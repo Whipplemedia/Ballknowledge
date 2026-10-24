@@ -1,6 +1,8 @@
 import * as THREE from 'three';
+import { createGames } from './games.js';
 
-const BK = window.BK; window.__dbg = {};
+const BK = window.BK; BK.leaveGames = () => games.leave();
+window.__dbg = {};
 const canvas = document.getElementById('world');
 const promptEl = document.getElementById('prompt');
 const cross = Object.assign(document.createElement('div'), { id: 'cross' });
@@ -65,7 +67,7 @@ const stations = []; // {x,z,r,text,act}
   for (let i = -3; i <= 3; i += 1.5) { cyl(0.25, 0.25, 0.1, 0xc0392b, i, 0.75, 6.2, 12); cyl(0.05, 0.05, 0.7, 0x888, i, 0.35, 6.2, 6); }
   obstacles.push({ x: -2.6, z: 7.2, r: 1.2 }, { x: 0, z: 7.2, r: 1.2 }, { x: 2.6, z: 7.2, r: 1.2 });
   // tables
-  [[-4, 0], [4, 0.5], [-6, -3]].forEach(([x, z]) => { cyl(0.9, 0.9, 0.08, 0x6d4c2f, x, 0.8, z, 16); cyl(0.08, 0.08, 0.8, 0x333, x, 0.4, z, 8); obstacles.push({ x, z, r: 1 }); });
+  [[4, 0.5], [6.5, 2.8]].forEach(([x, z]) => { cyl(0.9, 0.9, 0.08, 0x6d4c2f, x, 0.8, z, 16); cyl(0.08, 0.08, 0.8, 0x333, x, 0.4, z, 8); obstacles.push({ x, z, r: 1 }); });
 
   // --- TV wall + sportsbook terminal ---
   [-4.2, 0, 4.2].forEach((x, i) => {
@@ -90,22 +92,6 @@ const stations = []; // {x,z,r,text,act}
   obstacles.push({ x: 9.5, z: -5.5, r: 0.9 });
   stations.push({ x: 9.5, z: -4.2, r: 2.4, text: 'E - Talk to Uncle Sal', act: () => BK.openPanel('mob') });
   BK.sal = sal;
-
-  // --- arcade corner (left) ---
-  box(0.2, 2, 2, 0x222, -ROOM.x + 0.2, 1.6, -2); // dartboard backing
-  const board = new THREE.Group(); board.position.set(-ROOM.x + 0.35, 1.8, -2); board.rotation.y = Math.PI / 2; scene.add(board);
-  [[0.8, 0x111], [0.6, 0x1d6b3a], [0.4, 0x8c1c2c], [0.15, 0x1d6b3a], [0.06, 0xffc83d]].forEach(([r, c], i) => { const m = cyl(r, r, 0.04, c, 0, 0, 0.02 * i, 24, board); m.rotation.x = Math.PI / 2; });
-  const l1 = label('🎯 DARTS'); l1.position.set(-ROOM.x + 0.8, 3, -2); scene.add(l1);
-  stations.push({ x: -ROOM.x + 2, z: -2, r: 2, text: 'E - Play darts', act: () => playMG('darts') });
-
-  box(2.4, 0.15, 9, 0x7a5430, -9.2, 0.08, 2.5); box(2.2, 0.05, 8.8, 0xc99a5a, -9.2, 0.17, 2.5); // lane
-  [[0, 0], [-0.15, 0.3], [0.15, 0.3], [-0.3, 0.6], [0, 0.6], [0.3, 0.6], [-0.45, 0.9], [-0.15, 0.9], [0.15, 0.9], [0.45, 0.9]].forEach(([px, pz]) => cyl(0.06, 0.08, 0.38, 0xffffff, -9.2 + px, 0.4, -1.7 - pz, 6));
-  const l2 = label('🎳 BOWLING'); l2.position.set(-9.2, 2.2, 6.4); scene.add(l2);
-  stations.push({ x: -9.2, z: 6.3, r: 1.8, text: 'E - Go bowling', act: () => playMG('bowling') });
-
-  [[-6, 5.2], [-3.4, 5.2]].forEach(([x, z]) => { const b = box(1.2, 0.35, 2.4, 0xc9a15b, x, 0.3, z - 0.0); b.rotation.x = 0.2; cyl(0.12, 0.12, 0.06, 0, x, 0.52, z - 0.6, 12); });
-  const l3 = label('🌽 CORNHOLE'); l3.position.set(-4.7, 1.6, 5.2); scene.add(l3);
-  stations.push({ x: -4.7, z: 3.9, r: 1.8, text: 'E - Cornhole', act: () => playMG('cornhole') });
 
   // --- roulette ---
   box(2.6, 0.9, 1.4, 0x0d5a2e, -6.5, 0.45, -5.2); cyl(0.5, 0.5, 0.08, 0x2a1810, -6.0, 0.95, -5.2, 24); cyl(0.08, 0.08, 0.2, 0xffc83d, -6.0, 1.05, -5.2, 8);
@@ -188,20 +174,25 @@ function syncHitmen() {
 // ---------- player controls ----------
 const me = { x: 0, z: 2, yaw: 0, pitch: 0, vx: 0, vz: 0 };
 const keys = {};
+const games = createGames({ scene, camera, BK, me, keys, helpers: { box, cyl, label, mat }, stations, obstacles });
 addEventListener('keydown', (e) => {
   if (!active() || BK.ui.open || mgOpen()) return;
   keys[e.code] = true;
-  if (e.code === 'KeyE') { const s = nearest(); if (s) s.act(); }
-  if (e.code === 'KeyC') BK.openPanel('crew');
+  if (e.code === 'KeyE') { if (games.active()) games.leave(); else { const s = nearest(); if (s) s.act(); } }
+  if (e.code === 'KeyC') { games.leave(); BK.openPanel('crew'); }
 });
+document.addEventListener('pointerlockchange', () => { if (games.active()) games.setPaused(document.pointerLockElement !== canvas); });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 addEventListener('mousemove', (e) => {
   if (document.pointerLockElement !== canvas) return;
   me.yaw -= e.movementX * 0.0022; me.pitch = Math.max(-1.3, Math.min(1.3, me.pitch - e.movementY * 0.0022));
+  games.clampLook();
 });
+canvas.addEventListener('mouseup', () => games.up());
 const ray = new THREE.Raycaster();
 canvas.addEventListener('mousedown', () => {
   if (document.pointerLockElement !== canvas) { if (active() && !BK.ui.open && !mgOpen()) canvas.requestPointerLock(); return; }
+  if (games.active()) return games.down();
   const S = BK.S;
   if (S && S.phase === 'hunt') {
     BK.send({ type: 'attack' });
@@ -215,7 +206,7 @@ const mgOpen = () => !document.getElementById('mg').classList.contains('hidden')
 const nearest = () => stations.filter((s) => Math.hypot(s.x - me.x, s.z - me.z) < s.r).sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
 
 function move(dt) {
-  if (BK.ui.open || mgOpen()) { me.vx = me.vz = 0; return; }
+  if (BK.ui.open || mgOpen() || games.active()) { me.vx = me.vz = 0; return; }
   const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
   const sp = (keys.ShiftLeft ? 6.2 : 3.8);
   const sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
@@ -247,7 +238,8 @@ function frame(now) {
   if (!on) { promptEl.classList.add('hidden'); return; }
   move(dt); netSend(now);
   camera.position.set(me.x, EYE + Math.sin(now / 180) * (keys.KeyW || keys.KeyS || keys.KeyA || keys.KeyD ? 0.03 : 0), me.z);
-  camera.rotation.set(me.pitch, me.yaw, 0);
+  const off = games.camOffset(now); camera.rotation.set(me.pitch + off.p, me.yaw + off.y, 0);
+  games.update(dt);
   for (const a of avatars.values()) {
     a.g.position.x += (a.tx - a.g.position.x) * Math.min(1, dt * 10); a.g.position.z += (a.tz - a.g.position.z) * Math.min(1, dt * 10);
     a.g.rotation.y += (a.try - a.g.rotation.y) * Math.min(1, dt * 10);
@@ -260,8 +252,9 @@ function frame(now) {
   });
   if (BK.sal) BK.sal.rotation.y = Math.atan2(me.x - 9.5, me.z + 5.5) * 0.4;
   const st = nearest();
-  if (st && !BK.ui.open && !mgOpen()) { promptEl.textContent = st.text; promptEl.classList.remove('hidden'); } else promptEl.classList.add('hidden');
-  if (!st && !BK.ui.open && !mgOpen() && document.pointerLockElement !== canvas) { promptEl.textContent = 'Click to look around'; promptEl.classList.remove('hidden'); }
+  if (st && !BK.ui.open && !mgOpen() && !games.active()) { promptEl.textContent = st.text; promptEl.classList.remove('hidden'); } else promptEl.classList.add('hidden');
+  if (!st && !games.active() && !BK.ui.open && !mgOpen() && document.pointerLockElement !== canvas) { promptEl.textContent = 'Click to look around'; promptEl.classList.remove('hidden'); }
   renderer.render(scene, camera);
 }
-window.__dbg = { renderer, scene, camera, me }; requestAnimationFrame(frame);
+BK.leaveGames = () => games.leave();
+window.__dbg = { renderer, scene, camera, me, games }; requestAnimationFrame(frame);

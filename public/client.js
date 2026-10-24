@@ -28,7 +28,7 @@ function toast(text, kind = 'info') {
 let lastPhase = null;
 function render() {
   if (S && S.phase !== lastPhase) {
-    if (S.phase === 'result') { ui.open = true; ui.tab = 'book'; document.exitPointerLock && document.exitPointerLock(); }
+    if (S.phase === 'result') { window.BK.leaveGames && window.BK.leaveGames(); ui.open = true; ui.tab = 'book'; document.exitPointerLock && document.exitPointerLock(); }
     else if (S.phase === 'betting' && lastPhase === 'result') { ui.open = false; toast('Betting is open for the next round.'); }
     else if (['lobby', 'ended'].includes(S.phase)) ui.open = false;
     lastPhase = S.phase;
@@ -75,10 +75,19 @@ function lobbyView() {
   </div></div>`;
 }
 
-function openPanel(tab) { ui.open = true; if (tab) ui.tab = tab; document.exitPointerLock && document.exitPointerLock(); render(); }
-function closePanel() { ui.open = false; render(); }
+function openPanel(tab) { window.BK.leaveGames && window.BK.leaveGames(); ui.open = true; if (tab) ui.tab = tab; document.exitPointerLock && document.exitPointerLock(); render(); }
+function closePanel() { ui.open = false; render(); try { document.getElementById('world').requestPointerLock(); } catch {} }
 window.BK = { get S() { return S; }, ui, send, openPanel, closePanel };
-addEventListener('keydown', (e) => { if (e.key === 'Escape' && ui.open && S && S.phase !== 'result') closePanel(); });
+addEventListener('keydown', (e) => { if (e.key === 'Escape' && ui.open) closePanel(); });
+
+function goalText() {
+  const me = S.me;
+  if (S.phase === 'hunt') return me.remaining > 0 ? '🎯 The mob wants ' + $$(me.remaining) + ' from YOU - pay, win cash, or ambush them!' : '🎯 Help your crew - click the hitmen!';
+  if (S.phase === 'result') return '📺 Round over';
+  if (me.ready) return '✅ Locked in. Waiting on the crew - go win cash at the arcade (left side)';
+  if (!me.bet) return '📍 Walk to the SPORTSBOOK terminal under the TVs and place your bet';
+  return '📍 Bet placed - lock in at the terminal when you are ready (or see Uncle Sal to rig it)';
+}
 
 function gameView() {
   const me = S.me, hunt = S.phase === 'hunt';
@@ -91,6 +100,7 @@ function gameView() {
       <div class="row" style="gap:8px;justify-content:flex-end"><span class="pill time" id="timer"></span>
       <span class="pill money">${$$(me.money)}</span>${me.mobTied ? `<span class="pill debt">Owe ${$$(me.debt)}</span>` : ''}</div>
     </div>
+    <div class="hud-goal">${goalText()}</div>
     ${hunt ? huntBanner() : ''}
     <div class="hud-crew">${playerList()}</div>
     <div class="hud-feed">${[...S.feed].slice(-4).reverse().map((f) => `<div>${esc(f.text)}</div>`).join('')}</div>
@@ -135,7 +145,7 @@ function bookView() {
     <div class="muted">${me.bet ? `Your bet: ${$$(me.bet.stake)} on ${esc(me.bet.team)}.` : 'Tap a team, set a stake, then place your bet.'}</div>
     <div class="title" style="margin-top:8px">Side action</div>
     ${S.sides.map((s) => sideView(s, locked)).join('')}
-    <button class="blue" ${locked ? 'disabled' : ''} onclick="send({type:'ready'})">${locked ? 'Locked in - waiting for crew' : 'Lock in & start the game'}</button>
+    <button class="blue" ${locked ? 'disabled' : ''} onclick="send({type:'ready'});closePanel()">${locked ? 'Locked in - waiting for crew' : 'Lock in & start the game'}</button>
   </div>`;
 }
 let pendingTeam = null;
@@ -163,7 +173,7 @@ function resultView() {
     ${mine.notes.map((n) => `<div class="side">${esc(n)}</div>`).join('') || '<div class="muted">You sat this one out.</div>'}
     <div class="${mine.delta >= 0 ? 'ok' : 'bad'} big">${mine.delta >= 0 ? '+' : ''}${$$(mine.delta)}</div>
     ${r.sideResults.map((s) => `<div class="muted">${esc(s.kind)}: ${esc(s.winner === 'a' ? s.a : s.b)} won</div>`).join('')}
-    <button class="blue" ${S.me.ready ? 'disabled' : ''} onclick="send({type:'ready'})">Continue</button></div>`;
+    <button class="blue" ${S.me.ready ? 'disabled' : ''} onclick="send({type:'ready'});closePanel()">Continue</button></div>`;
 }
 
 function mobView() {
@@ -181,10 +191,8 @@ function mobView() {
 }
 
 function arcadeView() {
-  return `<div class="card col"><div class="title">Win cash on the side (5s cooldown, capped payouts)</div>
-    <div class="game"><button onclick="playMG('darts')">🎯 Darts<br><span class="muted">up to $450</span></button>
-    <button onclick="playMG('bowling')">🎳 Bowling<br><span class="muted">up to $500</span></button>
-    <button onclick="playMG('cornhole')">🌽 Cornhole<br><span class="muted">up to $420</span></button></div>
+  return `<div class="card col"><div class="title">The arcade</div>
+    <div class="muted">Darts, bowling and cornhole are real games on the left side of the bar - walk up and press <b>E</b> to play. Better throws = more cash (5s cooldown, capped payouts).</div>
     <div class="title" style="margin-top:10px">Roulette</div>
     <input id="rstake" type="number" min="10" value="${ui.roulette}" oninput="ui.roulette=+this.value">
     <div class="row"><button class="red" onclick="send({type:'roulette',pick:'red',stake:ui.roulette})">Red 2x</button>

@@ -70,3 +70,21 @@ body.ingame #app .overlay,body.ingame #app .hud-top .pill,body.ingame #app .hunt
 .panel{width:min(640px,100%);max-height:92vh;overflow:auto}
 #prompt{position:fixed;left:50%;bottom:22%;transform:translateX(-50%);background:#0b1020e6;border:1px solid var(--green);color:var(--text);padding:10px 18px;border-radius:12px;font-weight:700;z-index:6;pointer-events:none}
 #cross{position:fixed;left:50%;top:50%;width:8px;height:8px;margin:-4px;border-radius:50%;background:#fff;opacity:.7;z-index:6;pointer-events:none}
+
+#playhud{position:fixed;inset:0;pointer-events:none;z-index:7;text-align:center;font-weight:800;text-shadow:0 2px 8px #000}
+.ph-title{position:absolute;top:64px;left:50%;transform:translateX(-50%);font-size:22px;letter-spacing:.08em}
+.ph-sub{position:absolute;top:96px;left:50%;transform:translateX(-50%);font-size:18px;color:var(--gold)}
+.ph-power{position:absolute;bottom:18%;left:50%;transform:translateX(-50%);width:min(360px,70vw);height:18px;border-radius:99px;background:#0009;border:2px solid #fff8;overflow:hidden}
+.ph-fill{position:absolute;inset:0 auto 0 0;width:0;background:linear-gradient(90deg,#27e08a,#ffc83d,#ff4d5e)}
+.ph-zone{position:absolute;top:0;bottom:0;border-left:2px solid #fff;border-right:2px solid #fff;background:#ffffff33;display:none;z-index:2}
+.ph-msg{position:absolute;bottom:30%;left:50%;transform:translateX(-50%);font-size:20px;white-space:nowrap}
+.ph-help{position:absolute;bottom:34px;left:50%;transform:translateX(-50%);font-size:13px;color:#fffc;width:min(640px,90vw)}
+.ph-pop{position:absolute;top:34%;left:50%;transform:translateX(-50%);font-size:44px;animation:pop 1.3s ease-out forwards}
+.ph-pop.good{color:var(--green)}.ph-pop.bad{color:var(--red)}
+@keyframes pop{0%{transform:translate(-50%,10px) scale(.6);opacity:0}15%{transform:translate(-50%,0) scale(1.15);opacity:1}100%{transform:translate(-50%,-40px) scale(1);opacity:0}}
+
+.hud-goal{position:absolute;top:56px;left:50%;transform:translateX(-50%);background:#0b1020dd;border:1px solid var(--gold);border-radius:12px;padding:8px 16px;font-weight:700;font-size:14px;max-width:min(560px,90vw);text-align:center}
+.hud .hunt{top:104px!important}
+#playhud .ph-sub{top:120px;font-size:22px}
+
+body.playing .hud-goal{display:none}

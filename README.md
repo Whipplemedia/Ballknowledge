@@ -13,7 +13,10 @@ Run: `npm install && npm start` -> http://localhost:3000 (share the 4-letter roo
 5. Reveal the real season. Crew wins if at least half the players called the champion.
 
 ## First-person world
-Walk the bar (WASD + mouse, E to interact, C for crew/wire). Stations: betting terminal, Uncle Sal's booth, darts, bowling, cornhole, roulette.
+Walk the bar (WASD + mouse, E to interact, C for crew/wire). Stations: betting terminal, Uncle Sal's booth, roulette, and three physical mini-games:
+- **Darts** - click to throw; the view sways, so time it. 3 darts, up to 150 pts.
+- **Bowling** - A/D to slide, mouse to aim, hold click to charge, release to roll. 2 frames.
+- **Cornhole** - hold click to charge (hit the green zone), release to toss onto the tilted board; drop it in the hole for 3.
 Hitmen walk in during the hunt - aim and click to hit them. Three.js is vendored in `public/vendor/`.
 
 ## Files
