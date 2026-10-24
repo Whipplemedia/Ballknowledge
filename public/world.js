@@ -6,8 +6,10 @@ import { createRoulette } from './roulette.js';
 import { createFX } from './fx.js';
 import { makePreset, animate } from './people.js';
 import { label } from './textures.js';
+import { CATALOG, BY_ID, RARITY, SLOTS, rollCrate, createPreview, applyCosmetics, tickCosmetics } from './cosmetics.js';
 
 const BK = window.BK;
+window.BKC = { CATALOG, BY_ID, RARITY, SLOTS, rollCrate, preview: createPreview() };
 const canvas = document.getElementById('world');
 const promptEl = document.getElementById('prompt');
 const cross = Object.assign(document.createElement('div'), { id: 'cross' });
@@ -39,13 +41,14 @@ const games = createGames({ scene, camera, BK, me, keys, helpers, stations, obst
 const roulette = createRoulette({ scene, BK, me, stations, obstacles });
 BK.onSpin = (m) => roulette.onSpin(m);
 BK.leaveGames = () => games.leave();
+BK.startGame = (name, ch) => games.start(name, ch);
 const fx = createFX(renderer, scene, camera);
 
 const active = () => { const S = BK.S; return S && ['play', 'hunt'].includes(S.phase); };
 const nearest = () => stations.filter((s) => Math.hypot(s.x - me.x, s.z - me.z) < s.r).sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
 
 addEventListener('keydown', (e) => {
-  if (!active() || BK.ui.open) return;
+  if (!active() || BK.ui.open || BK.ui.shop) return;
   keys[e.code] = true;
   if (e.code === 'KeyE') { if (games.active()) games.leave(); else { const s = nearest(); if (s) s.act(); } }
   if (e.code === 'KeyC') { games.leave(); BK.openPanel('crew'); }
@@ -80,6 +83,7 @@ function syncAvatars() {
       a = { P, tx: P.group.position.x, tz: P.group.position.z, try: pm ? pm.ry : 0, px: P.group.position.x, pz: P.group.position.z, drunk: 0 }; avatars.set(p.id, a);
     }
     a.drunk = p.drunk;
+    const ck = JSON.stringify(p.cos || {}); if (a.cosKey !== ck) { a.cosKey = ck; applyCosmetics(a.P, p.cos || {}); }
   }
 }
 
@@ -91,16 +95,30 @@ function makeHitman() {
   return P;
 }
 function syncHitmen() {
-  const on = BK.S && BK.S.phase === 'hunt';
+  const on = BK.S && (BK.S.phase === 'hunt' || BK.S.shake);
   if (on && !hitmen.length) for (let i = 0; i < 3; i++) { const P = makeHitman(); P.group.position.set(-2 + i * 2, 0, ROOM.z - 2); scene.add(P.group); hitmen.push({ P, flash: 0, ph: i * 2 }); }
   if (!on && hitmen.length) { hitmen.forEach((h) => scene.remove(h.P.group)); hitmen.length = 0; }
 }
+// ---------- bar-fight brawlers ----------
+const brawlers = [];
+function syncBrawlers() {
+  const be = BK.S && BK.S.barEvent, on = be && be.kind === 'fight';
+  if (on && !brawlers.length) {
+    [['jock', { shirt: 0xb02a2a, number: '1' }, 0.4, be.red], ['dieHard', { shirt: 0x2a5aa8, number: 'B' }, 1.6, be.blue]].forEach(([pre, over, x, nm], i) => {
+      const P = makePreset(pre, over); P.group.position.set(x, 0, -2.2); P.group.rotation.y = i ? Math.PI / 2 : -Math.PI / 2; const l = label(nm, i ? '#7ab0ff' : '#ff7a88', 0.9); l.position.y = 2.35; P.group.add(l); scene.add(P.group); brawlers.push({ P, x, i });
+    });
+  }
+  if (!on && brawlers.length) { brawlers.forEach((b) => scene.remove(b.P.group)); brawlers.length = 0; }
+}
+// lights: remember base intensities so blackouts can dim everything
+const lightList = []; scene.traverse((o) => { if (o.isLight) lightList.push([o, o.intensity]); });
+const party = new THREE.PointLight(0xff40d0, 0, 14, 2); party.position.set(0, 3.6, 1); scene.add(party);
 const ray = new THREE.Raycaster();
 canvas.addEventListener('mousedown', () => {
   if (document.pointerLockElement !== canvas) { if (active() && !BK.ui.open) canvas.requestPointerLock(); return; }
   if (games.active()) return games.down();
   const S = BK.S;
-  if (S && S.phase === 'hunt') {
+  if (S && (S.phase === 'hunt' || S.shake)) {
     BK.send({ type: 'attack' });
     ray.setFromCamera({ x: 0, y: 0 }, camera);
     const hit = ray.intersectObjects(hitmen.map((h) => h.P.group), true)[0];
@@ -136,7 +154,7 @@ function setLowQuality() { renderer.setPixelRatio(1); renderer.shadowMap.enabled
 function resize() { renderer.setSize(innerWidth, innerHeight, false); fx.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 BK.onRender = () => {
-  syncAvatars(); syncHitmen();
+  syncAvatars(); syncHitmen(); syncBrawlers();
   if (active() && !spawned) { spawned = true; const S = BK.S, mp = S.players.find((p) => p.id === S.you); me.x = -3 + (mp ? mp.color : 0) * 1.2; me.z = 2; me.yaw = 0; me.pitch = 0; }
   if (!active()) spawned = false;
 };
@@ -161,12 +179,17 @@ function frame(now) {
   camera.position.set(me.x, EYE + Math.sin(now / 180) * (moving ? 0.03 : 0.004), me.z);
   const off = games.camOffset(now);
   camera.rotation.set(me.pitch + off.p + Math.sin(t * 0.7) * drunkAmt * 0.03, me.yaw + off.y + Math.sin(t * 0.5) * drunkAmt * 0.05, Math.sin(t * 0.9) * drunkAmt * 0.07);
-  games.update(dt); roulette.update(dt); bar.update(t, dt, me); tv.draw(BK.S, now);
+  games.update(dt); games.rig(camera);
+  const ev = BK.S && BK.S.barEvent, blackout = !!(ev && ev.kind === 'blackout'), happy = !!(ev && ev.kind === 'happy');
+  tv.blackout = blackout;
+  { const tgt = blackout ? (Math.random() < 0.06 ? 0.5 : 0.05) : 1; for (const [l, base] of lightList) l.intensity += (base * tgt - l.intensity) * Math.min(1, dt * 9); party.intensity += ((happy ? 26 : 0) - party.intensity) * Math.min(1, dt * 4); party.color.setHSL((t * 0.25) % 1, 1, 0.55); }
+  brawlers.forEach((b, k) => { const g = b.P.group, sway = Math.sin(t * 3 + k) * 0.35; g.position.x = b.x + sway * (k ? -1 : 1) * 0.6; g.position.z = -2.2 + Math.sin(t * 2.3 + k * 2) * 0.35; animate(b.P, 'fight', t + k, 1); });
+  roulette.update(dt); bar.update(t, dt, me); tv.draw(BK.S, now);
   for (const a of avatars.values()) {
     const g = a.P.group, k = Math.min(1, dt * 10); g.position.x += (a.tx - g.position.x) * k; g.position.z += (a.tz - g.position.z) * k;
     let d = a.try - g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); g.rotation.y += d * k;
     const sp = Math.hypot(g.position.x - a.px, g.position.z - a.pz) / Math.max(dt, 0.001); a.px = g.position.x; a.pz = g.position.z;
-    animate(a.P, a.drunk >= 40 && sp < 0.4 ? 'stagger' : sp > 0.5 ? 'walk' : 'idle', t, Math.min(1.4, sp / 3.5));
+    animate(a.P, a.drunk >= 40 && sp < 0.4 ? 'stagger' : sp > 0.5 ? 'walk' : 'idle', t, Math.min(1.4, sp / 3.5)); tickCosmetics(a.P, t);
   }
   hitmen.forEach((h, i) => {
     const g = h.P.group, tx = Math.sin(t / 1.5 + h.ph) * 4, tz = ROOM.z - 5 + Math.cos(t / 1.9 + h.ph) * 2.2;

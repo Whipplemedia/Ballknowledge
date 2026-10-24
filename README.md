@@ -11,7 +11,11 @@ Dev: `BK_SPEED=10 npm start` divides every timer by 10 (full game in about a min
 - **Win condition**: put a moneyline bet on the champion of the title game. Crew wins if at least half the players do.
 - **Bar**: buy drinks. Drunk confidence = gut-feeling hints on each game (more accurate as you get drunker, until you are wasted and they turn to nonsense). It wears off.
 - **Mob (Uncle Sal)**: loans and game fixes (flips the real result, adds to your tab). Conflicting fixes cancel. At the end the mob collects; shortfalls bring the hitmen - pay, wire money, win cash, or fight them in the room.
-- **Arcade**: physical first-person darts (a real numbered board: triples, doubles, bull - up to 180), bowling and cornhole (sway, hook, wind - all randomized, drunk makes it worse), each with a scoreboard and your hands holding the dart/ball/bag, plus a 3D roulette wheel whose ball lands on the server's number.
+- **Arcade (no more farming)**: darts, bowling and cornhole pay only when you beat an NPC's posted score in a **challenge** (stake from the bar's board; win streaks raise the stakes, caps apply). Practice mode pays nothing. Plus a 3D roulette wheel whose ball lands on the server's number.
+- **Pool**: full 2D-physics pool table (your 4 solids vs an NPC's 4 stripes + the 8-ball). Pick Rookie or Shark, stake cash, win to double up.
+- **Quota**: Uncle Sal sets crew net-worth checkpoints through the season. Miss one and his collectors shake you down (pay, fight, or forfeit cash). Hit the final quota for bonus tickets.
+- **Chaos**: random bar events (happy hour, bar fight you can bet on, blackout, big tipper) and per-player bounties keep things moving.
+- **Pro Shop**: earn tickets (finishing games, crew wins, quotas, bounties) and open crates for ~50 wearable items (helmets, jerseys, golf clubs, and more) in four rarities. Cosmetics are visible to the whole crew. Saved in browser localStorage.
 
 ## Controls
 WASD move, mouse look, E interact, C crew/wire money, Esc releases the mouse / closes menus.
@@ -19,14 +23,14 @@ WASD move, mouse look, E interact, C crew/wire money, Esc releases the mouse / c
 ## Files
 - `seasons.js` - season data (real results). `server.js` - authoritative game state over WebSocket.
 - **Look**: chunky faceted cartoon cast (Bub, the bartender, six regulars, Uncle Sal, hitmen, a crowd), dive-bar set with beams, windows, neon, chalkboard menu, ambient stylized sports broadcasts on the TVs, a live bar behind the title screen, bloom + color grade, and a four-stage drunk look.
-- `public/` - client: `client.js` (2D UI), `world.js` (3D loop), `bar.js` (environment + NPCs), `tv.js`, `roulette.js`, `games.js`, `people.js` (characters + hands), `textures.js`, `fx.js` (bloom + drunk shader). Three.js is vendored in `public/vendor/`.
+- `public/` - client: `client.js` (2D UI), `world.js` (3D loop), `bar.js` (environment + NPCs), `tv.js`, `roulette.js`, `games.js`, `pool.js`, `cosmetics.js`, `people.js` (characters + hands), `textures.js`, `fx.js` (bloom + drunk shader). Three.js is vendored in `public/vendor/`.
 
 ## Data notes (please double-check before shipping)
 Game results were verified against web sources where possible (2016 NBA Finals + ECF, 2011 NBA Finals + most of the WCF, 2016 NLCS, 2019 Stanley Cup Final, 2018 NCAA Elite Eight/Final Four, most 2018 conference title games). Less verified: 2019 NHL West Final scores (one secondary source), 2016 World Series games 3-4, 2004 ALCS games 1-2/5-6 and World Series games 2-4, 2011 WCF Game 5, NFL playoff brackets (from memory), 2018 CFP/Rose Bowl scores. Team **records and star stat lines are from memory** - college records are approximate.
 
 ## Known gaps / next
 - Highlights are a generated recap, not real play-by-play. Player props, parlays, and cascading alt-history after a fix are not built.
-- Mini-game scores are client-reported (server caps them) - move physics server-side before real stakes.
+- Tickets/cosmetics live in the browser and are trusted. Mini-game and pool results are client-reported (server caps them) - move physics server-side before real stakes.
 - Art is procedural low-poly; no sound or voice chat yet.
 
 ## Performance

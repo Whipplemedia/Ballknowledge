@@ -159,6 +159,7 @@ export function animate(P, mode, t, speed = 1) {
   else if (mode === 'sleep') { P.head.rotation.x = 0.9; P.torso.rotation.x = 0.4; aL.rotation.x = aR.rotation.x = -1.3; }
   else if (mode === 'cheer') { aL.rotation.x = -2.6 + Math.sin(ph * 5) * 0.3; aR.rotation.x = -2.4 + Math.cos(ph * 5) * 0.3; P.group.position.y = base + Math.abs(Math.sin(ph * 5)) * 0.06; }
   else if (mode === 'stagger') { P.group.rotation.z = Math.sin(ph * 1.7) * 0.12; P.head.rotation.z = Math.sin(ph * 1.1) * 0.25; }
+  else if (mode === 'fight') { const k = Math.sin(ph * 7); aL.rotation.x = -1.5 * Math.max(0, k) - 0.35; aR.rotation.x = -1.5 * Math.max(0, -k) - 0.35; P.torso.rotation.x = 0.25; P.head.rotation.x = 0.15; P.group.rotation.z = Math.sin(ph * 5) * 0.08; P.group.position.y = base + Math.abs(Math.sin(ph * 7)) * 0.05; lL.rotation.x = Math.sin(ph * 7) * 0.3; lR.rotation.x = -Math.sin(ph * 7) * 0.3; }
   else if (mode === 'point') { aR.rotation.x = -1.5 + Math.sin(ph * 2) * 0.1; P.head.rotation.y = Math.sin(ph * 0.35) * 0.3; }
   else { P.head.rotation.y = Math.sin(ph * 0.35) * 0.35; aR.rotation.x = Math.sin(ph * 0.5) * 0.05; }
 }

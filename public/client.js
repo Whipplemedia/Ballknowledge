@@ -5,12 +5,18 @@ const amer = (d) => (d >= 2 ? '+' + Math.round((d - 1) * 100) : String(-Math.rou
 const mmss = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
 let ws, S = null, err = '', skew = 0, stateAt = 0;
-const ui = { tab: 'book', open: false, sel: null, stake: 100, giveTo: '', giveAmt: 100, rStake: 100, rPick: 'red', rNum: '', intelTab: 'stats' };
+const ui = { shop: false, shopTab: 'all', reveal: null, tab: 'book', open: false, sel: null, stake: 100, giveTo: '', giveAmt: 100, rStake: 100, rPick: 'red', rNum: '', intelTab: 'stats' };
 const now = () => Date.now() + skew;
+
+// ---------- local save: tickets + inventory (browser only) ----------
+const SAVE_KEY = 'bk_save_v1';
+function loadSave() { try { const o = JSON.parse(localStorage.getItem(SAVE_KEY)); if (o && Array.isArray(o.inv)) return o; } catch {} return { tix: 60, inv: [], eq: {} }; }
+let save = loadSave();
+function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch {} }
 
 function connect(msg) {
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-  ws.onopen = () => ws.send(JSON.stringify(msg));
+  ws.onopen = () => { ws.send(JSON.stringify(msg)); ws.send(JSON.stringify({ type: 'cosmetics', cos: save.eq })); };
   ws.onmessage = (e) => {
     const m = JSON.parse(e.data);
     if (m.type === 'state') { S = m; skew = m.now - Date.now(); stateAt = Date.now(); err = ''; render(); }
@@ -31,7 +37,7 @@ function toast(text, kind = 'info') {
 function openPanel(tab) { window.BK.leaveGames && window.BK.leaveGames(); ui.open = true; if (tab) ui.tab = tab; document.exitPointerLock && document.exitPointerLock(); render(); }
 function closePanel() { ui.open = false; render(); try { document.getElementById('world').requestPointerLock(); } catch {} }
 window.BK = { get S() { return S; }, ui, send, openPanel, closePanel, now, get drunk() { return drunkLevel(); } };
-addEventListener('keydown', (e) => { if (e.key === 'Escape' && ui.open) closePanel(); });
+addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (ui.shop) closeShop(); else if (ui.open) closePanel(); } });
 function drunkLevel() { if (!S) return 0; return Math.max(0, S.me.drunk - (Date.now() - stateAt) / (S.me.decay || 6000)); }
 
 // ---------- render ----------
@@ -43,13 +49,18 @@ function render() {
     lastPhase = S.phase;
   }
   if (S && S.cur && ui.sel && ui.selIdx !== S.cur.idx) ui.sel = null;
+  if (S && ui.pendingPool) { if (S.me.pool) { ui.pendingPool = null; window.BK.startGame && window.BK.startGame('pool', S.me.pool); } else if (Date.now() - ui.pendingPool.at > 4000) ui.pendingPool = null; }
+  if (S && ui.pending) { if (S.me.challenge && S.me.challenge.game === ui.pending.game) { const g = ui.pending.game; ui.pending = null; window.BK.startGame && window.BK.startGame(g, S.me.challenge); } else if (Date.now() - ui.pending.at > 4000) ui.pending = null; }
   document.body.classList.toggle('ingame', !!S && ['play', 'hunt'].includes(S.phase));
+  if (S && S.phase === 'ended' && S.summary) { const mine = S.summary.players.find((p) => p.id === S.you), key = S.code + ':' + S.summary.year; if (mine && ui.paid !== key) { ui.paid = key; save.tix += mine.tickets; persist(); toast(`+${mine.tickets} 🎟 tickets earned!`, 'win'); } }
+  if (window.BKC) window.BKC.preview.setHost(ui.shop && !ui.reveal ? '#shopPrev' : null);
   const a = document.activeElement, keep = a && a.id ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
   const app = $('#app');
   if (!S) app.innerHTML = joinView();
   else if (S.phase === 'lobby') app.innerHTML = lobbyView();
   else if (S.phase === 'ended') app.innerHTML = endView();
   else app.innerHTML = gameView();
+  if (ui.shop) app.insertAdjacentHTML('beforeend', shopView());
   if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { el.setSelectionRange(keep.s, keep.e); } catch {} } }
   tick();
   window.BK.onRender && window.BK.onRender();
@@ -83,6 +94,7 @@ function lobbyView() {
     <div class="sports">${S.sports.map((s) => `<button class="sport ${S.sport === s.id ? 'sel' : ''}" ${S.host ? '' : 'disabled'} onclick="send({type:'setSport',sport:'${s.id}'})"><span class="e">${s.emoji}</span>${esc(s.label)}</button>`).join('')}</div>
     <div class="title">Pace</div>
     <div class="row">${S.paces.map((p) => `<button class="sport ${S.pace === p.id ? 'sel' : ''}" ${S.host ? '' : 'disabled'} onclick="send({type:'setPace',pace:'${p.id}'})">${esc(p.label)}</button>`).join('')}</div>
+    <button class="ghost" onclick="openShop()">🛍️ Pro Shop · 🎟 ${save.tix} tickets</button>
     ${S.host ? `<button onclick="send({type:'start'})">Start - assign a mystery season</button>` : ''}
   </div></div>`;
 }
@@ -103,6 +115,7 @@ function tick() {
   const el = $('#timer'); if (el && S.events) { const p = phaseInfo(); el.innerHTML = `${p.text} <b>${mmss(p.ms)}</b>`; el.classList.toggle('urgent', !!p.urgent); }
   const t2 = $('#tl2'); if (t2 && S.cur) { const e = S.events[S.cur.idx]; t2.textContent = mmss(e.closeAt - now()); t2.classList.toggle('urgent', e.closeAt - now() < 20000); const bar = $('#tlbar'); if (bar) bar.style.width = Math.max(0, Math.min(100, (e.closeAt - now()) / (e.closeAt - e.openAt) * 100)) + '%'; }
   const h = $('#huntt'); if (h && S.hunt) h.textContent = mmss(S.hunt.until - now());
+  const st = $('#shaket'); if (st && S.shake) st.textContent = mmss(S.shake.until - now());
   const dm = $('#drunkfill'); if (dm) dm.style.width = Math.round(drunkLevel()) + '%';
 }
 setInterval(() => S && tick(), 250);
@@ -118,6 +131,7 @@ function strip() {
 }
 function goalText() {
   const me = S.me;
+  if (S.shake) return '💼 Sal\'s collectors are in the bar! Chip in together - or click them to throw them out.';
   if (S.phase === 'hunt') return me.remaining > 0 ? `🎯 The mob wants ${$$(me.remaining)} from YOU - pay, win cash, or ambush them!` : '🎯 Help your crew - click the hitmen!';
   const cur = S.cur;
   if (cur) {
@@ -129,9 +143,9 @@ function goalText() {
 }
 function gameView() {
   const me = S.me, hunt = S.phase === 'hunt';
-  const extra = ui.tab === 'bar' ? [['bar', '🍺 Bar']] : ui.tab === 'wheel' ? [['wheel', '🎰 Roulette']] : [];
+  const extra = ui.tab === 'bar' ? [['bar', '🍺 Bar']] : ui.tab === 'wheel' ? [['wheel', '🎰 Roulette']] : ui.tab === 'challenge' ? [['challenge', '🎯 Challenge']] : ui.tab === 'pool' ? [['pool', '🎱 Pool']] : [];
   const tabs = [['book', '📱 Sportsbook'], ['bets', '🧾 My Bets'], ['mob', '🕴️ The Mob'], ['crew', '👥 Crew'], ...extra];
-  const body = { book: bookView, bets: betsView, mob: mobView, crew: crewView, bar: barView, wheel: wheelView }[ui.tab]();
+  const body = { book: bookView, bets: betsView, mob: mobView, crew: crewView, bar: barView, wheel: wheelView, challenge: challengeView, pool: typeof poolView === 'function' ? poolView : () => '' }[ui.tab]();
   return `<div class="hud">
     <div class="hud-top">
       <div class="row" style="gap:8px;justify-content:flex-start"><span class="pill">Room ${S.code}</span></div>
@@ -141,6 +155,7 @@ function gameView() {
     </div>
     <div class="hud-clock"><span class="pill time" id="timer"></span></div>
     <div class="hud-goal">${goalText()}</div>
+    ${quotaHud()}${eventBanner()}${bountyHud()}${shakeBanner()}
     ${hunt ? huntBanner() : ''}
     <div class="hud-crew">${playerList()}</div>
     <div class="hud-feed">${[...S.feed].slice(-4).reverse().map((f) => `<div>${esc(f.text)}</div>`).join('')}</div>
@@ -199,6 +214,7 @@ function bookView() {
     <div class="tlbar"><div id="tlbar"></div></div>
     <div class="matchup">${teamCard(A, 'a', cur, ev)}<div class="vs">VS</div>${teamCard(B, 'b', cur, ev)}</div>
     ${ev.final ? '<div class="champ-note">To win the game you need a <b>Moneyline</b> bet on the champion of this game.</div>' : ''}
+    ${cur.tip ? `<div class="tipcard">🗒️ <b>${esc(cur.tip.from)}</b> slid a napkin across the bar: "I like <b>${esc(cur.intel[cur.tip.side].name)}</b> tonight." <span class="muted">(unverified)</span></div>` : ''}
     ${h ? hintView(h) : ''}
     <div class="mgrid">
       <div class="mcol"><div class="mh ${(ui.sel ? ui.sel.market : 'ml') === 'ml' ? 'on' : ''}">Moneyline</div>${oddBtn('ml', 'a', A.short, mk.ml.a.am, hs('ml', 'a'))}${oddBtn('ml', 'b', B.short, mk.ml.b.am, hs('ml', 'b'))}</div>
@@ -315,7 +331,110 @@ function endView() {
     <div class="muted">${esc(s.blurb || '')}</div>
     <div>Real champion: <b>${esc(s.champion)}</b></div>
     <div>${s.altered ? `History was rewritten - your champion was <b>${esc(s.finalWinner)}</b>.` : 'History played out as it happened.'}</div>
-    ${s.players.map((p) => `<div class="pl"><span>${esc(p.name)} ${p.finalCorrect ? '✅' : '❌'}</span><span>${p.fate === 'dead' ? '💀 dead' : esc(p.fate)} · ${$$(p.money)}</span></div>`).join('')}
+    ${s.players.map((p) => `<div class="pl"><span>${esc(p.name)} ${p.finalCorrect ? '✅' : '❌'}</span><span>${p.fate === 'dead' ? '💀 dead' : esc(p.fate)} · ${$$(p.money)} · +${p.tickets}🎟</span></div>`).join('')}
+    <button class="ghost" onclick="openShop()">🛍️ Spend tickets · 🎟 ${save.tix}</button>
     ${host ? `<button onclick="send({type:'rematch'})">Back to lobby</button>` : '<div class="muted">Waiting for host...</div>'}</div></div>`;
+}
+
+// ---------- quota / bounties / events ----------
+function quotaHud() {
+  if (!S.quota) return '';
+  const nxt = S.quota.find((q) => q.status === 'pending');
+  const chips = S.quota.map((q) => `<span class="qc ${q.status}" title="After game ${q.idx + 1}: ${$$(q.target)}">${q.status === 'met' ? '✓' : q.status === 'missed' ? '✗' : q.idx + 1}</span>`).join('');
+  if (!nxt) return `<div class="hud-quota"><div class="qt">SAL'S QUOTAS <span class="qchips">${chips}</span></div><div class="muted">All quotas settled.</div></div>`;
+  const pct = Math.max(0, Math.min(100, (S.crewNow / nxt.target) * 100)), ok = S.crewNow >= nxt.target;
+  return `<div class="hud-quota"><div class="qt">SAL'S QUOTA <span class="qchips">${chips}</span></div><div class="qbar ${ok ? 'ok' : ''}"><div style="width:${pct}%"></div></div><div class="muted">Crew net worth <b>${$$(S.crewNow)}</b> / ${$$(nxt.target)} by Game ${nxt.idx + 1}${nxt.kind === 'final' ? ' (final)' : ''}</div></div>`;
+}
+function bountyHud() {
+  const b = S.me.bounties || []; if (!b.length) return '';
+  return `<div class="hud-bounty"><div class="qt">🎯 BOUNTIES</div>${b.map((x) => `<div class="bn ${x.done ? 'done' : ''}">${x.done ? '✅' : '☐'} ${esc(x.text)} <b>+${x.reward}🎟</b></div>`).join('')}</div>`;
+}
+function eventBanner() {
+  const be = S.barEvent; if (!be) return '';
+  const base = `<div class="hud-event ${be.kind}"><div class="et">${esc(be.title)} <span class="pill time">${mmss(be.until - now())}</span></div><div>${esc(be.text)}</div>`;
+  if (be.kind === 'fight') {
+    if (be.mine) return base + `<div class="muted">You bet ${$$(be.mine.stake)} on ${esc(be.mine.side === 'red' ? be.red : be.blue)}.</div></div>`;
+    if (now() < be.betUntil) return base + `<div class="row"><button class="red" onclick="send({type:'fightBet',side:'red',stake:50})">🔴 ${esc(be.red)} · $50</button><button class="blue" onclick="send({type:'fightBet',side:'blue',stake:50})">🔵 ${esc(be.blue)} · $50</button></div></div>`;
+  }
+  return base + '</div>';
+}
+function shakeBanner() {
+  const sh = S.shake; if (!sh) return '';
+  const pct = Math.max(0, (sh.hp / sh.maxHp) * 100);
+  return `<div class="card hunt col"><div class="big">💼 Sal's collectors <span class="pill time" id="shaket"></span></div>
+    <div class="muted">The crew missed the quota. They want <b class="bad">${$$(sh.tax - sh.paid)}</b> more. Chip in - or throw them out.</div>
+    <div class="hp"><div style="width:${pct}%"></div></div>
+    <div class="row"><button class="red" onmousedown="send({type:'attack'})">👊 FIGHT</button><button class="gold" onclick="send({type:'shakePay',amount:100})">Pay $100</button><button class="gold" onclick="send({type:'shakePay',amount:500})">Pay $500</button></div></div>`;
+}
+
+// ---------- arcade challenge board ----------
+window.BK.openChallenge = (g) => { ui.chGame = g; openPanel('challenge'); };
+function challengeView() {
+  const g = ui.chGame || 'darts', title = { darts: '🎯 Darts', bowling: '🎳 Bowling', cornhole: '🌽 Cornhole' }[g];
+  const open = S.me.challenge && S.me.challenge.game === g ? S.me.challenge : null, streak = (S.me.streak || {})[g] || 0;
+  if (open) return `<div class="card col"><div class="big">${title} - open challenge</div>
+    <div class="muted"><b>${esc({ rookie: 'The Rookie', regular: 'The Regular', shark: 'The Shark' }[open.opp])}</b> posted a score of <b class="gold">${open.target}</b>. Beat it to win <b class="ok">${$$(open.stake * open.mult)}</b> (stake ${$$(open.stake)}).</div>
+    <div class="row"><button onclick="resumeChallenge()">Take my shot</button><button class="ghost" onclick="cancelChallenge()">Walk away (refund)</button></div></div>`;
+  const opps = [['rookie', '🧒', 'The Rookie', 'Easy', 1.6], ['regular', '🧔', 'The Regular', 'A fair fight', 2.0], ['shark', '🦈', 'The Shark', 'Brutal', 2.8]];
+  const sel = ui.chOpp || 'regular', stake = ui.chStake || 50;
+  return `<div class="card col"><div class="big">${title} - challenge board</div>
+    <div class="muted">Pick an opponent. They shoot first and post a score. <b>Beat it</b> and you win the payout; lose and the house keeps your stake. Win streaks make them harder (+7% per win, your streak: <b>${streak}</b>). Practice is free - but pays nothing.</div>
+    <div class="opps">${opps.map(([id, ico, n, d, m]) => `<button class="opp ${sel === id ? 'sel' : ''}" onclick="ui.chOpp='${id}';render()"><span class="oi">${ico}</span><b>${n}</b><span class="muted">${d}</span><span class="gold">Pays ${m}x</span></button>`).join('')}</div>
+    <div class="chips">${[25, 50, 100, 200, 300].map((v) => `<button class="${stake === v ? 'sel' : ''}" onclick="ui.chStake=${v};render()">${$$(v)}</button>`).join('')}</div>
+    <div class="row"><button ${S.me.money < stake ? 'disabled' : ''} onclick="postChallenge()">Post challenge · ${$$(stake)} → win ${$$(stake * (opps.find((o) => o[0] === sel)[4]))}</button><button class="ghost" onclick="startPractice()">Practice (free)</button></div></div>`;
+}
+function postChallenge() { send({ type: 'challenge', game: ui.chGame, opp: ui.chOpp || 'regular', stake: ui.chStake || 50 }); ui.pending = { game: ui.chGame, at: Date.now() }; closePanel(); }
+function startPractice() { closePanel(); window.BK.startGame && window.BK.startGame(ui.chGame, null); }
+function resumeChallenge() { const ch = S.me.challenge; closePanel(); window.BK.startGame && window.BK.startGame(ch.game, ch); }
+function cancelChallenge() { send({ type: 'challengeCancel' }); render(); }
+
+// ---------- pool ----------
+window.BK.openPool = () => openPanel('pool');
+function poolView() {
+  const open = S.me.pool, NAME = { rookie: 'The Rookie', shark: 'The Shark' };
+  if (open) return `<div class="card col"><div class="big">🎱 Game in progress</div><div class="muted">${$$(open.stake)} on the table against <b>${NAME[open.opp]}</b>. Walking away forfeits the stake.</div>
+    <div class="row"><button onclick="closePanel();BK.startGame('pool', S.me.pool)">Back to the table</button><button class="ghost" onclick="send({type:'poolEnd',won:false});render()">Forfeit</button></div></div>`;
+  const sel = ui.poolOpp || 'rookie', stake = ui.poolStake || 50, mult = { rookie: 1.7, shark: 2.6 }[sel];
+  return `<div class="card col"><div class="big">🎱 Pool - 8-ball showdown</div>
+    <div class="muted">You shoot <b>solids</b>, they shoot <b>stripes</b>. Clear your four balls, then sink the 8. Mouse aims, hold click to charge, release to shoot. Sinking the 8 early - or scratching on it - loses. Winners take the pot.</div>
+    <div class="opps" style="grid-template-columns:repeat(2,1fr)">${[['rookie', '🧒', 'The Rookie', 'Shaky aim', 1.7], ['shark', '🦈', 'The Shark', 'Runs the table', 2.6]].map(([id, ico, n, d, m]) => `<button class="opp ${sel === id ? 'sel' : ''}" onclick="ui.poolOpp='${id}';render()"><span class="oi">${ico}</span><b>${n}</b><span class="muted">${d}</span><span class="gold">Pays ${m}x</span></button>`).join('')}</div>
+    <div class="chips">${[25, 50, 100, 250, 500].map((v) => `<button class="${stake === v ? 'sel' : ''}" onclick="ui.poolStake=${v};render()">${$$(v)}</button>`).join('')}</div>
+    <div class="row"><button ${S.me.money < stake ? 'disabled' : ''} onclick="postPool()">Rack 'em · ${$$(stake)} → win ${$$(stake * mult)}</button><button class="ghost" onclick="closePanel();BK.startGame('pool',{opp:'${sel}',stake:0})">Practice (free)</button></div></div>`;
+}
+function postPool() { send({ type: 'poolStart', opp: ui.poolOpp || 'rookie', stake: ui.poolStake || 50 }); ui.pendingPool = { at: Date.now() }; closePanel(); }
+
+// ---------- Pro Shop ----------
+const SLOT_ICON = { head: '🧢', face: '🕶️', body: '👕', hand: '🏌️', back: '🦸' };
+const CRATE = 25, DUP_REFUND = 6;
+function openShop() { window.BK.leaveGames && window.BK.leaveGames(); ui.shop = true; ui.reveal = null; document.exitPointerLock && document.exitPointerLock(); render(); if (window.BKC) window.BKC.preview.set(save.eq); }
+function closeShop() { ui.shop = false; ui.reveal = null; render(); if (S && ['play', 'hunt'].includes(S.phase) && !ui.open) { try { document.getElementById('world').requestPointerLock(); } catch {} } }
+window.BK.openShop = openShop;
+function equipItem(id) {
+  const it = BKC.BY_ID[id]; if (!it || !save.inv.includes(id)) return;
+  if (save.eq[it.slot] === id) delete save.eq[it.slot]; else save.eq[it.slot] = id;
+  persist(); send({ type: 'cosmetics', cos: save.eq }); BKC.preview.set(save.eq); render();
+}
+function unequipSlot(slot) { delete save.eq[slot]; persist(); send({ type: 'cosmetics', cos: save.eq }); BKC.preview.set(save.eq); render(); }
+function buyCrates(n) {
+  const cost = n === 1 ? CRATE : CRATE * 5 - 15; if (save.tix < cost) return toast('Not enough tickets. Play a season to earn more.', 'err');
+  save.tix -= cost; const got = [];
+  for (let i = 0; i < n; i++) { const it = BKC.rollCrate(); const dup = save.inv.includes(it.id); if (dup) save.tix += DUP_REFUND; else save.inv.push(it.id); got.push({ id: it.id, dup }); }
+  persist(); ui.reveal = got; render();
+}
+function revealView() {
+  return `<div class="reveal" onclick="ui.reveal=null;render()"><div class="rv-row">${ui.reveal.map(({ id, dup }) => { const it = BKC.BY_ID[id], R = BKC.RARITY[it.rarity]; return `<div class="rv-card" style="--rc:${R.color}"><div class="rv-r">${R.label.toUpperCase()}</div><div class="rv-i">${SLOT_ICON[it.slot]}</div><div class="rv-n">${esc(it.name)}</div><div class="muted">${dup ? 'Duplicate - scrapped for +6 🎟' : 'NEW! Added to your locker'}</div></div>`; }).join('')}</div><div class="muted" style="margin-top:12px">Click to continue</div></div>`;
+}
+function shopView() {
+  if (!window.BKC) return '';
+  const { CATALOG, RARITY, SLOTS } = window.BKC, own = new Set(save.inv), tab = ui.shopTab;
+  const items = CATALOG.filter((c) => tab === 'all' || c.slot === tab).sort((a, b) => Object.keys(RARITY).indexOf(b.rarity) - Object.keys(RARITY).indexOf(a.rarity));
+  return `<div class="overlay shop-ov"><div class="panel shop"><div class="row" style="justify-content:space-between;margin-bottom:8px"><div class="big">🛍️ Pro Shop</div><div class="row fit" style="gap:8px"><span class="pill gold">🎟 ${save.tix}</span><button class="ghost" onclick="closeShop()">✕</button></div></div>
+    <div class="shop-grid"><div class="shop-left"><div id="shopPrev" class="prev"></div>
+      <div class="eqs">${SLOTS.map(([s, l]) => { const id = save.eq[s], it = id && BKC.BY_ID[id]; return `<div class="eq" ${it ? `style="border-color:${RARITY[it.rarity].color}" onclick="unequipSlot('${s}')" title="Click to take off"` : ''}>${SLOT_ICON[s]} <span>${it ? esc(it.name) : l}</span></div>`; }).join('')}</div></div>
+      <div class="shop-right"><div class="crates"><button class="gold" onclick="buyCrates(1)">📦 Mystery Crate · ${CRATE} 🎟</button><button class="gold" onclick="buyCrates(5)">📦×5 · ${CRATE * 5 - 15} 🎟</button></div>
+        <div class="muted" style="margin:4px 2px 8px">Crates drop a random item. Rarer items are... rarer. Duplicates scrap for ${DUP_REFUND} 🎟. Collected ${own.size}/${CATALOG.length}. Earn tickets by finishing seasons and completing bounties.</div>
+        <div class="itabs">${[['all', 'All'], ...SLOTS].map(([id, l]) => `<button class="${tab === id ? 'on' : ''}" onclick="ui.shopTab='${id}';render()">${l}</button>`).join('')}</div>
+        <div class="items">${items.map((it) => { const R = RARITY[it.rarity], has = own.has(it.id), on = save.eq[it.slot] === it.id; return `<button class="item ${has ? '' : 'locked'} ${on ? 'on' : ''}" style="--rc:${R.color}" ${has ? `onclick="equipItem('${it.id}')"` : 'disabled'}><span class="ii">${has ? SLOT_ICON[it.slot] : '🔒'}</span><span class="in">${has ? esc(it.name) : '???'}</span><span class="ir">${R.label}</span>${on ? '<em>WEARING</em>' : ''}</button>`; }).join('')}</div></div></div>
+    ${ui.reveal ? revealView() : ''}</div></div>`;
 }
 render();

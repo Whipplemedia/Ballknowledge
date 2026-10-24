@@ -19,7 +19,30 @@ const DRINKS = [
   { id: 'whiskey', name: 'Top-Shelf Whiskey', emoji: '🥂', price: 120, add: 42, blurb: 'The expensive stuff. Confidence in a glass.' },
   { id: 'mystery', name: 'Bartender\'s Special', emoji: '🧪', price: 90, add: 55, blurb: 'Ingredients: unknown. Side effects: yes.' },
 ];
-const MG = { darts: { max: 180, rate: 3 }, bowling: { max: 20, rate: 25 }, cornhole: { max: 12, rate: 35 } };
+const MG = { darts: { max: 180 }, bowling: { max: 20 }, cornhole: { max: 12 } };
+const OPPS = { rookie: { label: 'Rookie', mult: 1.6 }, regular: { label: 'Regular', mult: 2.0 }, shark: { label: 'The Shark', mult: 2.8 } };
+const NPC_SKILL = { darts: { rookie: [45, 18], regular: [70, 22], shark: [98, 26] }, bowling: { rookie: [9, 3], regular: [12.5, 3.2], shark: [16, 3] }, cornhole: { rookie: [3, 1.8], regular: [5, 2], shark: [7.5, 2] } };
+const POOL_MULT = { rookie: 1.7, shark: 2.6 };
+const QUOTA_MULT = [1.0, 1.12, 1.3];
+const TICKETS = { base: 5, crewWin: 15, quota: 8 };
+const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 0.5;
+const BOUNTIES = [
+  { id: 'darts_reg', text: 'Beat the Regular or Shark at darts', reward: 12, on: 'challengeWin', test: (d) => d.game === 'darts' && d.opp !== 'rookie' },
+  { id: 'bowl_win', text: 'Win a bowling challenge', reward: 10, on: 'challengeWin', test: (d) => d.game === 'bowling' },
+  { id: 'corn_win', text: 'Win a cornhole challenge', reward: 10, on: 'challengeWin', test: (d) => d.game === 'cornhole' },
+  { id: 'shark', text: 'Beat The Shark at anything', reward: 18, on: 'challengeWin', test: (d) => d.opp === 'shark' },
+  { id: 'pool', text: 'Win a game of pool', reward: 12, on: 'poolWin' },
+  { id: 'spread', text: 'Win a spread bet', reward: 8, on: 'betWin', test: (d) => d.mk === 'spread' },
+  { id: 'total', text: 'Win an over/under bet', reward: 8, on: 'betWin', test: (d) => d.mk === 'total' },
+  { id: 'dog', text: 'Win a bet at +140 or longer', reward: 12, on: 'betWin', test: (d) => d.dec >= 2.4 },
+  { id: 'big', text: 'Win a $400+ bet', reward: 12, on: 'betWin', test: (d) => d.stake >= 400 },
+  { id: 'drunkwin', text: 'Win a bet while buzzed or drunker', reward: 12, on: 'betWin', test: (d) => d.band >= 2 },
+  { id: 'wasted', text: 'Get absolutely wasted', reward: 8, on: 'drunk', test: (d) => d.level >= 85 },
+  { id: 'rlt', text: 'Hit green or a straight number on roulette', reward: 20, on: 'roulette', test: (d) => d.win && (d.color === 'green' || d.isNum) },
+  { id: 'fixed', text: 'Fix a game and watch it flip', reward: 12, on: 'fixFlip' },
+  { id: 'fight', text: 'Win a bet on a bar fight', reward: 8, on: 'fightWin' },
+  { id: 'collect', text: 'Help beat down Sal\'s collectors', reward: 12, on: 'shakeBeat' },
+];
 const REDS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
 const colorOf = (n) => (n === 0 ? 'green' : REDS.has(n) ? 'red' : 'black');
 
@@ -142,11 +165,11 @@ function newCode() {
 }
 function newPlayer(id, name, ws) {
   return { id, name, ws, connected: true, money: START_MONEY, debt: 0, loans: 0, mobTied: false, bets: {}, fix: {}, results: {}, drunk: 0, drunkT: 0,
-    finalCorrect: null, fate: null, lastMg: 0, lastHit: 0, lastDrink: 0, remaining: 0, color: 0, x: 0, z: 2, ry: 0 };
+    finalCorrect: null, fate: null, lastMg: 0, lastHit: 0, lastDrink: 0, remaining: 0, color: 0, x: 0, z: 2, ry: 0, tickets: 0, bounties: [], challenge: null, pool: null, streak: { darts: 0, bowling: 0, cornhole: 0 }, cos: {} };
 }
 function createRoom() {
   const room = { code: newCode(), hostId: null, players: new Map(), phase: 'lobby', sport: 'nba', pace: 'normal', season: null, sportDef: null, events: [], feed: [],
-    tick: null, hp: 0, maxHp: 0, huntEnd: 0, huntTimer: null, finalWinner: null, altered: false, summary: null, spin: null, t0: 0 };
+    tick: null, quota: [], shake: null, barEvent: null, nextBarEvent: 0, lastBarKind: null, hp: 0, maxHp: 0, huntEnd: 0, huntTimer: null, finalWinner: null, altered: false, summary: null, spin: null, t0: 0 };
   rooms.set(room.code, room); return room;
 }
 const feed = (room, text) => { room.feed.push({ t: Date.now(), text }); if (room.feed.length > 50) room.feed.shift(); };
@@ -155,6 +178,17 @@ const send = (p, msg) => { if (p.ws && p.ws.readyState === 1) p.ws.send(JSON.str
 const toast = (p, text, kind = 'info') => send(p, { type: 'toast', text, kind });
 const drunkNow = (p) => { const now = Date.now(); if (p.drunk > 0) { p.drunk = Math.max(0, p.drunk - (now - p.drunkT) / dur(DRUNK_DECAY_MS)); } p.drunkT = now; return p.drunk; };
 const band = (d) => (d < 15 ? 0 : d < 40 ? 1 : d < 65 ? 2 : d < 85 ? 3 : 4);
+
+function networth(room, p) {
+  let n = p.money - p.debt;
+  for (const [idx, b] of Object.entries(p.bets)) { const ev = room.events[idx]; if (ev && ev.status !== 'final') for (const x of Object.values(b)) n += x.stake; }
+  if (p.challenge) n += p.challenge.stake; if (p.pool) n += p.pool.stake;
+  return n;
+}
+function award(room, p, type, data = {}) {
+  for (const b of p.bounties) if (!b.done && b.on === type && (!b.test || b.test(data, p))) { b.done = true; p.tickets += b.reward; toast(p, `🎯 Bounty complete: ${b.text} (+${b.reward} tickets)`, 'win'); }
+}
+function awardAll(room, type, data) { for (const p of room.players.values()) award(room, p, type, data); }
 
 function startGame(room) {
   const sport = SPORTS[room.sport];
@@ -168,7 +202,13 @@ function startGame(room) {
     return { idx: i, ...e, openAt, closeAt, resolveAt: closeAt + air, status: i === 0 ? 'open' : 'upcoming', mk: buildMarkets(sport, season, e, rng), result: null, air: null };
   });
   room.events[0].openAt = now;
-  for (const p of room.players.values()) Object.assign(p, { money: START_MONEY, debt: 0, loans: 0, mobTied: false, bets: {}, fix: {}, results: {}, drunk: 0, drunkT: now, finalCorrect: null, fate: null, remaining: 0 });
+  for (const p of room.players.values()) {
+    Object.assign(p, { money: START_MONEY, debt: 0, loans: 0, mobTied: false, bets: {}, fix: {}, results: {}, drunk: 0, drunkT: now, finalCorrect: null, fate: null, remaining: 0, tickets: 0, challenge: null, pool: null, streak: { darts: 0, bowling: 0, cornhole: 0 }, lastChallenge: 0 });
+    p.bounties = [...BOUNTIES].sort(() => Math.random() - 0.5).slice(0, 3).map((b) => ({ ...b, done: false }));
+  }
+  const nE = room.events.length, start = START_MONEY * room.players.size;
+  room.quota = [{ kind: 'mid', idx: Math.max(0, Math.round(nE * 0.33) - 1) }, { kind: 'mid', idx: Math.max(1, Math.round(nE * 0.7) - 1) }, { kind: 'final', idx: nE - 1 }].map((q, i) => ({ ...q, target: Math.round(start * QUOTA_MULT[i]), status: 'pending', crew: 0 }));
+  room.shake = null; room.barEvent = null; room.nextBarEvent = now + dur(55000 + rnd(30000)); room.lastBarKind = null;
   room.altered = false; room.finalWinner = null; room.phase = 'play';
   feed(room, `${sport.emoji} A season has been assigned. Nobody will tell you which one. Place your bets before the clock runs out.`);
   clearInterval(room.tick); room.tick = setInterval(() => tick(room), 400);
@@ -184,9 +224,12 @@ function tick(room) {
     if (ev.status === 'open' && now >= ev.closeAt) { lockEvent(room, ev); changed = true; }
     if (ev.status === 'airing' && now >= ev.resolveAt) { finalizeEvent(room, ev); changed = true; }
   }
+  if (room.shake && now >= room.shake.until) { endShake(room, false); changed = true; }
+  if (room.barEvent && now >= room.barEvent.until) { endBarEvent(room); changed = true; }
+  else if (!room.barEvent && !room.shake && now >= room.nextBarEvent) { startBarEvent(room); changed = true; }
   if (changed) {
     broadcast(room);
-    if (room.events.every((e) => e.status === 'final')) settle(room);
+    if (room.events.every((e) => e.status === 'final') && room.phase === 'play' && !room.shake) settle(room);
   }
 }
 
@@ -195,12 +238,13 @@ function lockEvent(room, ev) {
   const fixers = plist(room).filter((p) => p.fix[ev.idx]);
   const sides = new Set(fixers.map((p) => p.fix[ev.idx]));
   const price = fixPrice(room, ev);
-  for (const p of fixers) { p.debt += price; p.mobTied = true; toast(p, `The mob took ${money(price)} for the fix on ${ev.label}. It's on your tab.`, 'mob'); }
+  for (const p of fixers) { p.debt += price; p.mobTied = true; p._fixPaid = true; toast(p, `The mob took ${money(price)} for the fix on ${ev.label}. It's on your tab.`, 'mob'); }
   let winner = nat, fixed = false, contested = sides.size > 1;
   if (sides.size === 1) { const s = [...sides][0]; if (s !== nat) { winner = s; fixed = true; room.altered = true; } }
   ev.rsa = ev.sa; ev.rsb = ev.sb;
   if (fixed) { ev.rsa = ev.sb; ev.rsb = ev.sa; } // flip the scoreboard
   ev.result = { sa: ev.rsa, sb: ev.rsb, winner, fixed, contested };
+  if (fixed && !contested) for (const p of fixers) award(room, p, 'fixFlip');
   const rng = seeded(room.code + ':air:' + ev.idx);
   ev.air = { plays: genHighlights(room.sportDef, ev, season, rng) };
   ev.status = 'airing';
@@ -216,7 +260,7 @@ function settleBets(room, ev) {
       if (mk === 'ml') { won = b.pick === win; label = `${b.pick === 'a' ? ev.a : ev.b} ML`; }
       else if (mk === 'spread') { const my = b.pick === 'a' ? r.sa : r.sb, other = b.pick === 'a' ? r.sb : r.sa; won = my + b.line > other; label = `${b.pick === 'a' ? ev.a : ev.b} ${b.line > 0 ? '+' : ''}${b.line}`; }
       else { const tot = r.sa + r.sb; won = b.pick === 'over' ? tot > b.line : tot < b.line; label = `${b.pick === 'over' ? 'Over' : 'Under'} ${b.line}`; }
-      if (won) { const pay = b.stake * b.dec; ret += pay; delta += pay - b.stake; notes.push(`✅ ${label}: +${money(pay - b.stake)}`); } else { delta -= b.stake; notes.push(`❌ ${label}: -${money(b.stake)}`); }
+      if (won) { const pay = b.stake * b.dec; ret += pay; delta += pay - b.stake; notes.push(`✅ ${label}: +${money(pay - b.stake)}`); award(room, p, 'betWin', { mk, dec: b.dec, stake: b.stake, band: b.band || 0 }); } else { delta -= b.stake; notes.push(`❌ ${label}: -${money(b.stake)}`); }
     }
     p.money += ret;
     if (ev.final) p.finalCorrect = !!(bets.ml && bets.ml.pick === win);
@@ -233,8 +277,58 @@ function finalizeEvent(room, ev) {
   feed(room, `🏁 FINAL - ${ev.label}: ${w} def. ${l}, ${r.winner === 'a' ? r.sa + '-' + r.sb : r.sb + '-' + r.sa}${ev.ot ? ' (OT)' : ''}.`);
   if (r.fixed) feed(room, `🕵️ Rumors swirl about the officiating in the ${ev.label}...`);
   if (ev.final) room.finalWinner = w;
+  const q = room.quota.find((x) => x.idx === ev.idx && x.status === 'pending'); if (q) checkQuota(room, q);
 }
 
+// ---------- the mob's quota ----------
+function checkQuota(room, q) {
+  const crew = plist(room).reduce((a, p) => a + networth(room, p), 0); q.crew = Math.round(crew);
+  if (crew >= q.target) {
+    q.status = 'met'; feed(room, `✅ Sal is pleased: the crew hit the ${money(q.target)} quota.`);
+    for (const p of room.players.values()) { p.tickets += TICKETS.quota; if (q.kind === 'mid') p.money += 150; toast(p, q.kind === 'mid' ? `Sal's thank-you: +$150 and +${TICKETS.quota} tickets` : `Final quota met: +${TICKETS.quota} tickets`, 'win'); }
+  } else {
+    q.status = 'missed'; feed(room, `⚠️ The crew missed the ${money(q.target)} quota (${money(crew)}).`);
+    if (q.kind === 'mid') startShake(room, q.target - crew);
+  }
+}
+function startShake(room, shortfall) {
+  const tax = clamp(Math.round(shortfall * 0.5 / 50) * 50, 400, 3000);
+  room.shake = { tax, paid: 0, hp: 60 + tax / 30, maxHp: 60 + tax / 30, until: Date.now() + dur(32000), hits: {} };
+  feed(room, `🔫 Sal's collectors walk in. They want ${money(tax)} - pay up together, or beat them down!`);
+}
+function endShake(room, beaten) {
+  const sh = room.shake; if (!sh) return; room.shake = null;
+  if (beaten) { feed(room, `👊 The crew threw Sal's collectors out. Free of charge.`); awardAll(room, 'shakeBeat'); return; }
+  const left = sh.tax - sh.paid;
+  if (left <= 0) { feed(room, `💸 The crew paid the collectors. Sal is satisfied.`); return; }
+  const each = Math.ceil(left / room.players.size);
+  for (const p of room.players.values()) { const take = Math.min(p.money, each); p.money -= take; toast(p, `The collectors shook you down for ${money(take)}.`, 'mob'); }
+  feed(room, `💼 The collectors took the remaining ${money(left)} and left.`);
+}
+
+// ---------- chaos: random bar events ----------
+const FIGHTERS = ['Big Tony', 'Skinny Pete', 'Two-Beer Terry', 'Crazy Carl', 'Mad Dog Mike', 'Slappy Sam', 'Gentle Gus', 'Brick Bobby'];
+function startBarEvent(room) {
+  const kinds = ['happy', 'fight', 'blackout', 'tip'].filter((k) => k !== room.lastBarKind);
+  const open = room.events.find((e) => e.status === 'open');
+  let kind = pick(kinds); if (kind === 'tip' && !open) kind = 'happy';
+  const now = Date.now(); room.lastBarKind = kind;
+  if (kind === 'happy') { room.barEvent = { kind, until: now + dur(45000), title: 'HAPPY HOUR', text: 'Drinks are HALF PRICE!' }; feed(room, '🍻 HAPPY HOUR! Drinks are half price.'); }
+  else if (kind === 'blackout') { room.barEvent = { kind, until: now + dur(18000), title: 'BLACKOUT', text: 'The power is out! No hints, no TVs.' }; feed(room, '🔦 The power went out!'); }
+  else if (kind === 'fight') { const [a, b] = [...FIGHTERS].sort(() => Math.random() - 0.5); room.barEvent = { kind, until: now + dur(24000), betUntil: now + dur(14000), red: a, blue: b, bets: {}, title: 'BAR FIGHT!', text: `${a} vs ${b} - place your bets!` }; feed(room, `🥊 BAR FIGHT! ${a} (red) vs ${b} (blue).`); }
+  else { const nat = open.sa > open.sb ? 'a' : 'b', side = Math.random() < 0.62 ? nat : nat === 'a' ? 'b' : 'a', who = pick(['Old Pete', 'Dizzy Dave', 'The Guy In The Corner', 'Sketchy Steve']); room.barEvent = { kind, until: now + dur(45000), title: 'HOT TIP', text: `${who} slides you a napkin...`, tip: { from: who, idx: open.idx, side } }; feed(room, `🗒️ ${who} whispers a hot tip to the crew.`); }
+}
+function endBarEvent(room) {
+  const be = room.barEvent; room.barEvent = null; room.nextBarEvent = Date.now() + dur(65000 + rnd(50000));
+  if (be.kind === 'fight') {
+    const win = Math.random() < 0.5 ? 'red' : 'blue'; feed(room, `🥊 ${win === 'red' ? be.red : be.blue} wins the bar fight!`);
+    for (const [pid, b] of Object.entries(be.bets)) { const p = room.players.get(pid); if (!p) continue; if (b.side === win) { p.money += b.stake * 1.9; toast(p, `Your fighter won! +${money(b.stake * 0.9)}`, 'win'); award(room, p, 'fightWin'); } else toast(p, `Your fighter got flattened. -${money(b.stake)}`, 'err'); }
+  }
+}
+
+
+
+function _unused() {}
 const fixPrice = (room, ev) => 1500 + 300 * ev.idx + (ev.final ? 2000 : 0);
 
 // ---------- settlement (mob collects, hitmen arrive) ----------
@@ -271,7 +365,7 @@ function finish(room) {
   const correct = ps.filter((p) => p.finalCorrect).length;
   room.summary = { year: s.year, league: s.league, champion: s.champion, finalWinner: room.finalWinner, altered: room.altered, blurb: s.blurb,
     crewWon: correct >= Math.ceil(ps.length / 2) && correct > 0, correct, total: ps.length,
-    players: ps.map((p) => ({ name: p.name, finalCorrect: p.finalCorrect, fate: p.fate, money: Math.round(p.money) })) };
+    players: ps.map((p) => ({ id: p.id, name: p.name, finalCorrect: p.finalCorrect, fate: p.fate, money: Math.round(p.money), tickets: TICKETS.base + p.tickets + (p.fate === 'dead' ? 0 : 3) + (correct >= Math.ceil(ps.length / 2) && correct > 0 ? TICKETS.crewWin : 0), bounties: p.bounties.filter((b) => b.done).length })) };
   room.phase = 'ended'; broadcast(room);
 }
 
@@ -344,17 +438,22 @@ function view(room, p) {
   const v = { type: 'state', now: Date.now(), code: room.code, you: p.id, host: room.hostId === p.id, phase: room.phase, sport: room.sport, pace: room.pace,
     sports: Object.entries(SPORTS).map(([id, s]) => ({ id, label: s.label, emoji: s.emoji })), paces: Object.entries(PACES).map(([id, x]) => ({ id, label: x.label })),
     feed: room.feed.slice(-25), drinks: DRINKS,
-    players: plist(room).map((q) => ({ id: q.id, name: q.name, color: q.color, money: Math.round(q.money), connected: q.connected, fate: q.fate, drunk: Math.round(drunkNow(q)),
+    players: plist(room).map((q) => ({ id: q.id, name: q.name, color: q.color, cos: q.cos || {}, money: Math.round(q.money), connected: q.connected, fate: q.fate, drunk: Math.round(drunkNow(q)),
       hunted: room.phase === 'hunt' && q.remaining > 0, finalCorrect: room.phase === 'ended' ? q.finalCorrect : null })),
-    me: { money: Math.round(p.money), debt: Math.round(p.debt), loans: p.loans, mobTied: p.mobTied, remaining: Math.round(p.remaining), drunk: d, decay: dur(DRUNK_DECAY_MS), band: band(d), bets: p.bets, fix: p.fix, results: p.results } };
+    me: { money: Math.round(p.money), debt: Math.round(p.debt), loans: p.loans, mobTied: p.mobTied, remaining: Math.round(p.remaining), drunk: d, decay: dur(DRUNK_DECAY_MS), band: band(d), bets: p.bets, fix: p.fix, results: p.results, tickets: p.tickets || 0, streak: p.streak || {}, challenge: p.challenge, pool: p.pool ? { opp: p.pool.opp, stake: p.pool.stake } : null,
+      bounties: (p.bounties || []).map((b) => ({ id: b.id, text: b.text, reward: b.reward, done: b.done })) } };
   if (room.season && room.phase !== 'lobby') {
     v.events = room.events.map((e) => evSummary(e));
     v.teams = Object.fromEntries(Object.entries(room.season.teams).map(([n, t]) => [n, { short: t.short, color: t.color }]));
+    v.quota = room.quota.map((q) => ({ kind: q.kind, idx: q.idx, target: q.target, status: q.status, crew: q.crew }));
+    v.crewNow = Math.round(plist(room).reduce((a, q) => a + networth(room, q), 0));
+    v.barEvent = room.barEvent ? { kind: room.barEvent.kind, until: room.barEvent.until, betUntil: room.barEvent.betUntil, red: room.barEvent.red, blue: room.barEvent.blue, title: room.barEvent.title, text: room.barEvent.text, mine: room.barEvent.bets ? room.barEvent.bets[p.id] || null : null } : null;
+    v.shake = room.shake ? { tax: room.shake.tax, paid: room.shake.paid, hp: Math.ceil(room.shake.hp), maxHp: Math.ceil(room.shake.maxHp), until: room.shake.until } : null;
     v.spinning = room.spin ? { by: room.spin.name, until: room.spin.until } : null;
     const cur = room.events.find((e) => e.status === 'open');
     if (cur && room.phase === 'play') {
       v.cur = { idx: cur.idx, mk: cur.mk, series: seriesText(room, cur), fixPrice: fixPrice(room, cur), intel: { a: intel(room, cur, 'a'), b: intel(room, cur, 'b') },
-        hint: hintFor(room, p, cur), crew: plist(room).reduce((acc, q) => { const b = (q.bets[cur.idx] || {}).ml; if (b) acc[b.pick]++; return acc; }, { a: 0, b: 0 }) };
+        hint: room.barEvent && room.barEvent.kind === 'blackout' ? null : hintFor(room, p, cur), tip: room.barEvent && room.barEvent.tip && room.barEvent.tip.idx === cur.idx ? room.barEvent.tip : null, crew: plist(room).reduce((acc, q) => { const b = (q.bets[cur.idx] || {}).ml; if (b) acc[b.pick]++; return acc; }, { a: 0, b: 0 }) };
     }
   }
   if (room.phase === 'hunt') v.hunt = { hp: Math.ceil(room.hp), maxHp: Math.ceil(room.maxHp), until: room.huntEnd };
@@ -372,7 +471,7 @@ function handle(room, p, m) {
     case 'setPace': if (room.hostId === p.id && room.phase === 'lobby' && PACES[m.pace]) { room.pace = m.pace; broadcast(room); } break;
     case 'start': if (room.hostId === p.id && room.phase === 'lobby') startGame(room); break;
     case 'rematch': if (room.hostId === p.id && room.phase === 'ended') {
-      Object.assign(room, { phase: 'lobby', season: null, events: [], feed: [], altered: false, summary: null, spin: null });
+      Object.assign(room, { phase: 'lobby', season: null, events: [], feed: [], altered: false, summary: null, spin: null, shake: null, barEvent: null, quota: [] });
       for (const q of room.players.values()) Object.assign(q, { bets: {}, fix: {}, results: {} });
       broadcast(room);
     } break;
@@ -386,7 +485,7 @@ function handle(room, p, m) {
       if (!(stake >= 10) || stake > p.money) { toast(p, 'Invalid stake.', 'err'); broadcast(room); break; }
       const mkt = ev.mk, d = mk === 'ml' ? mkt.ml[pk].dec : mk === 'spread' ? mkt.spread[pk].dec : mkt.total[pk].dec;
       const line = mk === 'spread' ? mkt.spread[pk].line : mk === 'total' ? mkt.total.line : null;
-      p.money -= stake; bets[mk] = { pick: pk, stake, dec: d, line }; broadcast(room); break;
+      p.money -= stake; bets[mk] = { pick: pk, stake, dec: d, line, band: band(drunkNow(p)) }; broadcast(room); break;
     }
     case 'cancelBet': {
       const ev = room.events[m.ev]; if (!ev || ev.status !== 'open') break;
@@ -404,16 +503,62 @@ function handle(room, p, m) {
     case 'drink': {
       const dr = DRINKS.find((x) => x.id === m.id);
       if (!dr || !inPlay(room) || Date.now() - p.lastDrink < 1200) break;
-      if (p.money < dr.price) { toast(p, 'Bartender: "Come back when you can pay."', 'err'); break; }
+      const price = Math.round(dr.price * (room.barEvent && room.barEvent.kind === 'happy' ? 0.5 : 1));
+      if (p.money < price) { toast(p, 'Bartender: "Come back when you can pay."', 'err'); break; }
       if (drunkNow(p) >= 100) { toast(p, 'Bartender: "You\'re cut off, pal."', 'err'); break; }
-      p.lastDrink = Date.now(); p.money -= dr.price; p.drunk = Math.min(100, drunkNow(p) + dr.add);
-      toast(p, `${dr.emoji} ${dr.name} - ${money(dr.price)}. ${p.drunk >= 85 ? 'The room is spinning.' : p.drunk >= 40 ? 'You feel... confident.' : 'Warm.'}`, 'info'); broadcast(room); break;
+      p.lastDrink = Date.now(); p.money -= price; p.drunk = Math.min(100, drunkNow(p) + dr.add); award(room, p, 'drunk', { level: p.drunk });
+      toast(p, `${dr.emoji} ${dr.name} - ${money(price)}. ${p.drunk >= 85 ? 'The room is spinning.' : p.drunk >= 40 ? 'You feel... confident.' : 'Warm.'}`, 'info'); broadcast(room); break;
     }
+    case 'challenge': {
+      const g = MG[m.game], opp = OPPS[m.opp]; if (room.phase !== 'play' || !g || !opp) break;
+      const stake = Math.floor(Number(m.stake));
+      if (p.challenge) { p.money += p.challenge.stake; p.challenge = null; }
+      if (!(stake >= 25 && stake <= 300 && stake <= p.money)) { toast(p, 'Stakes are $25 - $300.', 'err'); broadcast(room); break; }
+      const [mu, sd] = NPC_SKILL[m.game][m.opp], streak = p.streak[m.game] || 0;
+      const target = Math.round(clamp(mu * (1 + 0.07 * streak) + gauss() * sd, 0, g.max));
+      p.money -= stake; p.challenge = { game: m.game, opp: m.opp, stake, target, mult: opp.mult, expires: Date.now() + 180000 };
+      toast(p, `${opp.label} posted a ${target}. Beat it for ${money(stake * opp.mult)}.`, 'mob'); broadcast(room); break;
+    }
+    case 'challengeCancel': if (p.challenge) { p.money += p.challenge.stake; p.challenge = null; broadcast(room); } break;
     case 'mg': {
       const g = MG[m.game];
-      if (!inPlay(room) || !g || Date.now() - p.lastMg < 5000) break;
+      if (!inPlay(room) || !g || Date.now() - p.lastMg < 4000) break;
       const pts = Math.floor(Number(m.pts)); if (!(pts >= 0 && pts <= g.max)) break;
-      p.lastMg = Date.now(); const win = pts * g.rate; p.money += win; toast(p, `${m.game}: ${pts} pts = ${money(win)}`, win ? 'win' : 'info'); broadcast(room); break;
+      p.lastMg = Date.now();
+      const ch = p.challenge && p.challenge.game === m.game && Date.now() < p.challenge.expires ? p.challenge : null;
+      if (!ch) { toast(p, `${m.game}: ${pts} - practice round (no payout). Challenge someone to play for cash.`, 'info'); break; }
+      p.challenge = null; const L = OPPS[ch.opp].label;
+      if (pts > ch.target) { const pay = ch.stake * ch.mult; p.money += pay; p.streak[m.game] = (p.streak[m.game] || 0) + 1; toast(p, `🏆 You beat ${L} ${pts}-${ch.target}! +${money(pay - ch.stake)}`, 'win'); award(room, p, 'challengeWin', { game: m.game, opp: ch.opp }); feed(room, `🎯 ${p.name} beat ${L} at ${m.game}.`); }
+      else if (pts === ch.target) { p.money += ch.stake; toast(p, `Tie at ${pts}. Stake returned.`, 'info'); }
+      else { p.streak[m.game] = 0; toast(p, `${L} wins ${ch.target}-${pts}. -${money(ch.stake)}`, 'err'); }
+      broadcast(room); break;
+    }
+    case 'poolStart': {
+      if (room.phase !== 'play' || !POOL_MULT[m.opp]) break;
+      const stake = Math.floor(Number(m.stake)); if (p.pool) break;
+      if (!(stake >= 25 && stake <= 500 && stake <= p.money)) { toast(p, 'Pool stakes are $25 - $500.', 'err'); break; }
+      p.money -= stake; p.pool = { opp: m.opp, stake, at: Date.now() }; broadcast(room); break;
+    }
+    case 'poolEnd': {
+      if (!p.pool) break; const pl = p.pool; p.pool = null;
+      const won = !!m.won && Date.now() - pl.at > 15000 / Math.max(1, SPEED);
+      if (won) { const pay = pl.stake * POOL_MULT[pl.opp]; p.money += pay; toast(p, `🎱 You beat the ${OPPS[pl.opp] ? OPPS[pl.opp].label : pl.opp} at pool! +${money(pay - pl.stake)}`, 'win'); award(room, p, 'poolWin'); feed(room, `🎱 ${p.name} won a game of pool.`); }
+      else toast(p, `🎱 You lost the game. -${money(pl.stake)}`, 'err');
+      broadcast(room); break;
+    }
+    case 'shakePay': {
+      const sh = room.shake; if (!sh || room.phase !== 'play') break;
+      const amt = Math.min(p.money, sh.tax - sh.paid, Math.floor(Number(m.amount) || sh.tax)); if (amt <= 0) break;
+      p.money -= amt; sh.paid += amt; if (sh.paid >= sh.tax) endShake(room, false); broadcast(room); break;
+    }
+    case 'fightBet': {
+      const be = room.barEvent; if (!be || be.kind !== 'fight' || Date.now() > be.betUntil || !['red', 'blue'].includes(m.side)) break;
+      const stake = Math.floor(Number(m.stake)); if (be.bets[p.id] || !(stake >= 10 && stake <= Math.min(300, p.money))) break;
+      p.money -= stake; be.bets[p.id] = { side: m.side, stake }; broadcast(room); break;
+    }
+    case 'cosmetics': {
+      const cos = {}; for (const k of ['head', 'face', 'body', 'hand', 'back']) { const v = m.cos && m.cos[k]; if (typeof v === 'string' && /^[a-z0-9_]{1,24}$/.test(v)) cos[k] = v; }
+      p.cos = cos; broadcast(room); break;
     }
     case 'roulette': {
       if (!inPlay(room)) break;
@@ -427,7 +572,7 @@ function handle(room, p, m) {
       broadcast(room);
       setTimeout(() => {
         let win = 0; if (isNum) win = Number(pk) === n ? stake * 36 : 0; else if (pk === color) win = stake * (color === 'green' ? 36 : 2);
-        p.money += win; room.spin = null;
+        p.money += win; room.spin = null; award(room, p, 'roulette', { win: win > 0, color, isNum });
         toast(p, win ? `${n} ${color}! You win ${money(win - stake)}` : `${n} ${color}. You lose ${money(stake)}.`, win ? 'win' : 'err');
         feed(room, `🎰 ${p.name} ${win ? 'won ' + money(win - stake) : 'lost ' + money(stake)} on roulette (${n} ${color}).`);
         broadcast(room);
@@ -453,6 +598,7 @@ function handle(room, p, m) {
       break;
     }
     case 'attack':
+      if (room.shake && room.phase === 'play') { if (Date.now() - p.lastHit < 90) break; p.lastHit = Date.now(); room.shake.hp -= 1; if (room.shake.hp <= 0) endShake(room, true); broadcast(room); break; }
       if (room.phase !== 'hunt' || Date.now() - p.lastHit < 90) break;
       p.lastHit = Date.now(); room.hp -= 1;
       if (room.hp <= 0) { room.hp = 0; feed(room, `👊 The crew beat the hitmen senseless!`); endHunt(room); } else broadcast(room);

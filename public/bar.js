@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import * as TX from './textures.js';
 import { makePreset, makePerson, randomPatron, animate } from './people.js';
+import { BY_ID, applyCosmetics } from './cosmetics.js';
 
 export const ROOM = { x: 12, z: 8, h: 5 };
 
@@ -107,7 +108,6 @@ export function buildBar({ scene, BK, tv }) {
   box(2.9, 0.12, 1.6, M(0x4a2a14), PX, 0.82, PZ); box(2.6, 0.04, 1.3, feltM, PX, 0.9, PZ);
   [[-1.4, -0.75], [1.4, -0.75], [-1.4, 0.75], [1.4, 0.75]].forEach(([x, z]) => box(0.18, 0.8, 0.18, M(0x2a170b), PX + x, 0.4, PZ + z));
   [[-1.3, -0.65], [0, -0.67], [1.3, -0.65], [-1.3, 0.65], [0, 0.67], [1.3, 0.65]].forEach(([x, z]) => cyl(0.08, 0.08, 0.02, M(0x050505), PX + x, 0.925, PZ + z, 10, scene, false));
-  [[0.2, 0.1], [0.3, -0.1], [0.4, 0.15], [0.5, 0], [0.6, -0.2], [-0.8, 0]].forEach(([x, z], i) => { const b = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), M([0xffffff, 0xd22, 0x228, 0xe92, 0x2a2, 0x111][i], { roughness: 0.2 })); b.position.set(PX + x, 0.95, PZ + z); b.castShadow = true; scene.add(b); });
   const plb = box(2.4, 0.08, 0.3, M(0x1b3a2a), PX, 3.0, PZ); box(2.3, 0.02, 0.2, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff2c0).multiplyScalar(2) }), PX, 2.95, PZ, scene, false);
   cyl(0.02, 0.02, 2, M(0x111), PX - 1, 4, PZ, 6, scene, false); cyl(0.02, 0.02, 2, M(0x111), PX + 1, 4, PZ, 6, scene, false);
   obstacles.push({ x: PX - 1.1, z: PZ, r: 0.95 }, { x: PX, z: PZ, r: 0.95 }, { x: PX + 1.1, z: PZ, r: 0.95 });
@@ -165,7 +165,7 @@ export function buildBar({ scene, BK, tv }) {
   // pool table
   spawn(makePreset('gambler', { hat: { color: 0x2a5aa8, backwards: false }, outfit: 'tee', shirt: 0xd8d0b0, stache: false }), 3.4, 4.5, face(3.4, 4.5, 3.4, 3.4), 'pool', ['Eight ball, corner pocket.', 'You\'re hustling me.', 'Watch the cue chalk.'], 'Shark');
   spawn(makePreset('knowItAll', { glasses: false, shirt: 0x9a3a8a, outfit: 'tee', hat: { color: 0x222222, backwards: true } }), 5.4, 3.4, face(5.4, 3.4, 4.4, 3.4), 'idle', ['Double or nothing?', 'Nice shot. Lucky.', 'I need a beer.'], 'Shark');
-  spawn(randomPatron(2), 1.6, 4.4, face(1.6, 4.4, 3.0, 3.4), 'cheer', ['Sink it!', 'Ohhh!', 'Scratch!'], 'Watcher');
+  spawn(randomPatron(2), 5.9, 4.9, face(5.9, 4.9, 4.4, 3.6), 'cheer', ['Sink it!', 'Ohhh!', 'Scratch!'], 'Watcher');
   // booths (front wall). benches at z=7.6 (face -z) and z=5.4 (face +z); seat top ~0.45
   const benchA = (x, p, i) => spawn(p, x, 7.5, 0, 'drink', ['This booth is cursed.', 'Ssh, the game is on.', 'Order me a beer?'], 'Patron', 0.45);
   const benchB = (x, p) => spawn(p, x, 5.5, Math.PI, 'idle', ['Told you. Told you.', 'Lock in the under.', '*laughs*'], 'Patron', 0.45);
@@ -176,11 +176,23 @@ export function buildBar({ scene, BK, tv }) {
   // roulette dealer, bowling & cornhole spectators
   spawn(makePreset('knowItAll', { glasses: false, outfit: 'suit', shirt: 0x1d2a22, tie: 0x2a8a4a, hairStyle: 'slick', hair: 0x1a1210, mouth: 'smile' }), -7.0, -6.75, Math.PI, 'idle', ['Place your bets.', 'No more bets.', 'Red or black?'], 'Dealer');
   tag('Dealer', -7.0, 2.7, -6.75);
-  spawn(randomPatron(3), -8.6, 6.0, face(-8.6, 6.0, -10.6, 3.5), 'cheer', ['Strike! Strike!', 'Come on, pocket!', 'Gutter. Classic.'], 'Spectator');
+  spawn(randomPatron(3), -8.8, 3.6, face(-8.8, 3.6, -10.6, 3.0), 'cheer', ['Strike! Strike!', 'Come on, pocket!', 'Gutter. Classic.'], 'Spectator');
   spawn(randomPatron(6), -8.0, 1.6, face(-8.0, 1.6, -6.0, 4.4), 'drink', ['Bags up!', 'Watch the wind.', 'Nice toss.'], 'Spectator');
   spawn(randomPatron(9), -8.5, -4.6, face(-8.5, -4.6, -10, -7.6), 'point', ['Triple twenty!', 'Don\'t choke.', 'He\'s shaking.'], 'Spectator');
   spawn(randomPatron(10), -1.8, -2.4, face(-1.8, -2.4, 0, -7), 'idle', ['Which season is this?', 'I feel like I know this one.', 'Rewind the highlights.'], 'Patron');
   spawn(randomPatron(11), 5.8, -0.6, face(5.8, -0.6, 4.8, -7.6), 'point', ['Look at that line.', 'Easy money.', 'I\'ve seen this game.'], 'Patron');
+
+  // ---------- Pro Shop corner ----------
+  box(2.4, 1.0, 0.8, M(0x4a2a14), -8.6, 0.5, 6.7); box(2.55, 0.07, 0.95, M(0x8a5a30, { roughness: 0.3 }), -8.6, 1.03, 6.7);
+  const stand = (id, x, y = 1.07) => { const g = new THREE.Group(); g.position.set(x, y, 6.65); BY_ID[id].make(g); g.scale.setScalar(0.8); scene.add(g); box(0.12, 0.1, 0.12, M(0x222), x, 1.1, 6.65); return g; };
+  [['helmet_fb', -9.5], ['tophat', -8.9], ['crown', -8.3], ['viking', -7.7]].forEach(([id, x]) => { const s = stand(id, x, 1.35); s.position.y = 1.2; });
+  for (const [id, x] of [['golf_club', -9.9], ['bat', -9.5], ['hockey_stick', -9.1]]) { const g = new THREE.Group(); g.position.set(x, 1.6, ROOM.z - 0.2); BY_ID[id].make(g); g.rotation.set(0, 0, 0); g.children.forEach(() => {}); g.rotation.x = 0.0; g.rotation.z = 0.0; g.rotation.x = 0; g.position.y = 0.9; scene.add(g); }
+  neonPlane('PRO SHOP', '#ffc83d', 2.4, 0.7, -8.6, 3.3, ROOM.z - 0.12, Math.PI, 70);
+  const clerk = spawn(makePreset('knowItAll', { glasses: false, hairStyle: 'slick', hair: 0x2a1a10 }), -8.6, 7.55, 0, 'idle', ['Cosmetics! Crates! Dignity not included.', 'Every crate is a surprise.', 'Dress for the occasion.'], 'Clerk');
+  applyCosmetics(clerk.P, { body: 'ref_shirt', head: 'sweatband' }); tag('Pro Shop', -8.6, 2.7, 7.55, '#ffc83d');
+  lamp(-8.6, 3.2, 6.0, 0xffd8a0, 22, 8);
+  obstacles.push({ x: -8.6, z: 6.7, r: 1.4 });
+  stations.push({ x: -8.6, z: 5.5, r: 2.2, text: 'E - Pro Shop (cosmetics)', act: () => BK.openShop && BK.openShop() });
 
   // ---------- dressing (beams, windows, signs, chalkboard, extra TVs, door) ----------
   const darkWood = M(0x2a1608, { roughness: 0.8 });

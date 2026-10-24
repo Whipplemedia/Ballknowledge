@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { makeHand } from './people.js';
 import { canvasTex, neon } from './textures.js';
+import { createPool } from './pool.js';
 
 // In-world arcade: darts, bowling, cornhole. Physical throwing in first person.
 // Scores are reported to the server as {type:'mg', game, pts}; the server caps and pays out.
@@ -13,6 +14,10 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
   const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 0.5;
   const dr = () => 1 + (BK.drunk || 0) / 55; // drunk makes everything shakier
   const rate = { darts: 3, bowling: 25, cornhole: 35 };
+  let challenge = null, resultMsg = '';
+  const OPP_NAME = { rookie: 'the Rookie', regular: 'the Regular', shark: 'The Shark' };
+  const tgt = () => (challenge ? ` · BEAT ${challenge.target} (${OPP_NAME[challenge.opp]})` : ' · practice');
+  const verdict = (ch, score, unit = 'pts') => !ch ? `${score} ${unit} - practice round, no payout` : score > ch.target ? `🏆 ${score} beats ${ch.target}! You took ${OPP_NAME[ch.opp]} down` : score === ch.target ? `Tie at ${score} - stake returned` : `${OPP_NAME[ch.opp]} wins ${ch.target} to ${score}`;
   const kick = { v: 0 }; // throw animation for the first-person hands
   const sleeve = 0x6a6a72;
   const scoreTex = (w, h, draw) => { const o = canvasTex(w, h, draw); o.redraw = (fn) => { fn(o.g, w, h); o.t.needsUpdate = true; }; return o; };
@@ -60,7 +65,7 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
     const spotL = new THREE.PointLight(0xfff4e0, 9, 7); spotL.position.set(BX, BY + 0.9, BZ + 1.6); scene.add(spotL);
     const l = label('🎯 DARTS'); l.position.set(BX, 3.1, BZ + 0.3); scene.add(l);
     const spot = { x: -10, z: -5.1, yaw: 0, pitch: 0.02 };
-    stations.push({ x: spot.x, z: spot.z, r: 1.6, text: 'E - Play darts', act: () => start('darts') });
+    stations.push({ x: spot.x, z: spot.z, r: 1.6, text: 'E - Darts (challenge board)', act: () => BK.openChallenge('darts') });
 
     function dartMesh() {
       const g = new THREE.Group();
@@ -81,7 +86,7 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
       exit() { hand.remove(hR); clearTracked(); flying = null; },
       handAnim(k) { hR.position.z = hBaseZ - k * 0.2; hR.rotation.x = 0.25 - k * 0.5; },
       reset() { clearTracked(); thrown = 0; score = 0; flying = null; state = 'ready'; fx = null; since = 0; held.visible = true; hud.power(null); drawSb(301); this.hudUpdate(); },
-      hudUpdate() { hud.title(''); hud.sub(`Dart ${Math.min(3, thrown + 1)}/3 · ${score} pts · ${Math.max(0, 301 - score)} left`); hud.help('Your hand shakes more with every dart (and every drink). Click to throw. E to leave.'); },
+      hudUpdate() { hud.title(''); hud.sub(`Dart ${Math.min(3, thrown + 1)}/3 · ${score} pts${tgt()}`); hud.help('Your hand shakes more with every dart (and every drink). Click to throw. E to leave.'); },
       camOffset(now) { const t = now / 1000, A = 0.032 * dr() * (1 + thrown * 0.2); return { y: Math.sin(t * 2.9) * A + Math.sin(t * 6.1 + 1) * A * 0.45 + Math.sin(t * 0.8) * A * 0.7, p: Math.cos(t * 2.3) * A + Math.cos(t * 5.3) * A * 0.45 + Math.cos(t * 0.9 + 2) * A * 0.7 }; },
       down() {
         if (state !== 'ready' || flying) return;
@@ -108,8 +113,8 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
         }
         if (state === 'done') { since += dt; this.cool(); }
       },
-      finish() { state = 'done'; since = 0; submit('darts', score); this.hudUpdate(); },
-      cool() { const left = Math.ceil(COOLDOWN - since); hud.msg(`${score} pts - about $${score * rate.darts}. Next round in ${Math.max(0, left)}s`); if (since >= COOLDOWN) { hud.msg(''); this.reset(); } },
+      finish() { state = 'done'; since = 0; const ch = submit('darts', score); resultMsg = verdict(ch, score); this.hudUpdate(); },
+      cool() { const left = Math.ceil(COOLDOWN - since); hud.msg(`${resultMsg}. Practice resets in ${Math.max(0, left)}s`); if (since >= COOLDOWN) { hud.msg(''); this.reset(); } },
     };
   })();
 
@@ -128,7 +133,7 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
     { const t = neon('BOWL', '#ff3a4a', { w: 512, h: 192, size: 120 }).t; const m = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.42), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, toneMapped: false })); m.position.set(X0 + 0.15, 3.05, PIT + 0.2); scene.add(m); }
     { const lt = new THREE.PointLight(0xfff0d0, 14, 7); lt.position.set(X0, 2.7, 2.2); scene.add(lt); }
     const spot = { x: X0, z: 6.4, yaw: 0, pitch: -0.22 };
-    stations.push({ x: X0, z: 6.4, r: 1.5, text: 'E - Go bowling', act: () => start('bowling') });
+    stations.push({ x: X0, z: 6.4, r: 1.5, text: 'E - Bowling (challenge board)', act: () => BK.openChallenge('bowling') });
 
     const layout = [[0, 0], [-0.5, 1], [0.5, 1], [-1, 2], [0, 2], [1, 2], [-1.5, 3], [-0.5, 3], [0.5, 3], [1.5, 3]];
     const pins = layout.map(([c, r]) => {
@@ -152,7 +157,7 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
       handAnim(k) { bowlHands.position.z = -k * 0.25; bowlHands.position.y = -k * 0.1; },
       exit() { hand.remove(bowlHands); ballM.visible = false; resetPins(); pins.forEach((p) => (p.g.visible = true)); },
       reset() { resetPins(); frames[0] = []; frames[1] = []; drawMon(); frame = 0; ballNo = 0; total = 0; state = 'ready'; ball = null; charge = 0; charging = false; since = 0; frameStart = 0; bowlG.visible = true; ballM.visible = false; hud.power(null); this.hudUpdate(); },
-      hudUpdate() { hud.title(''); hud.sub(`Frame ${Math.min(frame + 1, 2)}/2 · Ball ${ballNo + 1}/2 · ${total} pins`); hud.help('A/D slide · mouse aims · HOLD click - the meter swings, release in the zone · the lane hooks! · E to leave'); },
+      hudUpdate() { hud.title(''); hud.sub(`Frame ${Math.min(frame + 1, 2)}/2 · Ball ${ballNo + 1}/2 · ${total} pins${tgt()}`); hud.help('A/D slide · mouse aims · HOLD click - the meter swings, release in the zone · the lane hooks! · E to leave'); },
       camOffset(now) { const t = now / 1000, A = 0.007 * dr(); return { y: Math.sin(t * 1.9) * A, p: Math.cos(t * 1.5) * A }; },
       down() { if (state === 'ready') { charging = true; charge = 0; cdir = 1; } },
       up() {
@@ -204,7 +209,7 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
             if (wait > 4) { pins.forEach((p) => { if (p.st === 'move') p.st = 'down'; }); this.endBall(); }
           }
         }
-        if (state === 'done') { since += dt; const left = Math.ceil(COOLDOWN - since); hud.msg(`${total} pins - about $${total * rate.bowling}. Next game in ${Math.max(0, left)}s`); if (since >= COOLDOWN) { hud.msg(''); this.reset(); } }
+        if (state === 'done') { since += dt; const left = Math.ceil(COOLDOWN - since); hud.msg(`${resultMsg}. Practice resets in ${Math.max(0, left)}s`); if (since >= COOLDOWN) { hud.msg(''); this.reset(); } }
       },
       endBall() {
         if (state !== 'settle') return;
@@ -212,7 +217,7 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
         { const fr = frames[Math.min(frame, 1)]; fr.push(downCount() === 10 && ballNo === 1 ? 'X' : downCount() === 10 ? '/' : knocked === 0 ? '-' : knocked); drawMon(); }
         hud.pop(downCount() === 10 && ballNo === 1 ? 'STRIKE!' : knocked ? `+${knocked}` : 'GUTTER', knocked > 0);
         const frameOver = ballNo >= 2 || downCount() === 10;
-        if (frameOver) { frame++; ballNo = 0; if (frame >= 2) { state = 'done'; since = 0; submit('bowling', total); this.hudUpdate(); return; } setTimeout(() => { if (cur === bowling) resetPins(); }, 700); }
+        if (frameOver) { frame++; ballNo = 0; if (frame >= 2) { state = 'done'; since = 0; const ch = submit('bowling', total); resultMsg = verdict(ch, total, 'pins'); this.hudUpdate(); return; } setTimeout(() => { if (cur === bowling) resetPins(); }, 700); }
         else clearDown();
         state = 'ready'; bowlG.visible = true; me.x = X0; this.hudUpdate();
       },
@@ -239,7 +244,7 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
     drawCsb(0, 0);
     { const m = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.77), new THREE.MeshBasicMaterial({ map: csb.t, toneMapped: false })); m.position.set(BX, 2.3, 6.1); m.rotation.y = Math.PI; scene.add(m); box(1.24, 0.9, 0.06, 0x2a1a0c, BX, 2.3, 6.15); box(0.08, 1.6, 0.08, 0x2a1a0c, BX - 0.5, 1.5, 6.15); box(0.08, 1.6, 0.08, 0x2a1a0c, BX + 0.5, 1.5, 6.15); }
     const spot = { x: BX, z: 0.3, yaw: Math.PI, pitch: -0.2 };
-    stations.push({ x: BX, z: 0.3, r: 1.6, text: 'E - Play cornhole', act: () => start('cornhole') });
+    stations.push({ x: BX, z: 0.3, r: 1.6, text: 'E - Cornhole (challenge board)', act: () => BK.openChallenge('cornhole') });
     obstacles.push({ x: BX, z: 4.6, r: 0.7 }, { x: BX, z: -0.9, r: 0.7 });
 
     const bagMesh = (c) => { const g = new THREE.Group(); const b = box(0.16, 0.05, 0.16, c, 0, 0, 0, g); b.scale.set(1, 1, 1); box(0.14, 0.055, 0.02, 0xffffff, 0, 0, 0, g); return g; };
@@ -252,7 +257,7 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
       handAnim(k) { cHand.position.z = -0.34 - k * 0.22; cHand.rotation.x = 0.15 - k * 0.7; },
       exit() { hand.remove(cHand); clearTracked(); },
       reset() { clearTracked(); thrown = 0; score = 0; state = 'ready'; charge = 0; charging = false; bag = null; since = 0; heldBag.visible = true; hud.power(null); wind = (Math.random() - 0.5) * 2.2; drawCsb(0, lastScore); this.hudUpdate(); },
-      hudUpdate() { hud.title(''); hud.sub(`Bag ${Math.min(4, thrown + 1)}/4 · ${score} pts · Wind ${wind < 0 ? '←' : '→'} ${Math.abs(wind).toFixed(1)}`); hud.help('HOLD click - the meter swings; release in the green zone. Watch the wind! - E to leave'); },
+      hudUpdate() { hud.title(''); hud.sub(`Bag ${Math.min(4, thrown + 1)}/4 · ${score} pts · Wind ${wind < 0 ? '←' : '→'} ${Math.abs(wind).toFixed(1)}${tgt()}`); hud.help('HOLD click - the meter swings; release in the green zone. Watch the wind! - E to leave'); },
       camOffset() { return { y: 0, p: 0 }; },
       down() { if (state === 'ready') { charging = true; charge = 0; cdir = 1; } },
       up() {
@@ -282,20 +287,23 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
           else if (b.mode === 'fall') { b.vy -= G * dt; b.y += b.vy * dt; if (b.y <= 0.03) { b.y = 0.03; b.mode = 'floor'; b.pts = 0; this.landed(b, 'OFF THE BOARD'); } }
           b.m.position.set(b.x, b.y, b.z);
         }
-        if (state === 'done') { since += dt; hud.msg(`${score} pts - about $${score * rate.cornhole}. Next round in ${Math.max(0, Math.ceil(COOLDOWN - since))}s`); if (since >= COOLDOWN) { hud.msg(''); this.reset(); } }
+        if (state === 'done') { since += dt; hud.msg(`${resultMsg}. Practice resets in ${Math.max(0, Math.ceil(COOLDOWN - since))}s`); if (since >= COOLDOWN) { hud.msg(''); this.reset(); } }
       },
-      landed(b, text) { score += b.pts; drawCsb(score, lastScore); hud.pop(text, b.pts > 0); bag = null; if (thrown >= 4) { state = 'done'; since = 0; lastScore = score; submit('cornhole', score); } else { state = 'ready'; heldBag.visible = true; } this.hudUpdate(); },
+      landed(b, text) { score += b.pts; drawCsb(score, lastScore); hud.pop(text, b.pts > 0); bag = null; if (thrown >= 4) { state = 'done'; since = 0; lastScore = score; const ch = submit('cornhole', score); resultMsg = verdict(ch, score); } else { state = 'ready'; heldBag.visible = true; } this.hudUpdate(); },
     };
   })();
 
+  const pool = createPool({ scene, camera, BK, me, stations, obstacles, hud, V });
+
   // ---------- controller ----------
-  const all = { darts, bowling, cornhole };
+  const all = { darts, bowling, cornhole, pool };
   let cur = null, acc = 0;
-  function submit(game, pts) { BK.send({ type: 'mg', game, pts }); }
-  function start(name) {
+  function submit(game, pts) { const ch = challenge; BK.send({ type: 'mg', game, pts }); challenge = null; return ch; }
+  function start(name, ch = null) {
     if (cur) leave();
+    challenge = ch;
     cur = all[name]; me.x = cur.spot.x; me.z = cur.spot.z; me.yaw = cur.spot.yaw; me.pitch = cur.spot.pitch || 0; document.body.classList.add('playing');
-    hudEl.classList.remove('hidden'); cur.enter();
+    hudEl.classList.remove('hidden'); cur.enter(ch);
   }
   function leave() { if (!cur) return; cur.exit(); cur = null; hud.msg(''); hud.power(null); hudEl.classList.add('hidden'); document.body.classList.remove('playing'); }
   return {
@@ -303,7 +311,8 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
     down: () => cur && cur.down(), up: () => cur && cur.up(),
     camOffset: (now) => (cur ? cur.camOffset(now) : { y: 0, p: 0 }),
     update(dt) { if (!cur) return; acc += Math.min(dt, 0.1); while (acc >= STEP) { cur.step(STEP); acc -= STEP; } kick.v = Math.max(0, kick.v - dt * 3.5); if (cur.handAnim) cur.handAnim(kick.v); },
-    clampLook() { if (!cur) return; const b = cur.spot.yaw, L = cur.limits; me.yaw = Math.max(b - L.yaw, Math.min(b + L.yaw, me.yaw)); const bp = cur.spot.pitch || 0; me.pitch = Math.max(bp - L.pitch, Math.min(bp + L.pitch, me.pitch)); },
+    rig(cam) { if (cur && cur.rig) cur.rig(cam); },
+    clampLook() { if (!cur) return; if (cur.look) { cur.look(); return; } const b = cur.spot.yaw, L = cur.limits; me.yaw = Math.max(b - L.yaw, Math.min(b + L.yaw, me.yaw)); const bp = cur.spot.pitch || 0; me.pitch = Math.max(bp - L.pitch, Math.min(bp + L.pitch, me.pitch)); },
     setPaused(p) { hud.msg(p ? 'Click to resume' : ''); },
     all,
   };

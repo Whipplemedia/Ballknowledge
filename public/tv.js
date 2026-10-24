@@ -134,7 +134,9 @@ export function createTV(BK) {
   }
   let last = 0;
   return { center: C.t, left: L.t, right: R.t, kiosk: K.t, amb: AMB.map((o) => o.t),
+    blackout: false,
     draw(S, ts) {
+      if (this.blackout) { if (ts - last < 120) return; last = ts; const nz = (o, label) => { const { g, c } = o, W = c.width, H = c.height; g.fillStyle = '#0c0c10'; g.fillRect(0, 0, W, H); for (let i = 0; i < 220; i++) { g.fillStyle = `rgba(255,255,255,${Math.random() * 0.45})`; g.fillRect(Math.random() * W, Math.random() * H, 8 + Math.random() * 70, 2 + Math.random() * 3); } if (label) fit(g, 'NO SIGNAL', W / 2, H / 2, W - 40, '900 56px system-ui', '#8f9bc7'); upd(o); }; nz(C, true); nz(L, false); nz(R, false); AMB.forEach((o) => nz(o, false)); return; }
       if (!S || !S.events) { // title / lobby: idle splash
         if (ts - last < 190) return; last = ts; const sec = ts / 1000, { g, c } = C; drawScene(g, c.width, c.height, 'football', sec, '#2a5aa8', '#b02a2a', 3); g.fillStyle = '#000a'; g.fillRect(0, 0, c.width, c.height);
         fit(g, 'BALL KNOWLEDGE', c.width / 2, 240, c.width - 60, '900 76px system-ui', '#27e08a'); fit(g, 'Waiting for kickoff...', c.width / 2, 320, c.width - 60, '700 36px system-ui', '#ffc83d'); upd(C);
