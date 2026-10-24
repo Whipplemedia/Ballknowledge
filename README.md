@@ -12,6 +12,10 @@ Run: `npm install && npm start` -> http://localhost:3000 (share the 4-letter roo
    pay, win cash in the arcade (darts/bowling/cornhole/roulette), wire money to crewmates, or ambush-mash together.
 5. Reveal the real season. Crew wins if at least half the players called the champion.
 
+## First-person world
+Walk the bar (WASD + mouse, E to interact, C for crew/wire). Stations: betting terminal, Uncle Sal's booth, darts, bowling, cornhole, roulette.
+Hitmen walk in during the hunt - aim and click to hit them. Three.js is vendored in `public/vendor/`.
+
 ## Files
 - `seasons.js` - season data (the main content job: add more seasons, verify results/odds)
 - `server.js` - authoritative room/game state over WebSocket

@@ -12,6 +12,7 @@ function connect(msg) {
     const m = JSON.parse(e.data);
     if (m.type === 'state') { S = m; err = ''; render(); }
     else if (m.type === 'toast') toast(m.text, m.kind);
+    else if (m.type === 'pos') window.BK.onPos && window.BK.onPos(m);
     else if (m.type === 'error') { err = m.text; ws.close(); S = null; render(); }
   };
   ws.onclose = () => { if (S) { S = null; err = 'Disconnected.'; render(); } };
@@ -24,7 +25,15 @@ function toast(text, kind = 'info') {
 }
 
 // ---------- rendering ----------
+let lastPhase = null;
 function render() {
+  if (S && S.phase !== lastPhase) {
+    if (S.phase === 'result') { ui.open = true; ui.tab = 'book'; document.exitPointerLock && document.exitPointerLock(); }
+    else if (S.phase === 'betting' && lastPhase === 'result') { ui.open = false; toast('Betting is open for the next round.'); }
+    else if (['lobby', 'ended'].includes(S.phase)) ui.open = false;
+    lastPhase = S.phase;
+  }
+  document.body.classList.toggle('ingame', !!S && ['betting', 'result', 'hunt'].includes(S.phase));
   const a = document.activeElement, keep = a && a.id ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
   const app = $('#app');
   if (!S) app.innerHTML = joinView();
@@ -33,6 +42,7 @@ function render() {
   else app.innerHTML = gameView();
   if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { el.setSelectionRange(keep.s, keep.e); } catch {} } }
   tick();
+  window.BK.onRender && window.BK.onRender();
 }
 
 function joinView() {
@@ -65,21 +75,30 @@ function lobbyView() {
   </div></div>`;
 }
 
+function openPanel(tab) { ui.open = true; if (tab) ui.tab = tab; document.exitPointerLock && document.exitPointerLock(); render(); }
+function closePanel() { ui.open = false; render(); }
+window.BK = { get S() { return S; }, ui, send, openPanel, closePanel };
+addEventListener('keydown', (e) => { if (e.key === 'Escape' && ui.open && S && S.phase !== 'result') closePanel(); });
+
 function gameView() {
   const me = S.me, hunt = S.phase === 'hunt';
   const tabs = [['book', '📱 Sportsbook'], ['mob', '🕴️ The Mob'], ['arcade', '🎯 Arcade'], ['crew', '👥 Crew']];
-  return `<div class="wrap">
-    <div class="top">
-      <div class="row" style="gap:8px"><span class="pill">Room ${S.code}</span>
+  const body = ui.tab === 'book' ? bookView() : ui.tab === 'mob' ? mobView() : ui.tab === 'arcade' ? arcadeView() : crewView();
+  return `<div class="hud">
+    <div class="hud-top">
+      <div class="row" style="gap:8px;justify-content:flex-start"><span class="pill">Room ${S.code}</span>
       <span class="pill">${hunt ? '🔫 HUNT' : esc(S.round?.label || '')} ${S.round && !hunt ? `(${S.round.index + 1}/${S.round.total})` : ''}</span></div>
       <div class="row" style="gap:8px;justify-content:flex-end"><span class="pill time" id="timer"></span>
       <span class="pill money">${$$(me.money)}</span>${me.mobTied ? `<span class="pill debt">Owe ${$$(me.debt)}</span>` : ''}</div>
     </div>
     ${hunt ? huntBanner() : ''}
-    <div class="tabs">${tabs.map(([id, l]) => `<button class="${id === 'mob' ? 'mob ' : ''}${ui.tab === id ? 'on' : ''}" onclick="ui.tab='${id}';render()">${l}</button>`).join('')}</div>
-    <div class="grid"><div>${ui.tab === 'book' ? bookView() : ui.tab === 'mob' ? mobView() : ui.tab === 'arcade' ? arcadeView() : crewView()}</div>
-    <div class="card"><div class="title">Crew</div>${playerList()}<div class="title" style="margin-top:12px">Wire</div>
-    <div class="feed">${[...S.feed].reverse().map((f) => `<div>${esc(f.text)}</div>`).join('')}</div></div></div></div>`;
+    <div class="hud-crew">${playerList()}</div>
+    <div class="hud-feed">${[...S.feed].slice(-4).reverse().map((f) => `<div>${esc(f.text)}</div>`).join('')}</div>
+    <div class="hud-help">WASD move · Mouse look · E interact · C crew/wire · Esc menu</div>
+  </div>
+  ${ui.open ? `<div class="overlay"><div class="panel">
+    <div class="tabs">${tabs.map(([id, l]) => `<button class="${id === 'mob' ? 'mob ' : ''}${ui.tab === id ? 'on' : ''}" onclick="ui.tab='${id}';render()">${l}</button>`).join('')}
+    <button class="ghost" style="flex:0 0 auto" onclick="closePanel()">✕</button></div>${body}</div></div>` : ''}`;
 }
 
 function huntBanner() {
@@ -120,7 +139,7 @@ function bookView() {
   </div>`;
 }
 let pendingTeam = null;
-function pickTeam(t) { pendingTeam = t; const el = document.querySelectorAll('.team'); el.forEach((e) => e.classList.toggle('sel', e.firstChild.textContent === t)); }
+function pickTeam(t) { pendingTeam = t; const el = document.querySelectorAll('.panel .team'); el.forEach((e) => e.classList.toggle('sel', e.firstChild.textContent === t)); }
 function placeBet() {
   const t = pendingTeam || (S.me.bet && S.me.bet.team);
   if (!t) return toast('Pick a team first.', 'err');

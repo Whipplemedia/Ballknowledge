@@ -48,7 +48,7 @@ function newCode() {
 
 function newPlayer(id, name, ws) {
   return { id, name, ws, connected: true, money: START_MONEY, debt: 0, loans: 0, mobTied: false,
-    bet: null, side: {}, fixPick: null, ready: false, finalCorrect: null, fate: null, lastMg: 0, lastHit: 0, remaining: 0 };
+    bet: null, side: {}, fixPick: null, ready: false, finalCorrect: null, fate: null, lastMg: 0, lastHit: 0, remaining: 0, color: 0, x: 0, z: 2, ry: 0 };
 }
 
 function createRoom() {
@@ -90,7 +90,7 @@ function view(room, p) {
   const v = { type: 'state', code: room.code, you: p.id, host: room.hostId === p.id, phase: room.phase, sport: room.sport,
     sports: Object.entries(SPORTS).map(([id, s]) => ({ id, label: s.label, emoji: s.emoji })),
     deadline: room.deadline, feed: room.feed.slice(-25),
-    players: alive(room).map((q) => ({ id: q.id, name: q.name, money: Math.round(q.money), ready: q.ready, connected: q.connected,
+    players: alive(room).map((q) => ({ id: q.id, name: q.name, color: q.color, money: Math.round(q.money), ready: q.ready, connected: q.connected,
       fate: q.fate, hunted: room.phase === 'hunt' && q.remaining > 0, finalCorrect: room.phase === 'ended' ? q.finalCorrect : null })),
     me: { money: Math.round(p.money), debt: Math.round(p.debt), loans: p.loans, mobTied: p.mobTied, bet: p.bet, side: p.side,
       fixPick: p.fixPick, ready: p.ready, remaining: Math.round(p.remaining) } };
@@ -320,6 +320,13 @@ function handle(room, p, m) {
       if (!to || to === p || !inPlay(room) || !(amt > 0 && amt <= p.money)) break;
       p.money -= amt; to.money += amt; toast(to, `${p.name} sent you ${money(amt)}`, 'win'); broadcast(room); break;
     }
+    case 'pos': {
+      const x = Number(m.x), z = Number(m.z), ry = Number(m.ry);
+      if (![x, z, ry].every(Number.isFinite)) break;
+      p.x = clamp(x, -30, 30); p.z = clamp(z, -30, 30); p.ry = ry;
+      for (const q of room.players.values()) if (q !== p) send(q, { type: 'pos', id: p.id, x: p.x, z: p.z, ry });
+      break;
+    }
     case 'attack':
       if (room.phase !== 'hunt' || Date.now() - p.lastHit < 90) break;
       p.lastHit = Date.now(); room.hp -= 1;
@@ -359,6 +366,7 @@ wss.on('connection', (ws) => {
       if (r.players.size >= 6) return ws.send(JSON.stringify({ type: 'error', text: 'Room is full.' }));
       room = r;
       player = newPlayer(Math.random().toString(36).slice(2, 9), name, ws);
+      player.color = room.players.size % 6; player.x = -3 + player.color * 1.2;
       room.players.set(player.id, player);
       if (!room.hostId) room.hostId = player.id;
       feed(room, `${name} joined the crew.`);
