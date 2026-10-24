@@ -8,6 +8,8 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
   scene.add(camera);
   const hand = new THREE.Group(); camera.add(hand);
   const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+  const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 0.5;
+  const dr = () => 1 + (BK.drunk || 0) / 55; // drunk makes everything shakier
   const rate = { darts: 3, bowling: 25, cornhole: 35 };
 
   // ---------- HUD ----------
@@ -56,13 +58,13 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
       enter() { hand.add(held); this.reset(); },
       exit() { hand.remove(held); clearTracked(); flying = null; },
       reset() { clearTracked(); thrown = 0; score = 0; flying = null; state = 'ready'; fx = null; since = 0; held.visible = true; hud.power(null); this.hudUpdate(); },
-      hudUpdate() { hud.title(''); hud.sub(`Dart ${Math.min(3, thrown + 1)}/3 · ${score} pts`); hud.help('Hold steady - the view shakes. Click to throw. E to leave.'); },
-      camOffset(now) { const t = now / 1000; return { y: Math.sin(t * 1.7) * 0.016 + Math.sin(t * 3.3) * 0.007, p: Math.cos(t * 1.3) * 0.016 + Math.cos(t * 2.9) * 0.007 }; },
+      hudUpdate() { hud.title(''); hud.sub(`Dart ${Math.min(3, thrown + 1)}/3 · ${score} pts`); hud.help('Your hand shakes more with every dart (and every drink). Click to throw. E to leave.'); },
+      camOffset(now) { const t = now / 1000, A = 0.032 * dr() * (1 + thrown * 0.2); return { y: Math.sin(t * 2.9) * A + Math.sin(t * 6.1 + 1) * A * 0.45 + Math.sin(t * 0.8) * A * 0.7, p: Math.cos(t * 2.3) * A + Math.cos(t * 5.3) * A * 0.45 + Math.cos(t * 0.9 + 2) * A * 0.7 }; },
       down() {
         if (state !== 'ready' || flying) return;
         const d = V(0, 0, -1).applyQuaternion(camera.quaternion), P = camera.getWorldPosition(V());
         if (d.z > -0.05) return;
-        const t = (BZ - P.z) / d.z, T = P.clone().add(d.clone().multiplyScalar(t));
+        const t = (BZ - P.z) / d.z, T = P.clone().add(d.clone().multiplyScalar(t)); const jit = 0.03 * dr(); T.x += gauss() * jit; T.y += gauss() * jit;
         const S = P.clone().add(V(0.14, -0.16, 0).applyQuaternion(camera.quaternion));
         const time = 0.3, v = T.clone().sub(S).multiplyScalar(1 / time); v.y += 0.5 * G * time;
         const m = dartMesh(); m.position.copy(S); addTracked(m);
@@ -75,7 +77,7 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
           f.m.position.copy(f.p); f.m.lookAt(f.p.clone().add(f.v));
           if (prev.z > BZ && f.p.z <= BZ) {
             const k = (prev.z - BZ) / (prev.z - f.p.z), hit = prev.clone().lerp(f.p, k);
-            const r = Math.hypot(hit.x - BX, hit.y - BY) / R, pts = sc(r);
+            let r = Math.hypot(hit.x - BX, hit.y - BY) / R; if ([0.06, 0.15, 0.45, 0.75, 1].some((e) => Math.abs(r - e) < 0.03) && Math.random() < 0.4) r += 0.05; const pts = sc(r);
             f.m.position.set(hit.x, hit.y, BZ + 0.03); score += pts; flying = null;
             hud.pop(pts ? '+' + pts : 'MISS', !!pts);
             if (thrown >= 3) this.finish(); else this.hudUpdate();
@@ -107,7 +109,7 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
     const ballM = new THREE.Mesh(new THREE.SphereGeometry(BR, 16, 12), mat(0x14223a, { roughness: 0.3 })); scene.add(ballM); ballM.visible = false;
     const held = new THREE.Mesh(new THREE.SphereGeometry(BR, 16, 12), mat(0x14223a, { roughness: 0.3 })); held.position.set(0.02, -0.34, -0.5);
 
-    let frame, ballNo, total, state, ball, charge, charging, wait, since, frameStart;
+    let frame, ballNo, total, state, ball, charge, charging, wait, since, frameStart, cdir = 1;
     const resetPins = () => pins.forEach((p) => { p.x = p.hx; p.z = p.hz; p.vx = p.vz = 0; p.st = 'up'; p.fall = 0; p.g.visible = true; place(p); });
     const clearDown = () => pins.forEach((p) => { if (p.st !== 'up') p.g.visible = false; });
     const place = (p) => { p.g.position.set(p.x, Y + 0.06 * p.fall, p.z); p.g.quaternion.setFromAxisAngle(V(p.dz, 0, -p.dx).normalize(), p.fall * Math.PI / 2); };
@@ -119,23 +121,24 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
       enter() { hand.add(held); this.reset(); },
       exit() { hand.remove(held); ballM.visible = false; resetPins(); pins.forEach((p) => (p.g.visible = true)); },
       reset() { resetPins(); frame = 0; ballNo = 0; total = 0; state = 'ready'; ball = null; charge = 0; charging = false; since = 0; frameStart = 0; held.visible = true; ballM.visible = false; hud.power(null); this.hudUpdate(); },
-      hudUpdate() { hud.title(''); hud.sub(`Frame ${Math.min(frame + 1, 2)}/2 · Ball ${ballNo + 1}/2 · ${total} pins`); hud.help('A/D slide · mouse aims · HOLD click to charge, release to roll · E to leave'); },
-      camOffset() { return { y: 0, p: 0 }; },
-      down() { if (state === 'ready') charging = true; },
+      hudUpdate() { hud.title(''); hud.sub(`Frame ${Math.min(frame + 1, 2)}/2 · Ball ${ballNo + 1}/2 · ${total} pins`); hud.help('A/D slide · mouse aims · HOLD click - the meter swings, release in the zone · the lane hooks! · E to leave'); },
+      camOffset(now) { const t = now / 1000, A = 0.007 * dr(); return { y: Math.sin(t * 1.9) * A, p: Math.cos(t * 1.5) * A }; },
+      down() { if (state === 'ready') { charging = true; charge = 0; cdir = 1; } },
       up() {
         if (!charging || state !== 'ready') return; charging = false;
-        const power = charge, speed = 5 + power * 8, dirx = -Math.sin(me.yaw), dirz = -Math.cos(me.yaw);
-        ball = { x: me.x, y: Y + BR, z: 6.0, vx: dirx * speed, vz: dirz * speed, spin: 0 };
+        const power = charge, inZone = power >= 0.5 && power <= 0.82, speed = 5 + power * 8, yawErr = gauss() * (inZone ? 0.012 : 0.03) * dr();
+        const dirx = -Math.sin(me.yaw + yawErr), dirz = -Math.cos(me.yaw + yawErr);
+        ball = { x: me.x, y: Y + BR, z: 6.0, vx: dirx * speed, vz: dirz * speed, spin: 0, hook: gauss() * (inZone ? 1.05 : 1.9) * dr() };
         ballM.visible = true; held.visible = false; hud.power(null); state = 'rolling'; wait = 0; frameStart = downCount();
       },
       step(dt) {
         if (state === 'ready') {
           const s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0); me.x = Math.max(X0 - 0.5, Math.min(X0 + 0.5, me.x + s * 1.1 * dt));
-          if (charging) { charge = Math.min(1, charge + dt / 1.2); hud.power(charge, [0.5, 0.8]); } else charge = 0;
+          if (charging) { charge += cdir * dt / 0.85; if (charge >= 1) { charge = 1; cdir = -1; } if (charge <= 0) { charge = 0; cdir = 1; } hud.power(charge, [0.5, 0.82]); } else charge = 0;
         }
         if (state === 'rolling' || state === 'settle') {
           if (ball) {
-            ball.x += ball.vx * dt; ball.z += ball.vz * dt; ball.spin += dt * 20;
+            ball.vx += ball.hook * dt; ball.x += ball.vx * dt; ball.z += ball.vz * dt; ball.spin += dt * 20;
             const off = Math.abs(ball.x - X0); ball.y += ((off > 0.62 ? 0.14 : Y + BR) - ball.y) * Math.min(1, dt * 20);
             ballM.position.set(ball.x, ball.y, ball.z); ballM.rotation.x -= dt * 12;
             for (const p of pins) {
@@ -143,7 +146,7 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
               const dx = p.x - ball.x, dz = p.z - ball.z, d = Math.hypot(dx, dz);
               if (d < BR + PR && ball.y > 0.2) {
                 const nx = dx / (d || 1), nz = dz / (d || 1), sp = Math.hypot(ball.vx, ball.vz);
-                p.st = 'move'; p.vx = nx * (sp * 0.72 + 0.8); p.vz = nz * (sp * 0.72 + 0.8); p.dx = nx; p.dz = nz;
+                const lk = 0.4 + Math.random() * 0.45; p.st = 'move'; p.vx = nx * (sp * 0.72 + 0.8) * lk; p.vz = nz * (sp * 0.72 + 0.8) * lk; p.dx = nx; p.dz = nz;
                 ball.vx = ball.vx * 0.94 - nx * 0.25; ball.vz *= 0.94;
               }
             }
@@ -157,7 +160,7 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
             if (sp > 0.2) { p.dx = p.vx / sp; p.dz = p.vz / sp; }
             if (sp > 0.35) for (const o of pins) {
               if (o.st !== 'up') continue; const dx = o.x - p.x, dz = o.z - p.z, d = Math.hypot(dx, dz);
-              if (d < 0.155) { const nx = dx / (d || 1), nz = dz / (d || 1); o.st = 'move'; o.vx = nx * sp * 0.7; o.vz = nz * sp * 0.7; o.dx = nx; o.dz = nz; p.vx *= 0.75; p.vz *= 0.75; }
+              if (d < 0.145) { const nx = dx / (d || 1), nz = dz / (d || 1); o.st = 'move'; const lk2 = 0.3 + Math.random() * 0.4; o.vx = nx * sp * 0.7 * lk2; o.vz = nz * sp * 0.7 * lk2; o.dx = nx; o.dz = nz; p.vx *= 0.75; p.vz *= 0.75; }
             }
             if (sp < 0.06 && p.fall >= 1) { p.st = 'down'; p.vx = p.vz = 0; }
             place(p);
@@ -206,28 +209,28 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
     const bagMesh = (c) => { const g = new THREE.Group(); const b = box(0.16, 0.05, 0.16, c, 0, 0, 0, g); b.scale.set(1, 1, 1); box(0.14, 0.055, 0.02, 0xffffff, 0, 0, 0, g); return g; };
     const heldBag = bagMesh(0xc0392b); heldBag.position.set(0.08, -0.3, -0.5);
     const LOFT = 0.45, ZONE = [0.25, 0.52];
-    let thrown, score, state, charge, charging, bag, since;
+    let thrown, score, state, charge, charging, bag, since, wind = 0, cdir = 1;
     return {
       name: 'cornhole', spot, limits: { yaw: 0.4, pitch: 0.3 }, rateName: 'cornhole',
       enter() { hand.add(heldBag); this.reset(); },
       exit() { hand.remove(heldBag); clearTracked(); },
-      reset() { clearTracked(); thrown = 0; score = 0; state = 'ready'; charge = 0; charging = false; bag = null; since = 0; heldBag.visible = true; hud.power(null); this.hudUpdate(); },
-      hudUpdate() { hud.title(''); hud.sub(`Bag ${Math.min(4, thrown + 1)}/4 · ${score} pts`); hud.help('Aim at the board - HOLD click to charge (aim for the green zone), release to toss - E to leave'); },
+      reset() { clearTracked(); thrown = 0; score = 0; state = 'ready'; charge = 0; charging = false; bag = null; since = 0; heldBag.visible = true; hud.power(null); wind = (Math.random() - 0.5) * 2.2; this.hudUpdate(); },
+      hudUpdate() { hud.title(''); hud.sub(`Bag ${Math.min(4, thrown + 1)}/4 · ${score} pts · Wind ${wind < 0 ? '←' : '→'} ${Math.abs(wind).toFixed(1)}`); hud.help('HOLD click - the meter swings; release in the green zone. Watch the wind! - E to leave'); },
       camOffset() { return { y: 0, p: 0 }; },
-      down() { if (state === 'ready') charging = true; },
+      down() { if (state === 'ready') { charging = true; charge = 0; cdir = 1; } },
       up() {
         if (!charging || state !== 'ready') return; charging = false;
-        const speed = 3.5 + charge * 5.0, el = LOFT + (me.pitch - spot.pitch), dirx = -Math.sin(me.yaw), dirz = -Math.cos(me.yaw);
+        const speed = (3.5 + charge * 5.0) * (1 + gauss() * 0.03 * dr()), el = LOFT + (me.pitch - spot.pitch), yw = me.yaw + gauss() * 0.009 * dr(), dirx = -Math.sin(yw), dirz = -Math.cos(yw);
         const m = bagMesh(thrown % 2 ? 0x2980b9 : 0xc0392b); const P = camera.getWorldPosition(V()); P.y -= 0.35; P.x += dirx * 0.3; P.z += dirz * 0.3; m.position.copy(P); addTracked(m);
-        bag = { m, x: P.x, y: P.y, z: P.z, vx: dirx * Math.cos(el) * speed, vy: Math.sin(el) * speed, vz: dirz * Math.cos(el) * speed, mode: 'air', spin: 6 + Math.random() * 4, pts: 0 };
-        state = 'flying'; heldBag.visible = false; thrown++; hud.power(null); charge = 0; this.hudUpdate();
+        bag = { m, x: P.x, y: P.y, z: P.z, vx: dirx * Math.cos(el) * speed, vy: Math.sin(el) * speed, vz: dirz * Math.cos(el) * speed, mode: 'air', spin: 6 + Math.random() * 4, pts: 0, wind };
+        state = 'flying'; heldBag.visible = false; thrown++; hud.power(null); charge = 0; wind = (Math.random() - 0.5) * 2.2; this.hudUpdate();
       },
       step(dt) {
-        if (state === 'ready') { if (charging) { charge = Math.min(1, charge + dt / 2.4); hud.power(charge, ZONE); } }
+        if (state === 'ready') { if (charging) { charge += cdir * dt / 0.95; if (charge >= 1) { charge = 1; cdir = -1; } if (charge <= 0) { charge = 0; cdir = 1; } hud.power(charge, ZONE); } }
         if (bag) {
           const b = bag;
           if (b.mode === 'air') {
-            b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt; b.vy -= G * dt; b.m.rotation.x += b.spin * dt;
+            b.vx += b.wind * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt; b.vy -= G * dt; b.m.rotation.x += b.spin * dt;
             const onBoard = Math.abs(b.x - BX) < HW + 0.04 && b.z > FRONT - 0.04 && b.z < BACK + 0.04;
             if (onBoard && b.y <= surf(b.z) + 0.06 && b.vy < 0) { b.mode = 'slide'; b.y = surf(b.z) + 0.06; b.vy = 0; b.vx *= 0.35; b.vz *= 0.35; b.m.rotation.set(-Math.atan(SLOPE), Math.random() * 3, 0); }
             else if (b.y <= 0.03) { b.mode = 'floor'; b.y = 0.03; b.pts = 0; this.landed(b, 'MISS'); }

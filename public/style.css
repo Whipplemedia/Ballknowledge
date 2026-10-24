@@ -88,3 +88,58 @@ body.ingame #app .overlay,body.ingame #app .hud-top .pill,body.ingame #app .hunt
 #playhud .ph-sub{top:120px;font-size:22px}
 
 body.playing .hud-goal{display:none}
+
+/* ---------- sportsbook ---------- */
+.panel{width:min(780px,100%)}
+.hud-clock{position:absolute;top:8px;left:50%;transform:translateX(-50%)}
+.pill.time{font-size:15px;border-color:var(--gold);padding:6px 16px}.pill.time b{font-size:20px;margin-left:6px;font-variant-numeric:tabular-nums}
+.pill.time.urgent{border-color:var(--red);color:var(--red);animation:blink .6s infinite alternate}
+@keyframes blink{to{background:#3a1620}}
+.hud-goal{top:54px!important}
+.hud .hunt{top:104px!important}
+.strip{display:flex;gap:3px;flex-wrap:wrap}
+.chip{display:inline-block;min-width:26px;text-align:center;padding:3px 6px;border-radius:8px;font-size:11px;font-weight:800;background:#1b2442;border:1px solid var(--line);color:var(--muted)}
+.chip.open{background:#12341f;border-color:var(--green);color:var(--green);animation:blink2 1s infinite alternate}
+.chip.airing{background:#3a2e10;border-color:var(--gold);color:var(--gold)}
+.chip.win{background:#12341f;border-color:var(--green);color:var(--green)}.chip.loss{background:#3a1620;border-color:var(--red);color:var(--red)}.chip.fin{color:var(--text)}
+.chip.champ{box-shadow:0 0 0 1px var(--gold) inset}
+@keyframes blink2{to{background:#1b5a35}}
+.drunkp{display:flex;align-items:center;gap:6px}.dm{display:block;width:60px;height:8px;border-radius:9px;background:#0b1020;overflow:hidden}.dm span{display:block;height:100%;background:linear-gradient(90deg,#27e08a,#ffc83d,#ff4d5e)}
+.sb{display:flex;flex-direction:column;gap:10px}
+.sb-head{display:flex;justify-content:space-between;align-items:flex-end;background:var(--panel);border:1px solid var(--line);border-radius:16px 16px 0 0;padding:14px 16px 8px}
+.clock{text-align:right}.tl2{font-size:34px;font-weight:900;color:var(--gold);font-variant-numeric:tabular-nums;line-height:1}.tl2.urgent{color:var(--red)}
+.tlbar{height:6px;background:#0b1020;margin:-10px 0 0;border-radius:0 0 8px 8px;overflow:hidden}.tlbar div{height:100%;background:linear-gradient(90deg,var(--green),var(--gold),var(--red));background-size:100vw 100%}
+.matchup{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px}
+.tc{text-align:center}.tn{font-weight:800;margin-top:6px}.tr{color:var(--muted);font-size:13px}.vs{font-weight:900;color:var(--muted)}
+.badge{display:inline-grid;place-items:center;min-width:52px;height:52px;padding:0 6px;border-radius:50%;color:#fff;font-weight:900;font-size:14px;letter-spacing:.02em;text-shadow:0 1px 2px #0008;border:2px solid #fff3}
+.champ-note{background:#3a2e10;border:1px solid var(--gold);border-radius:10px;padding:8px 12px;font-size:13px}
+.mkt{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px}.mh{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.og{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.odd{position:relative;background:var(--panel2);color:var(--text);border:2px solid var(--line);border-radius:12px;padding:10px 8px;display:flex;flex-direction:column;align-items:center;gap:2px;font-weight:600}
+.odd .ot{font-size:12px;color:var(--muted);text-align:center}.odd b{font-size:20px;color:var(--gold)}.odd i{font-size:12px;color:var(--green);font-style:normal}
+.odd:hover{border-color:#4a5a99;filter:none}.odd.sel{border-color:var(--green);background:#12341f}.odd.placed{border-color:var(--green)}
+.odd.hinted{box-shadow:0 0 14px #ffc83daa;border-color:var(--gold);animation:glow 1.2s infinite alternate}.odd em{position:absolute;top:2px;right:6px;font-style:normal;font-size:14px}
+@keyframes glow{to{box-shadow:0 0 24px #ffc83d}}
+.slip{background:#10261a;border:1px solid var(--green);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.sl1{display:flex;justify-content:space-between;gap:8px}:not(button).gold{color:var(--gold);font-weight:800}
+.mine{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px}.bt{display:flex;justify-content:space-between;align-items:center;padding:4px 0}.bt button{padding:4px 10px}
+.hint{background:linear-gradient(135deg,#2a2110,#1b1530);border:1px solid var(--gold);border-radius:14px;padding:12px}.hint.wasted{border-color:var(--red);filter:hue-rotate(40deg)}
+.hl{margin:4px 0}
+.intel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px}.itabs{display:flex;gap:6px;margin-bottom:8px}.itabs button{background:var(--panel2);color:var(--muted);border:1px solid var(--line);padding:6px 12px}.itabs button.on{background:var(--green);color:#04120b}
+.ig{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:620px){.ig{grid-template-columns:1fr}}
+.ts{background:var(--panel2);border-radius:10px;padding:10px}.tsh{display:flex;align-items:center;gap:8px;margin-bottom:6px}.tsh .badge{min-width:34px;height:34px;font-size:10px}
+.star{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:2px 0;border-top:1px solid var(--line)}.star b{color:var(--gold);text-align:right}.note{font-size:12px;color:var(--text);margin:4px 0;font-style:italic}
+.fm{font-size:13px;padding:2px 0}.cbar{display:flex;height:14px;border-radius:9px;overflow:hidden;margin:6px 0}
+.dmeter{height:14px;background:#0b1020;border-radius:9px;overflow:hidden}.dmeter div{height:100%;background:linear-gradient(90deg,#27e08a,#ffc83d,#ff4d5e)}
+.match2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}.team{background:var(--panel2);border:2px solid var(--line);border-radius:12px;padding:10px;color:var(--text);font-weight:700}.team.fix{border-color:var(--red);background:#3a1620}
+button.selp{outline:3px solid #fff}
+
+/* layout pass: top HUD */
+.hud-top{align-items:flex-start}
+.hud-top .strip{position:fixed;left:50%;top:50px;transform:translateX(-50%);justify-content:center;max-width:90vw;pointer-events:none}
+.hud-goal{top:82px!important}
+.hud .hunt{top:130px!important}
+#spinres{position:fixed;left:50%;top:26%;transform:translateX(-50%);font-size:72px;font-weight:900;text-shadow:0 4px 20px #000;z-index:8;pointer-events:none;animation:pop 4s ease-out forwards}
+/* hunt banner: corner so the hitmen stay visible */
+.hud .hunt{left:12px!important;transform:none!important;top:130px!important;width:min(340px,80vw)!important}
+.hud .hunt .big{font-size:18px}
