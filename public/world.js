@@ -4,7 +4,7 @@ import { buildBar, ROOM } from './bar.js';
 import { createTV } from './tv.js';
 import { createRoulette } from './roulette.js';
 import { createFX } from './fx.js';
-import { makePerson, animate } from './people.js';
+import { makePreset, animate } from './people.js';
 import { label } from './textures.js';
 
 const BK = window.BK;
@@ -62,7 +62,7 @@ addEventListener('mousemove', (e) => {
 canvas.addEventListener('mouseup', () => games.up());
 
 // ---------- avatars ----------
-const SHIRTS = [0xe74c3c, 0x3498db, 0x2ecc71, 0xf1c40f, 0x9b59b6, 0xe67e22], SKINS = [0xf0c8a0, 0xc58c5c, 0xe0b890, 0x8d5a3a, 0xf5d0b0, 0xd8a070], HAIRS = [0x2a1a0a, 0x111111, 0x8a5a2a, 0x3a3a3a, 0xb06a2a, 0x5a3a1a];
+const SHIRTS = [0xe74c3c, 0x3498db, 0x2ecc71, 0xf1c40f, 0x9b59b6, 0xe67e22], SKINS = [0xf0c8a0, 0xc58c5c, 0xe0b890, 0x8d5a3a, 0xf5d0b0, 0xd8a070], HAIRS = [0x2a1a0a, 0x111111, 0x8a5a2a, 0x3a3a3a, 0xb06a2a, 0x5a3a1a], CAPS = [0x9c9ca2, 0xb02a2a, 0x2a5aa8, 0x2f8f5a, 0xd0a020, 0x7a3fa0];
 const avatars = new Map(), pending = new Map();
 BK.onPos = (m) => { const a = avatars.get(m.id); if (a) { a.tx = m.x; a.tz = m.z; a.try = m.ry; } else pending.set(m.id, m); };
 function syncAvatars() {
@@ -74,7 +74,7 @@ function syncAvatars() {
     if (p.id === S.you) continue;
     let a = avatars.get(p.id);
     if (!a) {
-      const P = makePerson({ shirt: SHIRTS[p.color % 6], skin: SKINS[(p.color + 2) % 6], hair: HAIRS[(p.color + 1) % 6], hairStyle: p.color % 3 === 2 ? 'long' : 'short', cap: p.color % 4 === 1 ? SHIRTS[p.color % 6] : null });
+      const P = makePreset('bub', { shirt: SHIRTS[p.color % 6], skin: SKINS[(p.color + 2) % 6], hair: HAIRS[(p.color + 1) % 6], hairStyle: p.color % 3 === 2 ? 'long' : 'short', hat: p.color % 3 === 1 ? null : { color: CAPS[p.color % 6], backwards: p.color % 2 === 0 }, shorts: p.color % 2 === 0, pants: p.color % 2 === 0 ? 0x2a2a30 : 0x2c3e50, backpack: p.color % 2 === 0 });
       const l = label(p.name, '#fff', 0.8); l.position.y = 2.2; P.group.add(l); scene.add(P.group);
       const pm = pending.get(p.id); P.group.position.set(pm ? pm.x : -3 + p.color * 1.2, 0, pm ? pm.z : 2);
       a = { P, tx: P.group.position.x, tz: P.group.position.z, try: pm ? pm.ry : 0, px: P.group.position.x, pz: P.group.position.z, drunk: 0 }; avatars.set(p.id, a);
@@ -86,9 +86,7 @@ function syncAvatars() {
 // ---------- hitmen ----------
 const hitmen = [];
 function makeHitman() {
-  const P = makePerson({ skin: 0xc79a72, shirt: 0x0e0e14, pants: 0x0a0a10, hair: 0x050505, hairStyle: 'short', scale: 1.08, shoe: 0x050505 });
-  const hat = new THREE.Group(), crown = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.16, 14), stdMat(0x050505)); crown.position.y = 0.09; hat.add(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.02, 16), stdMat(0x050505)), crown); hat.position.y = 0.17; P.head.add(hat);
-  for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff2030).multiplyScalar(3) })); e.position.set(s * 0.07, 0.03, -0.17); P.head.add(e); }
+  const P = makePreset('hitman');
   P.group.traverse((o) => { o.userData.hitman = P; });
   return P;
 }
@@ -132,6 +130,9 @@ function netSend(t) {
 
 // ---------- loop ----------
 let prev = performance.now(), spawned = false, t0 = performance.now();
+// auto performance mode: if the first ~2 seconds average under ~30fps, drop shadows, bloom and resolution
+const perf = { frames: 0, acc: 0, done: !!navigator.webdriver || /[?&]quality=high/.test(location.search), low: /[?&]quality=low/.test(location.search) };
+function setLowQuality() { renderer.setPixelRatio(1); renderer.shadowMap.enabled = false; scene.traverse((o) => { if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => (m.needsUpdate = true)); } }); fx.setBloom(false); resize(); console.log('Ball Knowledge: performance mode on'); }
 function resize() { renderer.setSize(innerWidth, innerHeight, false); fx.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 BK.onRender = () => {
@@ -142,10 +143,16 @@ BK.onRender = () => {
 
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.1, (now - prev) / 1000); prev = now; const t = (now - t0) / 1000;
+  const rawDt = (now - prev) / 1000, dt = Math.min(0.1, rawDt); prev = now; const t = (now - t0) / 1000;
+  if (perf.low) { perf.low = false; setLowQuality(); }
+  if (!perf.done && active() && t > 1) { perf.acc += rawDt; if (++perf.frames >= 90) { perf.done = true; if (perf.acc / 90 > 0.034) setLowQuality(); } }
   const on = active(); cross.style.display = on && !BK.ui.open ? 'block' : 'none';
-  if (!on) { promptEl.classList.add('hidden'); return; }
-  const drunkAmt = Math.pow(Math.min(1, Math.max(0, (BK.drunk - 12) / 88)), 1.4);
+  if (!on) { // title / lobby: slow cinematic drift through the bar
+    promptEl.classList.add('hidden');
+    const k = t * 0.06; camera.position.set(Math.sin(k) * 3 - 1.2, 2.5 + Math.sin(k * 1.7) * 0.2, 0.4 + Math.cos(k * 0.8) * 0.8); camera.lookAt(Math.sin(k * 0.7) * 5, 1.9, -6); camera.rotation.z = 0;
+    const mm = { x: camera.position.x, z: camera.position.z }; bar.update(t, dt, mm); roulette.update(dt); tv.draw(BK.S, now); fx.setDrunk(0, t); fx.render(); return;
+  }
+  const drunkAmt = Math.pow(Math.min(1, Math.max(0, (BK.drunk - 8) / 80)), 1.1);
   const look = roulette.lookTarget();
   if (look) { const k = Math.min(1, dt * 3); me.x += (look.x - me.x) * k; me.z += (look.z - me.z) * k; me.yaw += (look.yaw - me.yaw) * k; me.pitch += (look.pitch - me.pitch) * k; }
   else move(dt, t, drunkAmt);

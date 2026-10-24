@@ -57,7 +57,7 @@ function render() {
 
 function joinView() {
   return `<div class="center"><div class="card col" style="width:min(420px,100%)">
-    <div class="logo">BALL <span>KNOWLEDGE</span></div>
+    <div class="logo">BALL<br><span>KNOWLEDGE</span><i class="ball"></i></div>
     <div class="tag">Pick a sport. We pick the season. Know your ball - or find another way to win.</div>
     ${err ? `<div class="bad">${esc(err)}</div>` : ''}
     <input id="name" placeholder="Your name" maxlength="16">
@@ -76,7 +76,7 @@ const playerList = () => S.players.map((p) => `<div class="pl"><span>${esc(p.nam
 
 function lobbyView() {
   return `<div class="wrap"><div class="card col">
-    <div class="top"><div class="logo" style="text-align:left;font-size:30px">BALL <span>KNOWLEDGE</span></div><div class="pill">Room <b>${S.code}</b></div></div>
+    <div class="top"><div class="logo sm">BALL <span>KNOWLEDGE</span><i class="ball"></i></div><div class="pill">Room <b>${S.code}</b></div></div>
     <div class="muted">Share the room code. Up to 6 players, co-op. Everyone starts with $2,000. A full season of <b>10 real games</b> is waiting - one new game opens for betting every couple of minutes.</div>
     <div class="title">Crew</div>${playerList()}
     <div class="title">${S.host ? 'Choose your sport' : 'The host is choosing a sport...'}</div>
@@ -161,14 +161,16 @@ function huntBanner() {
 }
 
 // ---------- sportsbook ----------
-const badge = (t) => `<span class="badge" style="background:${t.color}">${esc(t.short)}</span>`;
+const badge = (t) => `<span class="crest" style="--c:${t.color}"><b>${esc(t.short)}</b></span>`;
 function teamCard(t, side, cur, ev) {
   return `<div class="tc">${badge(t)}<div class="tn">${esc(t.name)}</div><div class="tr">${esc(t.rec)}${t.home ? ' · <span class="ok">HOME</span>' : ev.n ? ' · neutral' : ' · away'}</div></div>`;
 }
+
 function oddBtn(market, pick, top, main, hinted) {
   const cur = S.cur, mine = (S.me.bets[cur.idx] || {})[market], placed = mine && mine.pick === pick, sel = ui.sel && ui.sel.market === market && ui.sel.pick === pick;
-  return `<button class="odd ${sel ? 'sel' : ''} ${placed ? 'placed' : ''} ${hinted ? 'hinted' : ''}" onclick="selectOdd('${market}','${pick}')"><span class="ot">${esc(top)}</span><b>${main}</b>${placed ? `<i>✓ ${$$(mine.stake)}</i>` : ''}${hinted ? '<em>🍺</em>' : ''}</button>`;
+  return `<button class="odd ${sel ? 'sel' : ''} ${placed ? 'placed' : ''} ${hinted ? 'hinted' : ''}" onclick="selectOdd('${market}','${pick}')"><span class="ot">${esc(top)}</span><b>${main}</b>${placed ? `<i>✓ ${$$(mine.stake)}</i>` : ''}${hinted ? '<em>💡</em>' : ''}</button>`;
 }
+
 function selectOdd(market, pick) { ui.sel = { market, pick }; ui.selIdx = S.cur.idx; render(); }
 function slipInfo() {
   const cur = S.cur, ev = S.events[cur.idx], { market, pick } = ui.sel, mk = cur.mk;
@@ -187,32 +189,38 @@ function bookView() {
       <div class="muted">${next ? `Next up: <b>${esc(next.label)}</b> - ${esc(next.a)} vs ${esc(next.b)}. Opens in <b>${mmss(next.openAt - now())}</b>.` : 'All games have closed. Watch the highlights on the TV and wait for the finals.'}</div>
       <div class="muted">Tip: grab a drink at the bar. Drunk confidence is real... until you have one too many.</div></div>`;
   }
-  const cur = S.cur, ev = S.events[cur.idx], mk = cur.mk, mine = S.me.bets[cur.idx] || {}, h = cur.hint;
-  const A = cur.intel.a, B = cur.intel.b;
+  const cur = S.cur, ev = S.events[cur.idx], mk = cur.mk, h = cur.hint, A = cur.intel.a, B = cur.intel.b;
   const hs = (m, v) => !!(h && h[m] && (h[m].side === v || h[m].pick === v));
-  const crew = cur.crew, ctot = crew.a + crew.b;
+  const crew = cur.crew, ctot = crew.a + crew.b, sport = (S.sports.find((s) => s.id === S.sport) || {}).label || '';
+  const sp = (s) => `${s.short} ${mk.spread[s === A ? 'a' : 'b'].line > 0 ? '+' : ''}${mk.spread[s === A ? 'a' : 'b'].line}`;
   return `<div class="sb">
-    <div class="sb-head"><div><div class="title">${ev.final ? '🏆 CHAMPIONSHIP' : 'GAME ' + (ev.idx + 1) + ' OF ' + S.events.length}</div><div class="big">${esc(ev.label)}</div>${cur.series ? `<div class="muted">${esc(cur.series)}${ev.ot ? '' : ''}</div>` : ''}</div>
-      <div class="clock"><div class="muted">BETS CLOSE IN</div><div id="tl2" class="tl2"></div></div></div>
+    <div class="sb-head"><div><div class="title">${esc(sport.toUpperCase())} · MYSTERY SEASON</div><div class="big">${esc(ev.label)}</div><div class="muted">Game ${ev.idx + 1} of ${S.events.length}${cur.series ? ' · ' + esc(cur.series) : ''}${ev.final ? ' · 🏆 CHAMPIONSHIP' : ''}</div></div>
+      <div class="clock"><div class="muted">BETTING CLOSES IN</div><div id="tl2" class="tl2"></div></div></div>
     <div class="tlbar"><div id="tlbar"></div></div>
     <div class="matchup">${teamCard(A, 'a', cur, ev)}<div class="vs">VS</div>${teamCard(B, 'b', cur, ev)}</div>
     ${ev.final ? '<div class="champ-note">To win the game you need a <b>Moneyline</b> bet on the champion of this game.</div>' : ''}
     ${h ? hintView(h) : ''}
-    <div class="mkt"><div class="mh">Moneyline</div><div class="og">${oddBtn('ml', 'a', A.name, mk.ml.a.am, hs('ml', 'a'))}${oddBtn('ml', 'b', B.name, mk.ml.b.am, hs('ml', 'b'))}</div></div>
-    <div class="mkt"><div class="mh">Spread</div><div class="og">${oddBtn('spread', 'a', `${A.short} ${mk.spread.a.line > 0 ? '+' : ''}${mk.spread.a.line}`, amer(mk.spread.a.dec), hs('spread', 'a'))}${oddBtn('spread', 'b', `${B.short} ${mk.spread.b.line > 0 ? '+' : ''}${mk.spread.b.line}`, amer(mk.spread.b.dec), hs('spread', 'b'))}</div></div>
-    <div class="mkt"><div class="mh">Total points</div><div class="og">${oddBtn('total', 'over', `Over ${mk.total.line}`, '-110', hs('total', 'over'))}${oddBtn('total', 'under', `Under ${mk.total.line}`, '-110', hs('total', 'under'))}</div></div>
-    ${ui.sel ? slipView() : `<div class="muted" style="margin:8px 0">Tap any price to build your bet slip.</div>`}
+    <div class="mgrid">
+      <div class="mcol"><div class="mh ${(ui.sel ? ui.sel.market : 'ml') === 'ml' ? 'on' : ''}">Moneyline</div>${oddBtn('ml', 'a', A.short, mk.ml.a.am, hs('ml', 'a'))}${oddBtn('ml', 'b', B.short, mk.ml.b.am, hs('ml', 'b'))}</div>
+      <div class="mcol"><div class="mh ${ui.sel && ui.sel.market === 'spread' ? 'on' : ''}">Spread</div>${oddBtn('spread', 'a', sp(A), amer(mk.spread.a.dec), hs('spread', 'a'))}${oddBtn('spread', 'b', sp(B), amer(mk.spread.b.dec), hs('spread', 'b'))}</div>
+      <div class="mcol"><div class="mh ${ui.sel && ui.sel.market === 'total' ? 'on' : ''}">Total</div>${oddBtn('total', 'over', `O ${mk.total.line}`, '-110', hs('total', 'over'))}${oddBtn('total', 'under', `U ${mk.total.line}`, '-110', hs('total', 'under'))}</div>
+    </div>
+    ${ui.sel ? slipView() : `<div class="muted" style="margin:2px 4px">Tap any price to build your bet slip.</div>`}
     ${betList(cur.idx)}
-    <div class="intel"><div class="itabs">${[['stats', 'Team Stats'], ['form', 'Form'], ['crew', 'Crew Picks']].map(([id, l]) => `<button class="${ui.intelTab === id ? 'on' : ''}" onclick="ui.intelTab='${id}';render()">${l}</button>`).join('')}</div>
-      ${ui.intelTab === 'stats' ? `<div class="ig">${[A, B].map(teamStats).join('')}</div>` : ui.intelTab === 'form' ? `<div class="ig">${[A, B].map(teamForm).join('')}</div>`
+    <div class="intel"><div class="itabs">${[['stats', 'Team Stats'], ['players', 'Player Stats'], ['form', 'Form'], ['crew', 'Crew Picks']].map(([id, l]) => `<button class="${ui.intelTab === id ? 'on' : ''}" onclick="ui.intelTab='${id}';render()">${l}</button>`).join('')}</div>
+      ${ui.intelTab === 'stats' ? `<div class="ig">${[A, B].map(teamStats).join('')}</div>` : ui.intelTab === 'players' ? `<div class="ig">${[A, B].map(playerStats).join('')}</div>` : ui.intelTab === 'form' ? `<div class="ig">${[A, B].map(teamForm).join('')}</div>`
         : `<div class="crewp"><div class="muted">Moneyline picks from your crew</div><div class="cbar"><div style="width:${ctot ? crew.a / ctot * 100 : 50}%;background:${A.color}"></div><div style="flex:1;background:${B.color}"></div></div><div class="row"><span>${esc(A.short)}: ${crew.a}</span><span style="text-align:right">${esc(B.short)}: ${crew.b}</span></div></div>`}</div>
   </div>`;
 }
+
 function teamStats(t) {
-  return `<div class="ts"><div class="tsh">${badge(t)} <b>${esc(t.name)}</b></div><div class="muted">Record ${esc(t.rec)}</div>
-    ${t.note ? `<div class="note">${esc(t.note)}</div>` : ''}
-    ${t.stars.map(([n, l]) => `<div class="star"><span>${esc(n)}</span><b>${esc(l)}</b></div>`).join('') || '<div class="muted">No star data.</div>'}</div>`;
+  return `<div class="ts"><div class="tsh">${badge(t)} <b>${esc(t.name)}</b></div><div class="muted">Record <b>${esc(t.rec)}</b>${t.home ? ' · home team' : ''}</div>
+    ${t.note ? `<div class="note">${esc(t.note)}</div>` : '<div class="muted">No scouting notes.</div>'}</div>`;
 }
+function playerStats(t) {
+  return `<div class="ts"><div class="tsh">${badge(t)} <b>${esc(t.name)}</b></div>${t.stars.map(([n, l]) => `<div class="star"><span>${esc(n)}</span><b>${esc(l)}</b></div>`).join('') || '<div class="muted">No star data.</div>'}</div>`;
+}
+
 function teamForm(t) {
   return `<div class="ts"><div class="tsh">${badge(t)} <b>${esc(t.name)}</b></div>${t.form.length ? t.form.map((f) => `<div class="fm ${f.res === 'W' ? 'ok' : 'bad'}"><b>${f.res}</b> ${esc(f.score)} vs ${esc(f.opp)}<span class="muted"> · ${esc(f.label)}</span></div>`).join('') : '<div class="muted">First appearance this season - no form yet.</div>'}</div>`;
 }
@@ -232,8 +240,8 @@ function betList(idx) {
   }).join('')}</div>`;
 }
 function hintView(h) {
-  const lines = ['ml', 'spread', 'total'].filter((m) => h[m]).map((m) => `<div class="hl"><b>${{ ml: 'Winner', spread: 'Spread', total: 'Total' }[m]}:</b> "${esc(h[m].text)}" ${'🔥'.repeat(h[m].conf)}</div>`).join('');
-  return `<div class="hint ${h.level}"><div class="title">🍺 Drunk confidence - ${esc(h.level)}</div>${lines}<div class="muted">${h.level === 'wasted' ? 'You are way too drunk. Do not trust any of this.' : 'Gut feelings glow gold on the odds above. Not guaranteed - and too many drinks ruins it.'}</div></div>`;
+  const lines = ['ml', 'spread', 'total'].filter((m) => h[m]).map((m) => `<div class="hl"><b>${{ ml: 'Winner', spread: 'Spread', total: 'Total' }[m]}:</b> ${esc(h[m].text)} <span class="fire">${'🔥'.repeat(h[m].conf)}</span></div>`).join('');
+  return `<div class="hint ${h.level}"><div class="hbulb">💡</div><div class="hbody"><div class="htitle">${esc(h.level.toUpperCase())} HINT</div>${lines}<div class="hfoot">${h.level === 'wasted' ? '(You are way too drunk. Do not trust any of this.)' : '(Not a lock, but worth noting)'}</div></div></div>`;
 }
 
 function betsView() {
@@ -273,10 +281,11 @@ function crewView() {
 
 function barView() {
   const d = Math.round(drunkLevel()), b = d < 15 ? 'sober' : d < 40 ? 'tipsy' : d < 65 ? 'buzzed' : d < 85 ? 'drunk' : 'wasted';
-  return `<div class="card col"><div class="big">🍺 The Bar</div>
-    <div class="muted">Bartender: "What'll it be? First one's always full price."</div>
-    <div class="dmeter"><div style="width:${d}%"></div></div><div class="muted">You are: <b>${b}</b> (${d}%) - drunk confidence gives you gut feelings on the games. Too far gone and they turn into nonsense. It wears off over time.</div>
-    ${S.drinks.map((x) => `<div class="side row"><div style="flex:1"><b>${x.emoji} ${esc(x.name)}</b> <span class="gold">${$$(x.price)}</span><div class="muted">${esc(x.blurb)} (+${x.add} buzz)</div></div><button class="fit" ${S.me.money < x.price || d >= 100 ? 'disabled' : ''} onclick="send({type:'drink',id:'${x.id}'})">Order</button></div>`).join('')}</div>`;
+  return `<div class="chalk"><div class="chalk-h">DRINKS</div>
+    <div class="chalk-say">Bartender: "What'll it be? First one's always full price."</div>
+    ${S.drinks.map((x) => `<div class="chalk-row"><span class="cn">${x.emoji} ${esc(x.name)}</span><span class="cd"></span><span class="cp">${$$(x.price)}</span><button class="chalkbtn" ${S.me.money < x.price || d >= 100 ? 'disabled' : ''} onclick="send({type:'drink',id:'${x.id}'})">Order</button></div><div class="chalk-sub">${esc(x.blurb)} (+${x.add} buzz)</div>`).join('')}
+    <div class="dmeter" style="margin-top:14px"><div style="width:${d}%"></div></div>
+    <div class="chalk-sub">You are <b>${b}</b> (${d}%). Drunk confidence gives you gut feelings on the games. Too far gone and they turn into nonsense. It wears off over time.</div></div>`;
 }
 
 function wheelView() {

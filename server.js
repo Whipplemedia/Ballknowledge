@@ -19,7 +19,7 @@ const DRINKS = [
   { id: 'whiskey', name: 'Top-Shelf Whiskey', emoji: '🥂', price: 120, add: 42, blurb: 'The expensive stuff. Confidence in a glass.' },
   { id: 'mystery', name: 'Bartender\'s Special', emoji: '🧪', price: 90, add: 55, blurb: 'Ingredients: unknown. Side effects: yes.' },
 ];
-const MG = { darts: { max: 150, rate: 3 }, bowling: { max: 20, rate: 25 }, cornhole: { max: 12, rate: 35 } };
+const MG = { darts: { max: 180, rate: 3 }, bowling: { max: 20, rate: 25 }, cornhole: { max: 12, rate: 35 } };
 const REDS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
 const colorOf = (n) => (n === 0 ? 'green' : REDS.has(n) ? 'red' : 'black');
 

@@ -85,11 +85,11 @@ export function neon(text, color = '#27e08a', { w = 512, h = 128, size = 72 } = 
 }
 export function label(text, color = '#fff', scale = 1, w = 256) {
   const { t } = canvasTex(w, 64, (g) => { g.fillStyle = '#000b'; g.roundRect(0, 0, w, 64, 16); g.fill(); g.fillStyle = color; g.font = 'bold 30px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, w / 2, 34, w - 16); });
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true })); s.scale.set(1.6 * scale * (w / 256), 0.4 * scale, 1); s.renderOrder = 10; return s;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true, toneMapped: false, fog: false })); s.scale.set(1.6 * scale * (w / 256), 0.4 * scale, 1); s.renderOrder = 10; return s;
 }
 export function bubble() {
   const { c, g, t } = canvasTex(512, 160, () => {});
-  const mat = new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true }); const s = new THREE.Sprite(mat); s.scale.set(2.2, 0.69, 1); s.renderOrder = 11; s.visible = false;
+  const mat = new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true, toneMapped: false, fog: false }); const s = new THREE.Sprite(mat); s.scale.set(1.7, 0.53, 1); s.renderOrder = 11; s.visible = false;
   return { sprite: s, set(text) {
     if (!text) { s.visible = false; return; }
     g.clearRect(0, 0, 512, 160); g.fillStyle = '#fff'; g.strokeStyle = '#222'; g.lineWidth = 6; g.beginPath(); g.roundRect(8, 8, 496, 110, 24); g.fill(); g.stroke();
@@ -99,4 +99,23 @@ export function bubble() {
     lines.slice(0, 2).forEach((l, i, a) => g.fillText(l.trim(), 256, 62 + (i - (a.length - 1) / 2) * 36, 470));
     t.needsUpdate = true; s.visible = true;
   } };
+}
+
+// ---------- clothing textures ----------
+export function jerseyTex(color = '#1b2a5a', trim = '#ffffff', number = '12', numColor = '#ffffff') {
+  return canvasTex(128, 128, (g, w, h) => {
+    g.fillStyle = color; g.fillRect(0, 0, w, h);
+    g.fillStyle = trim; g.fillRect(0, 0, w, 10); g.fillRect(0, 22, w, 4);
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '900 78px "Arial Black", system-ui'; g.lineWidth = 8; g.strokeStyle = trim === numColor ? '#00000055' : trim; g.strokeText(number, w / 2, 78); g.fillStyle = numColor; g.fillText(number, w / 2, 78);
+    grain(g, w, h, 160, 0.12);
+  });
+}
+export function floralTex() {
+  return canvasTex(128, 128, (g, w, h) => {
+    g.fillStyle = '#16231c'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 26; i++) { const x = Math.random() * w, y = Math.random() * h, c = ['#d9382b', '#f08a24', '#e8c13a', '#c42a56'][i % 4]; g.fillStyle = c; for (let k = 0; k < 5; k++) { g.beginPath(); g.arc(x + Math.cos(k * 1.26) * 6, y + Math.sin(k * 1.26) * 6, 5, 0, 7); g.fill(); } g.fillStyle = '#f5d96a'; g.beginPath(); g.arc(x, y, 3, 0, 7); g.fill(); g.fillStyle = '#2d7a3a'; g.fillRect(x + 8, y + 6, 10, 4); }
+  });
+}
+export function buttonShirtTex(hex = '#aab0b8') {
+  return canvasTex(64, 128, (g, w, h) => { g.fillStyle = hex; g.fillRect(0, 0, w, h); g.fillStyle = '#0003'; g.fillRect(w / 2 - 1, 0, 2, h); for (let y = 12; y < h; y += 22) { g.fillStyle = '#0005'; g.beginPath(); g.arc(w / 2 + 6, y, 2.5, 0, 7); g.fill(); } g.fillStyle = '#0002'; g.fillRect(10, 24, 14, 16); grain(g, w, h, 100, 0.1); });
 }
