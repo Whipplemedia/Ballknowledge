@@ -245,3 +245,9 @@ body:not(.ingame) .center .card,body:not(.ingame) .wrap .card{background:#101830
 #voicehud { position: fixed; left: 50%; bottom: 44px; transform: translateX(-50%); z-index: 25; background: #0b1226d0; border: 1px solid #ffffff30; color: #cfd8ff; padding: 5px 12px; border-radius: 999px; font-size: 12px; pointer-events: none; }
 #voicehud.live { background: #12603a; border-color: #2ee09a; color: #fff; }
 #voicehud.muted { background: #5a1a22; border-color: #ff5a6a; color: #ffd0d4; }
+
+/* ---- bottles / knockouts ---- */
+#bottlehud { position: fixed; left: 50%; bottom: 74px; transform: translateX(-50%); z-index: 24; background: #0b1226d0; border: 1px solid #2f8a46; color: #d9ffe3; padding: 5px 14px; border-radius: 999px; font-size: 13px; pointer-events: none; }
+#kooverlay { position: fixed; inset: 0; z-index: 22; background: radial-gradient(ellipse at center, #000a 20%, #000f 85%); display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; pointer-events: none; }
+#kooverlay b { font-size: 34px; letter-spacing: 2px; text-shadow: 0 0 20px #ffd04a; }
+#kooverlay span { font-size: 64px; font-weight: 900; color: #ffd04a; }

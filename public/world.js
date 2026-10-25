@@ -8,6 +8,7 @@ import { makePreset, animate } from './people.js';
 import { audio } from './audio.js';
 import { createVoice } from './voice.js';
 import { createAudioUI } from './audioui.js';
+import { createBottles } from './bottles.js';
 import { label } from './textures.js';
 import { CATALOG, BY_ID, RARITY, SLOTS, rollCrate, createPreview, applyCosmetics, tickCosmetics } from './cosmetics.js';
 
@@ -52,6 +53,18 @@ BK.audio = audio; BK.voice = voice; BK.sfx = (n, o) => audio.sfx(n, o); BK.onRtc
 document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('button,[onclick]') && !e.target.closest('#audiopanel')) audio.sfx('click'); }, true);
 const sfxAt = (n, x, z, y = 1.2, o = {}) => audio.sfx(n, { pos: { x, y, z }, ...o });
 BK.sfxAt = sfxAt;
+// ---------- bottles + knockouts ----------
+const koNow = () => !!(me.koUntil && BK.now() < me.koUntil);
+const bottles = createBottles({ scene, camera, BK, me, obstacles, getAvatars: () => avatars, getNpcs: () => bar.npcs, ROOM, busy: () => games.active() || BK.ui.open || BK.ui.shop || koNow() });
+BK.bottles = bottles; BK.onBottle = (m) => bottles.remote(m);
+BK.onKo = (m) => {
+  const until = m.until;
+  if (m.id && m.id === (BK.S && BK.S.you)) { me.koUntil = until; if (me.sit) BK.stand(); games.leave(); audio.sfx('bonk'); audio.sfx('groan', { delay: 0.2 }); BK.toast && BK.toast('💫 You got bottled! Out cold for 5 seconds.', 'err'); }
+  else if (m.id) { const a = avatars.get(m.id); if (a) { a.ko = until; audio.sfx('bonk', { pos: { x: a.P.group.position.x, y: 1.5, z: a.P.group.position.z } }); } }
+  else if (m.npc !== undefined) { const n = bar.npcs[m.npc]; if (n) { n.ko = until; audio.sfx('bonk', { pos: { x: n.P.group.position.x, y: 1.5, z: n.P.group.position.z } }); audio.sfx('groan', { delay: 0.25, pos: { x: n.P.group.position.x, y: 1.5, z: n.P.group.position.z } }); } }
+};
+addEventListener('keydown', (e) => { if (e.code === 'KeyF' && !e.repeat && active() && !/INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '')) bottles.throw(); });
+addEventListener('contextmenu', (e) => { if (document.pointerLockElement === canvas) { e.preventDefault(); bottles.throw(); } });
 
 // ---- sitting: take a seat from bar.seats; camera drops to seated eye height and movement locks until E/Space/WASD ----
 me.sit = null;
@@ -64,6 +77,7 @@ addEventListener('keydown', (e) => {
   if (!active() || BK.ui.open || BK.ui.shop) return;
   keys[e.code] = true;
   if (me.sit && (e.code === 'KeyE' || e.code === 'Space' || ['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code))) { BK.stand(); return; }
+  if (koNow()) return;
   if (e.code === 'KeyE') { if (games.active()) games.leave(); else { const s = nearest(); if (s) s.act(); } }
   if (e.code === 'KeyC') { games.leave(); BK.openPanel('crew'); }
 });
@@ -71,7 +85,7 @@ addEventListener('keyup', (e) => { keys[e.code] = false; });
 let lockAt = 0;
 document.addEventListener('pointerlockchange', () => { lockAt = performance.now(); if (games.active()) games.setPaused(document.pointerLockElement !== canvas); });
 addEventListener('mousemove', (e) => {
-  if (document.pointerLockElement !== canvas || roulette.lookTarget() || performance.now() - lockAt < 250) return;
+  if (document.pointerLockElement !== canvas || roulette.lookTarget() || performance.now() - lockAt < 250 || koNow()) return;
   const mx = Math.max(-150, Math.min(150, e.movementX)), my = Math.max(-150, Math.min(150, e.movementY)); // ignore bogus jumps when the lock is (re)acquired
   me.yaw -= mx * 0.0022; me.pitch = Math.max(-1.3, Math.min(1.3, me.pitch - my * 0.0022));
   if (me.sit) { const d = Math.atan2(Math.sin(me.yaw - me.sit.yaw), Math.cos(me.yaw - me.sit.yaw)); if (Math.abs(d) > 1.75) me.yaw = me.sit.yaw + Math.sign(d) * 1.75; me.pitch = Math.max(-0.9, Math.min(0.8, me.pitch)); }
@@ -132,6 +146,7 @@ const party = new THREE.PointLight(0xff40d0, 0, 14, 2); party.position.set(0, 3.
 const ray = new THREE.Raycaster();
 canvas.addEventListener('mousedown', () => {
   if (document.pointerLockElement !== canvas) { if (active() && !BK.ui.open) canvas.requestPointerLock(); return; }
+  if (koNow()) return;
   if (games.active()) return games.down();
   const S = BK.S;
   if (S && (S.phase === 'hunt' || S.shake)) {
@@ -144,7 +159,7 @@ canvas.addEventListener('mousedown', () => {
 
 // ---------- movement ----------
 function move(dt, t, drunkAmt) {
-  if (BK.ui.open || games.active() || me.sit) return;
+  if (BK.ui.open || games.active() || me.sit || koNow()) return;
   const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
   const sp = keys.ShiftLeft ? 6.2 : 3.8, sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
   let dx = -sin * f + cos * s, dz = -cos * f - sin * s; const len = Math.hypot(dx, dz) || 1;
@@ -199,6 +214,7 @@ function frame(now) {
   games.update(dt); games.rig(camera);
   // ---- audio frame: listener, footsteps, bar-event cues, voice
   audio.update(dt, camera); audioUI.show(active()); voice.update(dt, avatars);
+  bottles.update(dt); { const left = koNow() ? (me.koUntil - BK.now()) / 1000 : 0; bottles.setKo(left); if (!left && me.koUntil) { me.koUntil = 0; audio.sfx('boing'); } if (left) { camera.position.y = 0.32; camera.rotation.z = 1.25; camera.rotation.x = 0.4; } }
   { const mvd = Math.hypot(me.x - (me._lx ?? me.x), me.z - (me._lz ?? me.z)); me._lx = me.x; me._lz = me.z;
     if (!me.sit && !games.active() && mvd < 1.2) { me._step = (me._step || 0) + mvd; if (me._step > (keys.ShiftLeft ? 0.95 : 0.7)) { me._step = 0; audio.sfx('step', { v: keys.ShiftLeft ? 0.9 : 0.6 }); } } }
   { const be = BK.S && BK.S.barEvent, kind = be ? be.kind : null; if (kind !== audio._ev) { const prev = audio._ev; audio._ev = kind;
@@ -224,6 +240,12 @@ function frame(now) {
       if (a.lab) { const k = Math.min(1.25, Math.max(0.45, dist * 0.32)); a.lab.scale.set(a.labS.x * k, a.labS.y * k, 1); a.lab.material.opacity = dist < 1.1 ? Math.max(0, (dist - 0.5) / 0.6) : 1; }
       const near = dist < 0.55; if (a.hideNear !== near) { a.hideNear = near; g.children.forEach((o) => { if (!o.isSprite) o.visible = !near; }); } }
     if (!a.mic) { a.mic = label('🎙', '#2ee09a', 0.55); a.mic.position.y = 2.65; a.mic.visible = false; g.add(a.mic); } const spk = voice.speaking(a.id); if (a.mic.visible !== spk) a.mic.visible = spk;
+    { const down = a.ko && a.ko > BK.now();
+      if (down || a._koOn) {
+        if (down && !a._koOn) { a._koOn = true; g.rotation.order = 'YXZ'; if (!a.star) { a.star = label('💫 KO 💫', '#ffd04a', 0.7); a.star.position.y = 2.35; g.add(a.star); } a.star.visible = true; }
+        if (down) { animate(a.P, 'idle', t); g.rotation.x += (Math.PI / 2 - g.rotation.x) * Math.min(1, dt * 12); g.position.y = (a.P.baseY || 0) + 0.2; continue; }
+        a._koOn = false; g.rotation.x = 0; g.position.y = a.P.baseY || 0; if (a.star) a.star.visible = false; audio.sfx('boing', { pos: { x: g.position.x, y: 1.4, z: g.position.z } });
+      } }
     animate(a.P, a.sit ? 'sit' : a.drunk >= 40 && sp < 0.4 ? 'stagger' : sp > 0.5 ? 'walk' : 'idle', t, Math.min(1.4, sp / 3.5)); tickCosmetics(a.P, t);
   }
   hitmen.forEach((h, i) => {
@@ -238,5 +260,5 @@ function frame(now) {
   fx.setDrunk(drunkAmt, t);
   fx.render();
 }
-window.__dbg = { renderer, scene, camera, me, games, roulette, bar, fx, tv };
+window.__dbg = { renderer, scene, camera, me, games, roulette, bar, fx, tv, avatars, bottles, voice, keys };
 requestAnimationFrame(frame);

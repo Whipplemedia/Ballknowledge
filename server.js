@@ -165,7 +165,7 @@ function newCode() {
 }
 function newPlayer(id, name, ws) {
   return { id, name, ws, connected: true, money: START_MONEY, debt: 0, loans: 0, mobTied: false, bets: {}, fix: {}, results: {}, drunk: 0, drunkT: 0,
-    finalCorrect: null, fate: null, lastMg: 0, lastHit: 0, lastDrink: 0, remaining: 0, color: 0, x: 0, z: 2, ry: 0, tickets: 0, bounties: [], challenge: null, pool: null, streak: { darts: 0, bowling: 0, cornhole: 0 }, cos: {} };
+    finalCorrect: null, fate: null, lastMg: 0, lastHit: 0, lastBottle: 0, credits: [], koUntil: 0, koImmune: 0, lastDrink: 0, remaining: 0, color: 0, x: 0, z: 2, ry: 0, tickets: 0, bounties: [], challenge: null, pool: null, streak: { darts: 0, bowling: 0, cornhole: 0 }, cos: {} };
 }
 function createRoom() {
   const room = { code: newCode(), hostId: null, players: new Map(), phase: 'lobby', sport: 'nba', pace: 'normal', season: null, sportDef: null, events: [], feed: [],
@@ -595,6 +595,22 @@ function handle(room, p, m) {
       const to = room.players.get(m.to); if (to && to !== p) send(to, { type: 'rtc', from: p.id, data: m.data });
       else if (m.to === '*') for (const q of room.players.values()) if (q !== p) send(q, { type: 'rtc', from: p.id, data: m.data });
       break;
+    }
+    case 'bottle': { // a thrown bottle: relay so everyone sees/hears it; give the thrower one hit credit (valid for 4s)
+      const t = Date.now(); if (!inPlay(room) || t - p.lastBottle < 700) break; p.lastBottle = t;
+      const n = ['x', 'y', 'z', 'vx', 'vy', 'vz'].map((k) => Number(m[k])); if (!n.every(Number.isFinite)) break;
+      p.credits = p.credits.filter((c) => t - c < 4000); p.credits.push(t);
+      for (const q of room.players.values()) if (q !== p) send(q, { type: 'bottle', from: p.id, x: n[0], y: n[1], z: n[2], vx: n[3], vy: n[4], vz: n[5] });
+      break;
+    }
+    case 'bottleHit': { // thrower reports a hit on a player or an NPC; knocks them out for 5s (3s immunity after waking)
+      const t = Date.now(); p.credits = p.credits.filter((c) => t - c < 4000); if (!p.credits.length || !inPlay(room)) break; p.credits.shift();
+      room.npcKo = room.npcKo || {};
+      if (m.kind === 'npc') { const i = Math.floor(Number(m.npc)); if (!(i >= 0 && i < 80) || t < (room.npcKo[i] || 0)) break; room.npcKo[i] = t + 5000 + 2000;
+        for (const q of room.players.values()) send(q, { type: 'ko', npc: i, until: t + 5000, by: p.id }); feed(room, `🍾 ${p.name} bottled a bar regular.`); broadcast(room); break; }
+      const v = room.players.get(m.target); if (!v || v === p || t < v.koImmune) break;
+      v.koUntil = t + 5000; v.koImmune = t + 5000 + 3000;
+      for (const q of room.players.values()) send(q, { type: 'ko', id: v.id, until: v.koUntil, by: p.id }); feed(room, `🍾 ${p.name} knocked out ${v.name} with a bottle!`); broadcast(room); break;
     }
     case 'pos': {
       const x = Number(m.x), z = Number(m.z), ry = Number(m.ry);

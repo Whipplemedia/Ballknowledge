@@ -93,6 +93,10 @@ export const SFX = {
   powerOn: (c, o, t) => { T(c, o, t, 0.5, { type: 'sawtooth', f: 40, f2: 300, g: 0.18, at: 0.1 }); N(c, o, t + 0.3, 0.08, { f: 2500, g: 0.3 }); },
   crate: (c, o, t) => { N(c, o, t, 0.5, { f: 400, f2: 3500, q: 1.5, g: 0.2, at: 0.3 }); for (let i = 0; i < 9; i++) T(c, o, t + 0.35 + i * 0.05, 0.14, { f: 1400 + i * 260, g: 0.08, type: 'triangle' }); },
   rare: (c, o, t) => { SFX.crate(c, o, t); SFX.bigwin(c, o, t + 0.6); },
+  glassBreak: (c, o, t) => { N(c, o, t, 0.09, { type: 'highpass', f: 3000, g: 0.6 }); T(c, o, t, 0.06, { f: 1700, f2: 900, g: 0.35 }); N(c, o, t + 0.01, 0.35, { type: 'highpass', f: 5200, g: 0.28, at: 0.02 });
+    for (let i = 0; i < 16; i++) { const u = t + 0.03 + Math.pow(i / 16, 1.6) * 0.75 + rnd(0, 0.02); bell(c, o, u, rnd(2600, 6800), rnd(0.12, 0.3), rnd(0.05, 0.16) * (1 - i / 26), [1, 1.5, 2.3]); } },
+  bonk: (c, o, t) => { T(c, o, t, 0.16, { f: 220, f2: 70, g: 0.5 }); N(c, o, t, 0.08, { type: 'lowpass', f: 900, g: 0.35 }); for (let i = 0; i < 4; i++) bell(c, o, t + 0.12 + i * 0.1, 1400 + i * 260, 0.3, 0.08, [1, 2.1]); },
+  boing: (c, o, t) => { T(c, o, t, 0.4, { type: 'sine', f: 180, f2: 520, g: 0.25 }); T(c, o, t + 0.1, 0.4, { type: 'triangle', f: 360, f2: 900, g: 0.1 }); },
   whoosh: (c, o, t) => { N(c, o, t, 0.35, { f: 600, f2: 2500, q: 0.8, g: 0.4, at: 0.15 }); },
   roll: (c, o, t) => { N(c, o, t, 0.5, { type: 'lowpass', f: 300, g: 0.14 }); },
 };

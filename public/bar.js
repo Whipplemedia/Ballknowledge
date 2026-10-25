@@ -255,6 +255,7 @@ export function buildBar({ scene, BK, tv }) {
   const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
   scene.add(new THREE.Points(dg, new THREE.PointsMaterial({ color: 0xffe8c0, size: 0.03, transparent: true, opacity: 0.5, depthWrite: false })));
 
+  stations.push({ x: 8.45, z: 5.4, r: 1.1, text: 'E - Grab bottles (throw with F / right-click)', act: () => BK.bottles && BK.bottles.grab() });
   // jukebox: E cycles through the songs (4 procedural tracks), long-press not needed
   stations.push({ x: -10.9, z: 6.3, r: 1.25, text: 'E - Jukebox (next song)', act: () => { const n = BK.audio && BK.audio.music.next(); BK.sfx && BK.sfx('click'); if (n) BK.toast('🎵 ' + n, 'info'); } });
   // ---------- seats the player can take (E). hip = where the pelvis goes, yaw = facing (same convention as me.yaw), sit = seat-top height ----------
@@ -272,6 +273,12 @@ export function buildBar({ scene, BK, tv }) {
 
   function update(t, dt, me) {
     for (const n of npcs) {
+      const koNow = n.ko && n.ko > BK.now();
+      if (koNow || n._koOn) { // knocked out by a bottle: stars, slump (seated) or fall flat on the back (standing)
+        if (koNow && !n._koOn) { n._koOn = true; n.P.group.rotation.order = 'YXZ'; if (!n.star) { n.star = TX.label('💫 KO 💫', '#ffd04a', 0.7); n.star.position.y = 2.35; n.P.group.add(n.star); } n.star.visible = true; }
+        if (koNow) { animate(n.P, n.seated ? 'sleep' : 'idle', t); if (!n.seated) { n.P.group.rotation.x += (Math.PI / 2 - n.P.group.rotation.x) * Math.min(1, dt * 12); n.P.group.position.y = (n.P.baseY || 0) + 0.2; } else n.P.legs.forEach((l) => (l.rotation.x = 1.45)); n.star.material.rotation = Math.sin(t * 6) * 0.15; if (n.bubble) n.bubble.set(''); continue; }
+        n._koOn = false; n.P.group.rotation.x = 0; n.P.group.position.y = n.P.baseY || 0; if (n.star) n.star.visible = false; BK.sfx && BK.sfx('boing', { pos: { x: n.P.group.position.x, y: 1.4, z: n.P.group.position.z } });
+      }
       animate(n.P, n.mode, t);
       if (n.seated) n.P.legs.forEach((l) => (l.rotation.x = 1.45));
       const near = Math.hypot(n.P.group.position.x - me.x, n.P.group.position.z - me.z) < 7;
