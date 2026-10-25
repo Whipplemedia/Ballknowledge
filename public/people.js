@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { jerseyTex, floralTex, buttonShirtTex } from './textures.js';
 
 // ---- authored Blender characters (blender/*.py -> public/models/*.glb). Procedural makePerson() below is the fallback. ----
-const MODEL_NAMES = ['bub', 'bartender', 'sal', 'hitman', 'jock', 'knowItAll', 'gambler', 'chill', 'dieHard', 'rookie'];
+const MODEL_NAMES = ['bub_ai', 'bub', 'bartender', 'sal', 'hitman', 'jock', 'knowItAll', 'gambler', 'chill', 'dieHard', 'rookie'];
 const MODELS = {};
 if (typeof location !== 'undefined' && !/[?&]models=0/.test(location.search)) {
   const loader = new GLTFLoader();
@@ -13,7 +14,77 @@ if (typeof location !== 'undefined' && !/[?&]models=0/.test(location.search)) {
 const TINTED_SHIRT = { jock: 0, knowItAll: 0, dieHard: 0, gambler: 0, sal: 0, hitman: 0, bartender: 0 }; // shirts with baked prints/suits keep their colors
 const MODEL_OK = new Set(['skin', 'shirt', 'pants', 'hair', 'hat', 'backpack', 'glasses', 'stache', 'scale', 'hairStyle', 'shorts', 'mouth', 'look', 'number']);
 const ROLE_K = { skin2: 0.9, shirt2: 0.92, hat2: 0.78 };
+// ---- Meshy (AI-generated) skinned characters: public/models/<name>_ai.glb, Mixamo-style skeleton ----
+const Q0 = new THREE.Quaternion(), V_DOWN = new THREE.Vector3(0, -1, 0);
+const qAlign = (from, to) => new THREE.Quaternion().setFromUnitVectors(from.clone().normalize(), to.clone().normalize());
+const qSlerp0 = (q, k) => Q0.clone().slerp(q, k);
+const qEuler = (o) => new THREE.Quaternion().setFromEuler(o.rotation);
+const qAxisX = (a) => new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), a);
+function fromSkinned(src, name, over) {
+  const rig = SkeletonUtils.clone(src), outer = new THREE.Group(), inner = new THREE.Group();
+  inner.rotation.y = Math.PI; inner.add(rig); outer.add(inner);
+  const B = {}; let skinned = null;
+  rig.traverse((o) => { if (o.isBone) B[o.name] = o; if (o.isSkinnedMesh) { skinned = o; o.frustumCulled = false; o.castShadow = true; } });
+  const need = ['Hips', 'Spine', 'Spine01', 'Spine02', 'neck', 'Head', 'LeftArm', 'LeftForeArm', 'LeftHand', 'RightArm', 'RightForeArm', 'RightHand', 'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'RightUpLeg', 'RightLeg', 'RightFoot'];
+  if (!skinned || need.some((n) => !B[n])) return null;
+  outer.updateMatrixWorld(true);
+  // scale to game height (~1.9) and stand on the floor
+  const box = new THREE.Box3().setFromObject(skinned), sc = 1.9 / (box.max.y - box.min.y);
+  inner.scale.setScalar(sc); inner.position.y = -box.min.y * sc; outer.updateMatrixWorld(true);
+  const wq = (b) => b.getWorldQuaternion(new THREE.Quaternion()), wp = (b) => b.getWorldPosition(new THREE.Vector3());
+  const rest = {}; for (const n in B) { rest[n] = wq(B[n]); B[n].userData.restQ = B[n].quaternion.clone(); }
+  const dir = (a, b) => wp(B[b]).sub(wp(B[a]));
+  const idle = {};
+  for (const sd of ['Left', 'Right']) {
+    idle[sd + 'Arm'] = qAlign(dir(sd + 'Arm', sd + 'ForeArm'), V_DOWN).multiply(rest[sd + 'Arm']);
+    idle[sd + 'ForeArm'] = qAlign(dir(sd + 'ForeArm', sd + 'Hand'), V_DOWN).multiply(rest[sd + 'ForeArm']);
+    idle[sd + 'UpLeg'] = qAlign(dir(sd + 'UpLeg', sd + 'Leg'), V_DOWN).multiply(rest[sd + 'UpLeg']);
+    idle[sd + 'Leg'] = qAlign(dir(sd + 'Leg', sd + 'Foot'), V_DOWN).multiply(rest[sd + 'Leg']);
+  }
+  const S = { ...PRESETS.bub, ...over }; const P = { group: outer, phase: Math.random() * 6, spec: S, model: true, skinned: true };
+  // invisible pivots in the same layout as the procedural rig: animate() drives them, the skeleton follows, cosmetics attach to them
+  const mk = (x, y, z, par = outer) => { const o = new THREE.Object3D(); o.position.set(x, y, z); par.add(o); return o; };
+  const hp = (n) => wp(B[n]); const hips = hp('Hips');
+  P.legs = [mk(hp('LeftUpLeg').x, hp('LeftUpLeg').y, 0), mk(hp('RightUpLeg').x, hp('RightUpLeg').y, 0)];
+  P.arms = [mk(hp('LeftArm').x, hp('LeftArm').y, 0), mk(hp('RightArm').x, hp('RightArm').y, 0)];
+  const hd = hp('Head'); P.head = mk(0, hd.y + 0.08, 0); P.torso = mk(0, (hips.y + hp('Spine02').y) / 2, 0);
+  const ID = new THREE.Quaternion(), rootWorld = {}; // world quat of the nodes above the hips
+  const up = B.Hips.parent; const upW = up ? wq(up) : ID;
+  const order = []; rig.traverse((o) => { if (o.isBone) order.push(o); });
+  const arms = { Left: P.arms[0], Right: P.arms[1] }, legs = { Left: P.legs[0], Right: P.legs[1] };
+  P.skinUpdate = () => {
+    const cur = new Map(); if (up) cur.set(up, upW);
+    const dT = qEuler(P.torso), dH = qEuler(P.head);
+    const put = (b, W) => { const pw = cur.get(b.parent) || ID; b.quaternion.copy(pw.clone().invert().multiply(W)); cur.set(b, W); };
+    const keep = (b) => { const pw = cur.get(b.parent) || ID; b.quaternion.copy(b.userData.restQ); cur.set(b, pw.clone().multiply(b.userData.restQ)); };
+    const chainArm = (sd) => {
+      const a = arms[sd], dA = qEuler(a), D = dT.clone().multiply(dA), raise = Math.max(0, a.rotation.x - 0.6);
+      const flex = 0.22 + Math.min(1.9, raise * 1.2);
+      put(B[sd + 'Arm'], D.clone().multiply(idle[sd + 'Arm']));
+      const Wf = D.clone().multiply(qAxisX(flex)).multiply(idle[sd + 'ForeArm']); put(B[sd + 'ForeArm'], Wf);
+      put(B[sd + 'Hand'], Wf.clone().multiply(rest[sd + 'ForeArm'].clone().invert().multiply(rest[sd + 'Hand'])));
+    };
+    const chainLeg = (sd) => {
+      const l = legs[sd], dL = qEuler(l), x = l.rotation.x, phi = x > 0.8 ? x : Math.max(0, -x) * 0.9;
+      put(B[sd + 'UpLeg'], dL.clone().multiply(idle[sd + 'UpLeg']));
+      put(B[sd + 'Leg'], dL.clone().multiply(qAxisX(-phi)).multiply(idle[sd + 'Leg']));
+      put(B[sd + 'Foot'], rest[sd + 'Foot']); if (B[sd + 'ToeBase']) put(B[sd + 'ToeBase'], rest[sd + 'ToeBase']);
+    };
+    for (const b of order) {
+      const n = b.name;
+      if (n === 'Spine') put(b, qSlerp0(dT, 1 / 3).multiply(rest[n])); else if (n === 'Spine01') put(b, qSlerp0(dT, 2 / 3).multiply(rest[n])); else if (n === 'Spine02') put(b, dT.clone().multiply(rest[n]));
+      else if (n === 'neck') put(b, dT.clone().multiply(rest[n])); else if (n === 'Head') put(b, dT.clone().multiply(dH).multiply(rest[n]));
+      else if (n === 'LeftArm') chainArm('Left'); else if (n === 'RightArm') chainArm('Right');
+      else if (n === 'LeftUpLeg') chainLeg('Left'); else if (n === 'RightUpLeg') chainLeg('Right');
+      else if (/ForeArm$|Hand$|Leg$|Foot$|ToeBase$/.test(n) && cur.has(b)) continue;
+      else if (!cur.has(b)) keep(b);
+    }
+  };
+  P.skinUpdate();
+  return P;
+}
 function fromModel(name, over) {
+  if (MODELS[name + '_ai']) { const ai = fromSkinned(MODELS[name + '_ai'], name, over); if (ai) return ai; }
   const src = MODELS[name]; if (!src) return null;
   for (const k of Object.keys(over)) if (!MODEL_OK.has(k)) return null;
   if (over.hat && Object.keys(over.hat).some((k) => k !== 'color' && k !== 'backwards')) return null;
@@ -205,4 +276,7 @@ export function animate(P, mode, t, speed = 1) {
   else if (mode === 'fight') { const k = Math.sin(ph * 7); aL.rotation.x = -1.5 * Math.max(0, k) - 0.35; aR.rotation.x = -1.5 * Math.max(0, -k) - 0.35; P.torso.rotation.x = 0.25; P.head.rotation.x = 0.15; P.group.rotation.z = Math.sin(ph * 5) * 0.08; P.group.position.y = base + Math.abs(Math.sin(ph * 7)) * 0.05; lL.rotation.x = Math.sin(ph * 7) * 0.3; lR.rotation.x = -Math.sin(ph * 7) * 0.3; }
   else if (mode === 'point') { aR.rotation.x = -1.5 + Math.sin(ph * 2) * 0.1; P.head.rotation.y = Math.sin(ph * 0.35) * 0.3; }
   else { P.head.rotation.y = Math.sin(ph * 0.35) * 0.35; aR.rotation.x = Math.sin(ph * 0.5) * 0.05; }
+  // the gestures above were written with the x-axis sign flipped (arms/torso/head swung backward); flip once here so forward is forward
+  aL.rotation.x *= -1; aR.rotation.x *= -1; P.head.rotation.x *= -1; P.torso.rotation.x *= -1;
+  if (P.skinUpdate) P.skinUpdate();
 }

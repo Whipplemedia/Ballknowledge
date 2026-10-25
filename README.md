@@ -31,6 +31,9 @@ The ten cast members are authored in Blender from the reference pack and exporte
 - Rebuild: `pip install bpy` (Blender as a Python module), then `python3 blender/build.py [names]`. Output: GLBs in `public/models/`, editable `.blend` files in `blender/out/`, preview renders in `/tmp/bk_prev/`.
 - Rig contract (same as the procedural people so animation and cosmetics keep working): nodes `legL legR armL armR head torso` at the same pivots. Material names start with a role (`skin shirt pants hair hat shoe`) so the game can recolor them per player; parts prefixed `hat_ hair_ hairtop_ pack_ glasses_ stache_` can be toggled.
 
+### AI-generated characters (Meshy)
+`public/models/<name>_ai.glb` (Mixamo-style skinned rig from Meshy: multi-image-to-3D from the reference sheets, then auto-rig) takes priority over the Blender-built `<name>.glb`. `people.js` drives the skeleton from the same invisible pivots the procedural rig uses, so all `animate()` modes and cosmetics work unchanged. Only Bub is converted so far. Baked textures mean no per-player recolor (plan: Meshy retexture variants). Meshy is wired in via `.mcp.json` with `MESHY_API_KEY` from the environment.
+
 ## Data notes (please double-check before shipping)
 Game results were verified against web sources where possible (2016 NBA Finals + ECF, 2011 NBA Finals + most of the WCF, 2016 NLCS, 2019 Stanley Cup Final, 2018 NCAA Elite Eight/Final Four, most 2018 conference title games). Less verified: 2019 NHL West Final scores (one secondary source), 2016 World Series games 3-4, 2004 ALCS games 1-2/5-6 and World Series games 2-4, 2011 WCF Game 5, NFL playoff brackets (from memory), 2018 CFP/Rose Bowl scores. Team **records and star stat lines are from memory** - college records are approximate.
 
