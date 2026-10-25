@@ -1,6 +1,46 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { jerseyTex, floralTex, buttonShirtTex } from './textures.js';
+
+// ---- authored Blender characters (blender/*.py -> public/models/*.glb). Procedural makePerson() below is the fallback. ----
+const MODEL_NAMES = ['bub', 'bartender', 'sal', 'hitman', 'jock', 'knowItAll', 'gambler', 'chill', 'dieHard', 'rookie'];
+const MODELS = {};
+if (typeof location !== 'undefined' && !/[?&]models=0/.test(location.search)) {
+  const loader = new GLTFLoader();
+  await Promise.all(MODEL_NAMES.map((n) => loader.loadAsync('models/' + n + '.glb').then((g) => { MODELS[n] = g.scene; }).catch(() => {})));
+}
+const TINTED_SHIRT = { jock: 0, knowItAll: 0, dieHard: 0, gambler: 0, sal: 0, hitman: 0, bartender: 0 }; // shirts with baked prints/suits keep their colors
+const MODEL_OK = new Set(['skin', 'shirt', 'pants', 'hair', 'hat', 'backpack', 'glasses', 'stache', 'scale', 'hairStyle', 'shorts', 'mouth', 'look', 'number']);
+const ROLE_K = { skin2: 0.9, shirt2: 0.92, hat2: 0.78 };
+function fromModel(name, over) {
+  const src = MODELS[name]; if (!src) return null;
+  for (const k of Object.keys(over)) if (!MODEL_OK.has(k)) return null;
+  if (over.hat && Object.keys(over.hat).some((k) => k !== 'color' && k !== 'backwards')) return null;
+  const rig = src.clone(true), g = new THREE.Group(); g.add(rig);
+  const S = { ...PRESETS[name], ...over };
+  const find = (n) => rig.getObjectByName(n);
+  const P = { group: g, legs: [find('legL'), find('legR')], arms: [find('armL'), find('armR')], head: find('head'), torso: find('torso'), phase: Math.random() * 6, spec: S, model: true };
+  if (P.legs.some((x) => !x) || P.arms.some((x) => !x) || !P.head || !P.torso) return null;
+  const tint = {}; // role -> hex
+  if (over.skin != null) tint.skin = over.skin; if (over.hair != null) tint.hair = over.hair;
+  if (over.shirt != null && !(name in TINTED_SHIRT)) tint.shirt = over.shirt;
+  if (over.pants != null && ['chill', 'rookie', 'bartender'].includes(name)) tint.pants = over.pants;
+  if (over.hat && over.hat.color != null) tint.hat = over.hat.color;
+  const cl = new Map();
+  const hide = (pre, on) => { if (on) return; rig.traverse((o) => { if (o.name.startsWith(pre)) o.visible = false; }); };
+  hide('hat_', over.hat !== null); hide('pack_', over.backpack !== false); hide('glasses_', over.glasses !== false); hide('stache_', over.stache !== false);
+  if (over.hat !== null && S.hat) hide('hairtop_', false);
+  rig.traverse((o) => {
+    if (!o.isMesh) return; o.castShadow = true;
+    const role = (o.material.name || '').split('_')[0], base = role.replace(/2$/, '');
+    if (tint[base] == null) return;
+    const key = o.material.uuid; if (!cl.has(key)) { const m = o.material.clone(); m.color.set(tint[base]).multiplyScalar(ROLE_K[role] ?? 1); cl.set(key, m); }
+    o.material = cl.get(key);
+  });
+  g.scale.setScalar(S.scale ?? 1);
+  return P;
+}
 
 // Chunky faceted cartoon people: beveled box heads, big white eyes, heavy brows, caps, jerseys.
 // Facing direction is -Z (matches the camera's forward at yaw 0).
@@ -130,9 +170,12 @@ export const PRESETS = {
 };
 const PATRON_BASES = ['jock', 'knowItAll', 'gambler', 'chill', 'dieHard', 'rookie'];
 const SHIRTS = [0x2e5aa8, 0xa83232, 0x2f8f5a, 0xc8a02a, 0x7a3fa0, 0xd0702a, 0x2a8a9a, 0x5a5a62];
-export function makePreset(name, over = {}) { return makePerson({ ...PRESETS[name], ...over }); }
+export function makePreset(name, over = {}) { return fromModel(name, over) || makePerson({ ...PRESETS[name], ...over }); }
 export function randomPatron(i = 0) {
   const base = PRESETS[PATRON_BASES[i % PATRON_BASES.length]], c = SHIRTS[(i * 3 + 1) % SHIRTS.length], sk = Object.values(SK)[(i * 2) % 5];
+  const baseName = PATRON_BASES[i % PATRON_BASES.length];
+  const hatO = i % 3 === 0 ? { color: SHIRTS[(i + 2) % SHIRTS.length], backwards: i % 2 === 0 } : undefined;
+  const mp = fromModel(baseName, { skin: sk, shirt: c, ...(hatO ? { hat: hatO } : {}) }); if (mp) return mp;
   return makePerson({ ...base, skin: sk, shirt: base.outfit === 'jersey' || base.outfit === 'floral' || base.outfit === 'button' ? (base.outfit === 'jersey' ? c : base.shirt) : c, number: String(((i * 7) % 90) + 3), hat: i % 3 === 0 ? { color: SHIRTS[(i + 2) % SHIRTS.length], backwards: i % 2 === 0 } : base.hat });
 }
 

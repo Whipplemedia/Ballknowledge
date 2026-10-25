@@ -25,6 +25,12 @@ WASD move, mouse look, E interact, C crew/wire money, Esc releases the mouse / c
 - **Look**: chunky faceted cartoon cast (Bub, the bartender, six regulars, Uncle Sal, hitmen, a crowd), dive-bar set with beams, windows, neon, chalkboard menu, ambient stylized sports broadcasts on the TVs, a live bar behind the title screen, bloom + color grade, and a four-stage drunk look.
 - `public/` - client: `client.js` (2D UI), `world.js` (3D loop), `bar.js` (environment + NPCs), `tv.js`, `roulette.js`, `games.js`, `pool.js`, `cosmetics.js`, `people.js` (characters + hands), `textures.js`, `fx.js` (bloom + drunk shader). Three.js is vendored in `public/vendor/`.
 
+## Characters (Blender pipeline)
+The ten cast members are authored in Blender from the reference pack and exported as `public/models/*.glb`; the game loads them at startup (`public/people.js`) and falls back to the old procedural people for any custom variant a model cannot express (`?models=0` forces the fallback).
+- Source: `blender/lib.py` (primitives, export, render), `blender/chars.py` (generic person builder), `blender/specs.py` (the 10 characters), `blender/textures.py` (jersey/floral/pinstripe prints).
+- Rebuild: `pip install bpy` (Blender as a Python module), then `python3 blender/build.py [names]`. Output: GLBs in `public/models/`, editable `.blend` files in `blender/out/`, preview renders in `/tmp/bk_prev/`.
+- Rig contract (same as the procedural people so animation and cosmetics keep working): nodes `legL legR armL armR head torso` at the same pivots. Material names start with a role (`skin shirt pants hair hat shoe`) so the game can recolor them per player; parts prefixed `hat_ hair_ hairtop_ pack_ glasses_ stache_` can be toggled.
+
 ## Data notes (please double-check before shipping)
 Game results were verified against web sources where possible (2016 NBA Finals + ECF, 2011 NBA Finals + most of the WCF, 2016 NLCS, 2019 Stanley Cup Final, 2018 NCAA Elite Eight/Final Four, most 2018 conference title games). Less verified: 2019 NHL West Final scores (one secondary source), 2016 World Series games 3-4, 2004 ALCS games 1-2/5-6 and World Series games 2-4, 2011 WCF Game 5, NFL playoff brackets (from memory), 2018 CFP/Rose Bowl scores. Team **records and star stat lines are from memory** - college records are approximate.
 
