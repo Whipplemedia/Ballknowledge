@@ -357,6 +357,7 @@ export function animate(P, mode, t, speed = 1) {
   else if (mode === 'drink') { const c = (Math.sin(ph * 0.7) + 1) / 2, up = c > 0.72 ? (c - 0.72) / 0.28 : 0; aR.rotation.x = -2.2 * up; aR.rotation.z = 0.2 * up; P.head.rotation.x = -0.15 * up; P.head.rotation.y = Math.sin(ph * 0.3) * 0.4; }
   else if (mode === 'polish') { aR.rotation.x = -1.2 + Math.sin(ph * 6) * 0.25; aL.rotation.x = -1.0; P.head.rotation.y = Math.sin(ph * 0.4) * 0.5; }
   else if (mode === 'pool') { const k = Math.sin(ph * 1.4); aR.rotation.x = -1.0 + k * 0.5; aL.rotation.x = -1.2; P.torso.rotation.x = 0.5; P.head.rotation.x = 0.3; }
+  else if (mode === 'sit') { lL.rotation.x = lR.rotation.x = 1.45; aL.rotation.x = aR.rotation.x = -0.55; P.head.rotation.y = Math.sin(ph * 0.35) * 0.3; }
   else if (mode === 'sleep') { P.head.rotation.x = 0.9; P.torso.rotation.x = 0.4; aL.rotation.x = aR.rotation.x = -1.3; }
   else if (mode === 'cheer') { aL.rotation.x = -2.6 + Math.sin(ph * 5) * 0.3; aR.rotation.x = -2.4 + Math.cos(ph * 5) * 0.3; P.group.position.y = base + Math.abs(Math.sin(ph * 5)) * 0.06; }
   else if (mode === 'stagger') { P.group.rotation.z = Math.sin(ph * 1.7) * 0.12; P.head.rotation.z = Math.sin(ph * 1.1) * 0.25; }

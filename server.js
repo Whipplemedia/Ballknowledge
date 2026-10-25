@@ -593,8 +593,8 @@ function handle(room, p, m) {
     case 'pos': {
       const x = Number(m.x), z = Number(m.z), ry = Number(m.ry);
       if (![x, z, ry].every(Number.isFinite)) break;
-      p.x = clamp(x, -30, 30); p.z = clamp(z, -30, 30); p.ry = ry;
-      for (const q of room.players.values()) if (q !== p) send(q, { type: 'pos', id: p.id, x: p.x, z: p.z, ry });
+      p.x = clamp(x, -30, 30); p.z = clamp(z, -30, 30); p.ry = ry; const sit = Number.isFinite(Number(m.sit)) && Number(m.sit) > 0 ? clamp(Number(m.sit), 0.2, 1.2) : 0;
+      for (const q of room.players.values()) if (q !== p) send(q, { type: 'pos', id: p.id, x: p.x, z: p.z, ry, sit });
       break;
     }
     case 'attack':

@@ -182,12 +182,10 @@ export function buildBar({ scene, BK, tv }) {
   tag('Bartender', 11.1, 2.55, 2.5);
   // regulars on stools facing the bar (stools at x=9, z=-0.2 + i*1.2)
   const stool = (z, name, over, mode, lines) => spawn(makePreset(name, over), 9.05, z, -Math.PI / 2, mode, lines, 'Regular', 0.8);
-  stool(-0.2, 'rookie', {}, 'drink', ['Is this the over or the under?', 'First time here. Be nice.', 'What\'s a moneyline?']);
   stool(1.0, 'jock', {}, 'cheer', ['LET\'S GOOO!', 'I called it. I CALLED it.', 'Ball knowledge, baby!']);
   stool(2.2, 'knowItAll', {}, 'point', ['Actually, the odds don\'t work like that.', 'Statistically speaking...', 'I read the box scores.']);
   stool(3.4, 'chill', {}, 'drink', ['I had Cleveland. Don\'t ask.', 'Rent was due. Bet was bigger.', 'Another round...']);
   stool(4.6, 'dieHard', {}, 'cheer', ['That ref is BLIND!', 'My cousin says it\'s rigged.', 'Never bet against my team.']);
-  stool(5.8, 'gambler', {}, 'drink', ['Double or nothing?', 'The house always wins. Not tonight.', 'I put my rent on the over.']);
   // pool table
   spawn(makePreset('gambler', { hat: { color: 0x2a5aa8, backwards: false }, outfit: 'tee', shirt: 0xd8d0b0, stache: false }), 3.4, 4.5, face(3.4, 4.5, 3.4, 3.4), 'pool', ['Eight ball, corner pocket.', 'You\'re hustling me.', 'Watch the cue chalk.'], 'Shark');
   spawn(makePreset('dieHard', { glasses: false, shirt: 0x9a3a8a, outfit: 'tee', hat: { color: 0x222222, backwards: true } }), 5.4, 3.4, face(5.4, 3.4, 4.4, 3.4), 'idle', ['Double or nothing?', 'Nice shot. Lucky.', 'I need a beer.'], 'Shark');
@@ -257,6 +255,19 @@ export function buildBar({ scene, BK, tv }) {
   const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
   scene.add(new THREE.Points(dg, new THREE.PointsMaterial({ color: 0xffe8c0, size: 0.03, transparent: true, opacity: 0.5, depthWrite: false })));
 
+  // ---------- seats the player can take (E). hip = where the pelvis goes, yaw = facing (same convention as me.yaw), sit = seat-top height ----------
+  const seats = [];
+  const addSeat = (o) => seats.push(o);
+  [-3.5, -0.5, 2.5].forEach((bx) => { for (const dx of [-0.5, 0.5]) {
+    const ex = bx + (dx < 0 ? -1.5 : 1.5);
+    addSeat({ x: bx + dx, z: BOOTH.hipA, yaw: 0, sit: BOOTH.seat, exit: [ex, 6.4], text: 'booth' });
+    addSeat({ x: bx + dx, z: BOOTH.hipB, yaw: Math.PI, sit: BOOTH.seat, exit: [ex, 6.6], text: 'booth' });
+  } });
+  [-0.2, 1.0, 2.2, 3.4, 4.6, 5.8].forEach((z) => addSeat({ x: 9.05, z, yaw: -Math.PI / 2, sit: 0.8, exit: [8.1, z], text: 'bar stool' }));
+  [7.4, 8.0, 8.6].forEach((x) => addSeat({ x, z: 6.92, yaw: 0, sit: 0.45, exit: [x, 5.9], text: 'couch' }));
+  const takenSeat = (s) => npcs.some((n) => n.seated && Math.hypot(n.P.group.position.x - s.x, n.P.group.position.z - s.z) < 0.55);
+  seats.forEach((s) => { s.free = !takenSeat(s); if (s.free) stations.push({ x: s.x, z: s.z, r: s.text === 'booth' ? 2.0 : s.text === 'couch' ? 1.5 : 0.8, text: 'E - Sit (' + s.text + ')', seat: s, act: () => BK.sit && BK.sit(s) }); });
+
   function update(t, dt, me) {
     for (const n of npcs) {
       animate(n.P, n.mode, t);
@@ -270,5 +281,5 @@ export function buildBar({ scene, BK, tv }) {
     const p = dg.attributes.position; for (let i = 0; i < dustN; i++) { p.array[i * 3 + 1] += dt * 0.03 * (1 + (i % 3)); if (p.array[i * 3 + 1] > 4.6) p.array[i * 3 + 1] = 0.1; p.array[i * 3] += Math.sin(t * 0.2 + i) * dt * 0.02; }
     p.needsUpdate = true;
   }
-  return { stations, obstacles, npcs, update };
+  return { stations, obstacles, npcs, seats, update };
 }

@@ -44,12 +44,17 @@ BK.leaveGames = () => games.leave();
 BK.startGame = (name, ch) => games.start(name, ch);
 const fx = createFX(renderer, scene, camera);
 
+// ---- sitting: take a seat from bar.seats; camera drops to seated eye height and movement locks until E/Space/WASD ----
+me.sit = null;
+BK.sit = (s) => { if (me.sit || games.active()) return; me.sit = s; me.x = s.x; me.z = s.z; me.yaw = s.yaw; me.pitch = -0.05; BK.toast && BK.toast('Sitting - press E, Space or WASD to stand up'); };
+BK.stand = () => { const s = me.sit; if (!s) return; me.sit = null; me.x = s.exit[0]; me.z = s.exit[1]; };
 const active = () => { const S = BK.S; return S && ['play', 'hunt'].includes(S.phase); };
 const nearest = () => stations.filter((s) => Math.hypot(s.x - me.x, s.z - me.z) < s.r).sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
 
 addEventListener('keydown', (e) => {
   if (!active() || BK.ui.open || BK.ui.shop) return;
   keys[e.code] = true;
+  if (me.sit && (e.code === 'KeyE' || e.code === 'Space' || ['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code))) { BK.stand(); return; }
   if (e.code === 'KeyE') { if (games.active()) games.leave(); else { const s = nearest(); if (s) s.act(); } }
   if (e.code === 'KeyC') { games.leave(); BK.openPanel('crew'); }
 });
@@ -60,6 +65,7 @@ addEventListener('mousemove', (e) => {
   if (document.pointerLockElement !== canvas || roulette.lookTarget() || performance.now() - lockAt < 250) return;
   const mx = Math.max(-150, Math.min(150, e.movementX)), my = Math.max(-150, Math.min(150, e.movementY)); // ignore bogus jumps when the lock is (re)acquired
   me.yaw -= mx * 0.0022; me.pitch = Math.max(-1.3, Math.min(1.3, me.pitch - my * 0.0022));
+  if (me.sit) { const d = Math.atan2(Math.sin(me.yaw - me.sit.yaw), Math.cos(me.yaw - me.sit.yaw)); if (Math.abs(d) > 1.75) me.yaw = me.sit.yaw + Math.sign(d) * 1.75; me.pitch = Math.max(-0.9, Math.min(0.8, me.pitch)); }
   games.clampLook();
 });
 canvas.addEventListener('mouseup', () => games.up());
@@ -67,7 +73,7 @@ canvas.addEventListener('mouseup', () => games.up());
 // ---------- avatars ----------
 const SHIRTS = [0xe74c3c, 0x3498db, 0x2ecc71, 0xf1c40f, 0x9b59b6, 0xe67e22], SKINS = [0xf0c8a0, 0xc58c5c, 0xe0b890, 0x8d5a3a, 0xf5d0b0, 0xd8a070], HAIRS = [0x2a1a0a, 0x111111, 0x8a5a2a, 0x3a3a3a, 0xb06a2a, 0x5a3a1a], CAPS = [0x9c9ca2, 0xb02a2a, 0x2a5aa8, 0x2f8f5a, 0xd0a020, 0x7a3fa0];
 const avatars = new Map(), pending = new Map();
-BK.onPos = (m) => { const a = avatars.get(m.id); if (a) { a.tx = m.x; a.tz = m.z; a.try = m.ry; } else pending.set(m.id, m); };
+BK.onPos = (m) => { const a = avatars.get(m.id); if (a) { a.tx = m.x; a.tz = m.z; a.try = m.ry; a.sit = m.sit || 0; } else pending.set(m.id, m); };
 function syncAvatars() {
   const S = BK.S, inGame = active();
   const ids = new Set(inGame ? S.players.filter((p) => p.id !== S.you).map((p) => p.id) : []);
@@ -128,7 +134,7 @@ canvas.addEventListener('mousedown', () => {
 
 // ---------- movement ----------
 function move(dt, t, drunkAmt) {
-  if (BK.ui.open || games.active()) return;
+  if (BK.ui.open || games.active() || me.sit) return;
   const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
   const sp = keys.ShiftLeft ? 6.2 : 3.8, sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
   let dx = -sin * f + cos * s, dz = -cos * f - sin * s; const len = Math.hypot(dx, dz) || 1;
@@ -139,11 +145,11 @@ function move(dt, t, drunkAmt) {
   me.x = Math.max(-ROOM.x + 0.6, Math.min(ROOM.x - 0.6, me.x)); me.z = Math.max(-ROOM.z + 0.6, Math.min(ROOM.z - 0.6, me.z));
   for (const o of obstacles) { const ex = me.x - o.x, ez = me.z - o.z, d = Math.hypot(ex, ez), min = o.r + 0.3; if (d < min && d > 0) { me.x = o.x + (ex / d) * min; me.z = o.z + (ez / d) * min; } }
 }
-let lastSend = 0, lastPos = '';
+let lastSend = 0, lastPos = '', lastBeat = 0;
 function netSend(t) {
   if (t - lastSend < 80) return; lastSend = t;
-  const k = `${me.x.toFixed(2)},${me.z.toFixed(2)},${me.yaw.toFixed(2)}`;
-  if (k === lastPos) return; lastPos = k; BK.send({ type: 'pos', x: me.x, z: me.z, ry: me.yaw });
+  const sitH = me.sit ? me.sit.sit : 0, k = `${me.x.toFixed(2)},${me.z.toFixed(2)},${me.yaw.toFixed(2)},${sitH}`;
+  if (k === lastPos && !(sitH && t - lastBeat > 2500)) return; lastPos = k; lastBeat = t; BK.send({ type: 'pos', x: me.x, z: me.z, ry: me.yaw, sit: sitH });
 }
 
 // ---------- loop ----------
@@ -176,7 +182,8 @@ function frame(now) {
   else move(dt, t, drunkAmt);
   netSend(now);
   const moving = !games.active() && !BK.ui.open && (keys.KeyW || keys.KeyS || keys.KeyA || keys.KeyD);
-  camera.position.set(me.x, EYE + Math.sin(now / 180) * (moving ? 0.03 : 0.004), me.z);
+  if (me.sit) { const s = me.sit, fx = -Math.sin(s.yaw) * 0.1, fz = -Math.cos(s.yaw) * 0.1; camera.position.set(s.x + fx, s.sit + 0.09 + (EYE - 0.98) + Math.sin(now / 900) * 0.004, s.z + fz); }
+  else camera.position.set(me.x, EYE + Math.sin(now / 180) * (moving ? 0.03 : 0.004), me.z);
   const off = games.camOffset(now);
   camera.rotation.set(me.pitch + off.p + Math.sin(t * 0.7) * drunkAmt * 0.03, me.yaw + off.y + Math.sin(t * 0.5) * drunkAmt * 0.05, Math.sin(t * 0.9) * drunkAmt * 0.07);
   games.update(dt); games.rig(camera);
@@ -189,7 +196,8 @@ function frame(now) {
     const g = a.P.group, k = Math.min(1, dt * 10); g.position.x += (a.tx - g.position.x) * k; g.position.z += (a.tz - g.position.z) * k;
     let d = a.try - g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); g.rotation.y += d * k;
     const sp = Math.hypot(g.position.x - a.px, g.position.z - a.pz) / Math.max(dt, 0.001); a.px = g.position.x; a.pz = g.position.z;
-    animate(a.P, a.drunk >= 40 && sp < 0.4 ? 'stagger' : sp > 0.5 ? 'walk' : 'idle', t, Math.min(1.4, sp / 3.5)); tickCosmetics(a.P, t);
+    const sitY = a.sit ? a.sit + 0.09 - (a.P.hipY || 0.98) : 0; a.P.baseY = (a.P.baseY || 0) + (sitY - (a.P.baseY || 0)) * Math.min(1, dt * 10);
+    animate(a.P, a.sit ? 'sit' : a.drunk >= 40 && sp < 0.4 ? 'stagger' : sp > 0.5 ? 'walk' : 'idle', t, Math.min(1.4, sp / 3.5)); tickCosmetics(a.P, t);
   }
   hitmen.forEach((h, i) => {
     const g = h.P.group, tx = Math.sin(t / 1.5 + h.ph) * 4, tz = ROOM.z - 5 + Math.cos(t / 1.9 + h.ph) * 2.2;

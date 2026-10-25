@@ -36,7 +36,7 @@ function toast(text, kind = 'info') {
 // ---------- panels / pointer lock ----------
 function openPanel(tab) { window.BK.leaveGames && window.BK.leaveGames(); ui.open = true; if (tab) ui.tab = tab; document.exitPointerLock && document.exitPointerLock(); render(); }
 function closePanel() { ui.open = false; render(); try { document.getElementById('world').requestPointerLock(); } catch {} }
-window.BK = { get S() { return S; }, ui, send, openPanel, closePanel, now, get drunk() { return drunkLevel(); } };
+window.BK = { get S() { return S; }, ui, send, openPanel, closePanel, now, toast, get drunk() { return drunkLevel(); } };
 addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (ui.shop) closeShop(); else if (ui.open) closePanel(); } });
 function drunkLevel() { if (!S) return 0; return Math.max(0, S.me.drunk - (Date.now() - stateAt) / (S.me.decay || 6000)); }
 
