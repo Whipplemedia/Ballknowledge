@@ -1,0 +1,44 @@
+{
+  "_note": "Meshy task ids behind public/models/*_ai.glb (multi-image-to-3d gen, then rigging). Settings: meshy-7.1, t-pose, 2k texture, remesh ~9000 tris. Inputs are crops of the reference-pack character sheets.",
+  "bub": {
+    "gen": "01a17457-7328-7584-b7d8-540e77ddda60",
+    "rig": "01a17459-824d-76f1-9d1b-c1efabdf24d5",
+    "note": "inputs were a cap/backpack-free edit (image-to-image 01a17456-b96e-755d-8ef9-181e04d70bf5), 4k texture, 10000 tris"
+  },
+  "bartender": {
+    "gen": "01a17460-3f1f-70c9-ae77-b1dc20bb775b",
+    "rig": "01a17463-bfc7-7119-84ca-30deb42e9fcd"
+  },
+  "sal": {
+    "gen": "01a17460-44e4-7203-9751-f3e9d04390f4",
+    "rig": "01a17463-ca7b-75be-ad4a-7b5d57cb02bc"
+  },
+  "jock": {
+    "gen": "01a17463-99eb-7740-b579-c8532da92ea1",
+    "rig": "01a17469-5c1a-7216-b925-7b556379467c"
+  },
+  "knowItAll": {
+    "gen": "01a17463-9fb6-758a-ae9c-fbd83284a828",
+    "rig": "01a17469-65dc-725a-8bc1-725a771c18e1"
+  },
+  "gambler": {
+    "gen": "01a17463-a5ba-700c-b790-33a92bf7316c",
+    "rig": "01a17469-7051-7659-a261-19a0551876d3"
+  },
+  "chill": {
+    "gen": "01a17463-aaec-73f6-8527-a8fa0ba9bd61",
+    "rig": "01a17469-7a1c-7786-a613-960f8f9fe3fd"
+  },
+  "dieHard": {
+    "gen": "01a17463-b019-76dc-8e40-e7dd09a5774e",
+    "rig": "01a17469-8425-748e-b3c4-234927f4319e"
+  },
+  "rookie": {
+    "gen": "01a17463-b4e3-7775-8855-06bf9a5f2eee",
+    "rig": "01a17469-8f92-705d-92c7-0b1fef54073f"
+  },
+  "hitman": {
+    "gen": "01a17463-b953-720a-8bc4-d93f1c088831",
+    "rig": "01a17469-99d6-7747-9bae-f92e1252ffa1"
+  }
+}

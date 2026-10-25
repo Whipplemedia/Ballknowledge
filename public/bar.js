@@ -164,7 +164,7 @@ export function buildBar({ scene, BK, tv }) {
   stool(5.8, 'gambler', {}, 'drink', ['Double or nothing?', 'The house always wins. Not tonight.', 'I put my rent on the over.']);
   // pool table
   spawn(makePreset('gambler', { hat: { color: 0x2a5aa8, backwards: false }, outfit: 'tee', shirt: 0xd8d0b0, stache: false }), 3.4, 4.5, face(3.4, 4.5, 3.4, 3.4), 'pool', ['Eight ball, corner pocket.', 'You\'re hustling me.', 'Watch the cue chalk.'], 'Shark');
-  spawn(makePreset('knowItAll', { glasses: false, shirt: 0x9a3a8a, outfit: 'tee', hat: { color: 0x222222, backwards: true } }), 5.4, 3.4, face(5.4, 3.4, 4.4, 3.4), 'idle', ['Double or nothing?', 'Nice shot. Lucky.', 'I need a beer.'], 'Shark');
+  spawn(makePreset('dieHard', { glasses: false, shirt: 0x9a3a8a, outfit: 'tee', hat: { color: 0x222222, backwards: true } }), 5.4, 3.4, face(5.4, 3.4, 4.4, 3.4), 'idle', ['Double or nothing?', 'Nice shot. Lucky.', 'I need a beer.'], 'Shark');
   spawn(randomPatron(2), 5.9, 4.9, face(5.9, 4.9, 4.4, 3.6), 'cheer', ['Sink it!', 'Ohhh!', 'Scratch!'], 'Watcher');
   // booths (front wall). benches at z=7.6 (face -z) and z=5.4 (face +z); seat top ~0.45
   const benchA = (x, p, i) => spawn(p, x, 7.5, 0, 'drink', ['This booth is cursed.', 'Ssh, the game is on.', 'Order me a beer?'], 'Patron', 0.45);
@@ -188,7 +188,7 @@ export function buildBar({ scene, BK, tv }) {
   [['helmet_fb', -9.5], ['tophat', -8.9], ['crown', -8.3], ['viking', -7.7]].forEach(([id, x]) => { const s = stand(id, x, 1.35); s.position.y = 1.2; });
   for (const [id, x] of [['golf_club', -9.9], ['bat', -9.5], ['hockey_stick', -9.1]]) { const g = new THREE.Group(); g.position.set(x, 1.6, ROOM.z - 0.2); BY_ID[id].make(g); g.rotation.set(0, 0, 0); g.children.forEach(() => {}); g.rotation.x = 0.0; g.rotation.z = 0.0; g.rotation.x = 0; g.position.y = 0.9; scene.add(g); }
   neonPlane('PRO SHOP', '#ffc83d', 2.4, 0.7, -8.6, 3.3, ROOM.z - 0.12, Math.PI, 70);
-  const clerk = spawn(makePreset('knowItAll', { glasses: false, hairStyle: 'slick', hair: 0x2a1a10 }), -8.6, 7.55, 0, 'idle', ['Cosmetics! Crates! Dignity not included.', 'Every crate is a surprise.', 'Dress for the occasion.'], 'Clerk');
+  const clerk = spawn(makePreset('jock', { glasses: false, hairStyle: 'slick', hair: 0x2a1a10 }), -8.6, 7.55, 0, 'idle', ['Cosmetics! Crates! Dignity not included.', 'Every crate is a surprise.', 'Dress for the occasion.'], 'Clerk');
   applyCosmetics(clerk.P, { body: 'ref_shirt', head: 'sweatband' }); tag('Pro Shop', -8.6, 2.7, 7.55, '#ffc83d');
   lamp(-8.6, 3.2, 6.0, 0xffd8a0, 22, 8);
   obstacles.push({ x: -8.6, z: 6.7, r: 1.4 });

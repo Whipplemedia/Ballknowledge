@@ -5,7 +5,9 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { jerseyTex, floralTex, buttonShirtTex } from './textures.js';
 
 // ---- authored Blender characters (blender/*.py -> public/models/*.glb). Procedural makePerson() below is the fallback. ----
-const MODEL_NAMES = ['bub_ai', 'bub', 'bartender', 'sal', 'hitman', 'jock', 'knowItAll', 'gambler', 'chill', 'dieHard', 'rookie'];
+const AI_NAMES = ['bub', 'bartender', 'sal', 'hitman', 'jock', 'knowItAll', 'gambler', 'chill', 'dieHard', 'rookie'];
+const AI_HEIGHT = { bub: 1.88, bartender: 1.72, sal: 1.8, hitman: 1.95, jock: 1.9, knowItAll: 1.85, gambler: 1.8, chill: 1.86, dieHard: 1.84, rookie: 1.8 };
+const MODEL_NAMES = AI_NAMES.map((n) => n + '_ai');
 const MODELS = {};
 if (typeof location !== 'undefined' && !/[?&]models=0/.test(location.search)) {
   const loader = new GLTFLoader();
@@ -29,7 +31,7 @@ function fromSkinned(src, name, over) {
   if (!skinned || need.some((n) => !B[n])) return null;
   outer.updateMatrixWorld(true);
   // scale to game height (~1.9) and stand on the floor
-  const box = new THREE.Box3().setFromObject(skinned), sc = 1.9 / (box.max.y - box.min.y);
+  const box = new THREE.Box3().setFromObject(skinned), sc = (AI_HEIGHT[name] || 1.88) / (box.max.y - box.min.y);
   inner.scale.setScalar(sc); inner.position.y = -box.min.y * sc; outer.updateMatrixWorld(true);
   const wq = (b) => b.getWorldQuaternion(new THREE.Quaternion()), wp = (b) => b.getWorldPosition(new THREE.Vector3());
   const rest = {}; for (const n in B) { rest[n] = wq(B[n]); B[n].userData.restQ = B[n].quaternion.clone(); }
@@ -80,6 +82,10 @@ function fromSkinned(src, name, over) {
       else if (!cur.has(b)) keep(b);
     }
   };
+  // AI models have baked colors: overrides can't recolor them, but a faint tint from the requested shirt color keeps crowds from being exact clones
+  const vary = over.shirt ?? over.skin;
+  if (vary != null) { const tc = new THREE.Color(0xffffff).lerp(new THREE.Color(vary), 0.16); const cl = new Map(); rig.traverse((o) => { if (!o.isMesh) return; if (!cl.has(o.material)) { const m = o.material.clone(); m.color.multiply(tc); cl.set(o.material, m); } o.material = cl.get(o.material); }); }
+  if (over.scale) outer.scale.setScalar(over.scale);
   P.skinUpdate();
   return P;
 }
