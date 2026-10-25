@@ -55,8 +55,9 @@
       "gen": "01a17472-7149-71af-8a85-af2acf86d66b"
     },
     "pool": {
-      "gen": "01a17476-228b-739d-92e5-876f7b6b32b8",
-      "note": "rejected: sunken felt/oversized rails, kept procedural table"
+      "gen": "01a174bc-d278-75ad-a630-04d1ce70287f",
+      "ref": "image-to-image 01a174bc-7c94-760a-9718-d4ea915b41ea",
+      "note": "single clean 3/4 view -> image-to-3d; first multi-view attempt 01a17476-228b-739d-92e5-876f7b6b32b8 was rejected"
     },
     "pin": {
       "gen": "01a1748b-7ecd-701f-8c94-fff51f255685"

@@ -111,7 +111,7 @@ export function buildBar({ scene, BK, tv }) {
 
   // ---------- pool table ----------
   const feltM = MT(TX.felt('#0d6b35').t, { roughness: 1 }), PX = 3.4, PZ = 3.4;
-  if (hasProp('pool')) { const pt = prop('pool', { w: 2.9, d: 1.6, h: 0.96, rotX: -Math.PI / 2, rotY: Math.PI / 2 }); pt.position.set(PX, 0, PZ); scene.add(pt); }
+  if (hasProp('pool')) { const pt = prop('pool', { w: 2.86, d: 1.51, h: 0.996 }); pt.position.set(PX, 0, PZ); scene.add(pt); }
   else {
   box(2.9, 0.12, 1.6, M(0x4a2a14), PX, 0.82, PZ); box(2.6, 0.04, 1.3, feltM, PX, 0.9, PZ);
   [[-1.4, -0.75], [1.4, -0.75], [-1.4, 0.75], [1.4, 0.75]].forEach(([x, z]) => box(0.18, 0.8, 0.18, M(0x2a170b), PX + x, 0.4, PZ + z));
