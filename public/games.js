@@ -151,6 +151,7 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
     const resetPins = () => pins.forEach((p) => { p.x = p.hx; p.z = p.hz; p.vx = p.vz = 0; p.st = 'up'; p.fall = 0; p.g.visible = true; place(p); });
     const clearDown = () => pins.forEach((p) => { if (p.st !== 'up') p.g.visible = false; });
     const place = (p) => { p.g.position.set(p.x, Y + 0.06 * p.fall, p.z); p.g.quaternion.setFromAxisAngle(V(p.dz, 0, -p.dx).normalize(), p.fall * Math.PI / 2); };
+    resetPins(); // pins start at the origin otherwise (visible in the middle of the bar)
     const downCount = () => pins.filter((p) => p.st !== 'up').length;
     const standing = () => pins.filter((p) => p.st === 'up' && p.g.visible);
 

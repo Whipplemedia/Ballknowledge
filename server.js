@@ -50,7 +50,7 @@ const rooms = new Map();
 const rnd = (n) => Math.floor(Math.random() * n);
 const pick = (a) => a[rnd(a.length)];
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
-const money = (n) => '$' + Math.round(n).toLocaleString('en-US');
+const money = (n) => (n < 0 ? '-' : '') + '$' + Math.abs(Math.round(n)).toLocaleString('en-US');
 const dur = (ms) => Math.max(1, Math.round(ms / SPEED));
 
 function seeded(str) { // mulberry32 over a string hash

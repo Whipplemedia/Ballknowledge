@@ -219,18 +219,22 @@ function frame(now) {
     const sitY = a.sit ? a.sit + 0.09 - (a.P.hipY || 0.98) : 0; a.P.baseY = (a.P.baseY || 0) + (sitY - (a.P.baseY || 0)) * Math.min(1, dt * 10);
     if (!!a.sit !== !!a._sat) { a._sat = !!a.sit; audio.sfx(a.sit ? 'sit' : 'stand', { pos: { x: g.position.x, y: 0.6, z: g.position.z } }); }
     if (!a.sit && sp > 0.6) { a._sd = (a._sd || 0) + sp * dt; if (a._sd > 0.8) { a._sd = 0; audio.sfx('step', { v: 0.5, pos: { x: g.position.x, y: 0.1, z: g.position.z } }); } }
+    { const dx = g.position.x - me.x, dz = g.position.z - me.z, dist = Math.hypot(dx, dz);
+      if (a.lab === undefined) { a.lab = g.children.find((o) => o.isSprite && o.position.y > 2 && o.position.y < 2.4); if (a.lab) a.labS = a.lab.scale.clone(); }
+      if (a.lab) { const k = Math.min(1.25, Math.max(0.45, dist * 0.32)); a.lab.scale.set(a.labS.x * k, a.labS.y * k, 1); a.lab.material.opacity = dist < 1.1 ? Math.max(0, (dist - 0.5) / 0.6) : 1; }
+      const near = dist < 0.55; if (a.hideNear !== near) { a.hideNear = near; g.children.forEach((o) => { if (!o.isSprite) o.visible = !near; }); } }
     if (!a.mic) { a.mic = label('🎙', '#2ee09a', 0.55); a.mic.position.y = 2.65; a.mic.visible = false; g.add(a.mic); } const spk = voice.speaking(a.id); if (a.mic.visible !== spk) a.mic.visible = spk;
     animate(a.P, a.sit ? 'sit' : a.drunk >= 40 && sp < 0.4 ? 'stagger' : sp > 0.5 ? 'walk' : 'idle', t, Math.min(1.4, sp / 3.5)); tickCosmetics(a.P, t);
   }
   hitmen.forEach((h, i) => {
-    const g = h.P.group, tx = Math.sin(t / 1.5 + h.ph) * 4, tz = ROOM.z - 5 + Math.cos(t / 1.9 + h.ph) * 2.2;
+    const g = h.P.group, R = 3.3 + Math.sin(t / 2.3 + h.ph) * 0.7, tx = Math.max(-ROOM.x + 1, Math.min(ROOM.x - 1, me.x + Math.cos(t / 3 + h.ph * 2.1) * R)), tz = Math.max(-ROOM.z + 1, Math.min(ROOM.z - 1, me.z + Math.sin(t / 3 + h.ph * 2.1) * R)); // circle the player they're hunting
     g.position.x += (tx - g.position.x) * dt * 0.8; g.position.z += (tz - g.position.z) * dt * 0.8;
     g.rotation.y = Math.atan2(-(me.x - g.position.x), -(me.z - g.position.z)) + Math.PI; h.flash = Math.max(0, h.flash - dt * 4); g.scale.setScalar(1.08 + h.flash * 0.25);
     animate(h.P, 'walk', t + h.ph, 0.5);
   });
   const st = nearest();
-  if (st && !BK.ui.open && !games.active()) { promptEl.textContent = st.text; promptEl.classList.remove('hidden'); } else promptEl.classList.add('hidden');
-  if (!st && !games.active() && !BK.ui.open && document.pointerLockElement !== canvas) { promptEl.textContent = 'Click to look around'; promptEl.classList.remove('hidden'); }
+  if (st && !BK.ui.open && !BK.ui.shop && !me.sit && !games.active()) { promptEl.textContent = st.text; promptEl.classList.remove('hidden'); } else promptEl.classList.add('hidden');
+  if (!st && !games.active() && !BK.ui.open && !BK.ui.shop && document.pointerLockElement !== canvas) { promptEl.textContent = 'Click to look around'; promptEl.classList.remove('hidden'); }
   fx.setDrunk(drunkAmt, t);
   fx.render();
 }
