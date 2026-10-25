@@ -54,6 +54,42 @@ function recolorTexture(srcTex, { shirt, skin, hair }, shirtMask) {
   RECOLOR_CACHE.set(key, tex); return tex;
 }
 
+
+// ---- crowd variants for the other AI characters: hue-rotate clothing triangles (by bone) and retone skin ----
+const CLOTH_BONES = new Set(['Hips', 'Spine', 'Spine01', 'Spine02', 'LeftShoulder', 'RightShoulder', 'LeftArm', 'RightArm', 'LeftUpLeg', 'RightUpLeg', 'LeftLeg', 'RightLeg']);
+function buildBoneMask(mesh, N, set) {
+  const g = mesh.geometry, uv = g.attributes.uv, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, bones = mesh.skeleton.bones;
+  const mc = document.createElement('canvas'); mc.width = mc.height = N; const c = mc.getContext('2d'); c.fillStyle = '#fff'; c.strokeStyle = '#fff'; c.lineWidth = 3;
+  const ok = (v) => { let bi = 0, bw = -1; for (let k = 0; k < 4; k++) { const w = sw.getComponent(v, k); if (w > bw) { bw = w; bi = si.getComponent(v, k); } } return set.has(bones[bi].name); };
+  const idx = g.index, n = idx ? idx.count : uv.count;
+  for (let t = 0; t < n; t += 3) {
+    const a = idx ? idx.getX(t) : t, b = idx ? idx.getX(t + 1) : t + 1, d = idx ? idx.getX(t + 2) : t + 2;
+    if ((ok(a) ? 1 : 0) + (ok(b) ? 1 : 0) + (ok(d) ? 1 : 0) < 2) continue;
+    c.beginPath(); c.moveTo(uv.getX(a) * N, uv.getY(a) * N); c.lineTo(uv.getX(b) * N, uv.getY(b) * N); c.lineTo(uv.getX(d) * N, uv.getY(d) * N); c.closePath(); c.fill(); c.stroke();
+  }
+  const dd = c.getImageData(0, 0, N, N).data, out = new Uint8Array(N * N); for (let i = 0; i < N * N; i++) out[i] = dd[i * 4] > 128 ? 1 : 0; return out;
+}
+function recolorNpc(srcTex, key, { hue, skin }, clothMask) {
+  if (RECOLOR_CACHE.has(key)) return RECOLOR_CACHE.get(key);
+  const N = 1024, cv = document.createElement('canvas'); cv.width = cv.height = N; const cx = cv.getContext('2d', { willReadFrequently: true });
+  cx.drawImage(srcTex.image, 0, 0, N, N); const im = cx.getImageData(0, 0, N, N), d = im.data;
+  const tK = skin == null ? null : [((skin >> 16) & 255) / 255, ((skin >> 8) & 255) / 255, (skin & 255) / 255];
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255, mx = Math.max(r, g, b), mn = Math.min(r, g, b), sat = mx > 0 ? (mx - mn) / mx : 0, dd = Math.max(mx - mn, 1e-6);
+    let h = mx === r ? ((g - b) / dd) % 6 : mx === g ? (b - r) / dd + 2 : (r - g) / dd + 4; h *= 60; if (h < 0) h += 360;
+    const isSkin = sat > 0.28 && mx > 0.62 && h > 5 && h < 40;
+    if (isSkin) { if (tK) { const k = Math.min(1.6, (0.299 * r + 0.587 * g + 0.114 * b) / 0.762); d[i] = Math.min(255, tK[0] * k * 255); d[i + 1] = Math.min(255, tK[1] * k * 255); d[i + 2] = Math.min(255, tK[2] * k * 255); } continue; }
+    if (hue && clothMask[i >> 2] && sat > 0.2 && mx > 0.12) { // rotate hue, keep value/saturation
+      const nh = (h + hue) % 360, c = mx * sat, x = c * (1 - Math.abs(((nh / 60) % 2) - 1)), m = mx - c; let rr = 0, gg = 0, bb = 0;
+      if (nh < 60) { rr = c; gg = x; } else if (nh < 120) { rr = x; gg = c; } else if (nh < 180) { gg = c; bb = x; } else if (nh < 240) { gg = x; bb = c; } else if (nh < 300) { rr = x; bb = c; } else { rr = c; bb = x; }
+      d[i] = (rr + m) * 255; d[i + 1] = (gg + m) * 255; d[i + 2] = (bb + m) * 255;
+    }
+  }
+  cx.putImageData(im, 0, 0);
+  const tex = new THREE.CanvasTexture(cv); tex.flipY = srcTex.flipY; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = srcTex.anisotropy; tex.wrapS = srcTex.wrapS; tex.wrapT = srcTex.wrapT;
+  RECOLOR_CACHE.set(key, tex); return tex;
+}
+
 // ---- Meshy (AI-generated) skinned characters: public/models/<name>_ai.glb, Mixamo-style skeleton ----
 const Q0 = new THREE.Quaternion(), V_DOWN = new THREE.Vector3(0, -1, 0);
 const qAlign = (from, to) => new THREE.Quaternion().setFromUnitVectors(from.clone().normalize(), to.clone().normalize());
@@ -123,6 +159,8 @@ function fromSkinned(src, name, over) {
   // Bub's texture is split into flat color regions, so skin / hair / shirt can be recolored per player. Other characters keep their art (only a faint crowd tint).
   if (name === 'bub' && (over.shirt != null || over.skin != null || over.hair != null)) {
     const cl = new Map(); rig.traverse((o) => { if (!o.isMesh || !o.material.map) return; if (!cl.has(o.material)) { const m = o.material.clone(); if (o.isSkinnedMesh && !src.userData.shirtMask) src.userData.shirtMask = buildShirtMask(o, 1024); m.map = recolorTexture(o.material.map, over, src.userData.shirtMask); cl.set(o.material, m); } o.material = cl.get(o.material); });
+  } else if (over.hue != null || (over.crowdSkin != null)) {
+    const cl = new Map(); rig.traverse((o) => { if (!o.isMesh || !o.material.map) return; if (!cl.has(o.material)) { const m = o.material.clone(); if (o.isSkinnedMesh && !src.userData.clothMask) src.userData.clothMask = buildBoneMask(o, 1024, CLOTH_BONES); m.map = recolorNpc(o.material.map, name + '|' + (over.hue | 0) + '|' + (over.crowdSkin ?? 'x'), { hue: over.hue, skin: over.crowdSkin }, src.userData.clothMask); cl.set(o.material, m); } o.material = cl.get(o.material); });
   } else {
     const vary = over.shirt ?? over.skin;
     if (vary != null) { const tc = new THREE.Color(0xffffff).lerp(new THREE.Color(vary), 0.16); const cl = new Map(); rig.traverse((o) => { if (!o.isMesh) return; if (!cl.has(o.material)) { const m = o.material.clone(); m.color.multiply(tc); cl.set(o.material, m); } o.material = cl.get(o.material); }); }
@@ -290,11 +328,12 @@ export const PRESETS = {
 const PATRON_BASES = ['jock', 'knowItAll', 'gambler', 'chill', 'dieHard', 'rookie'];
 const SHIRTS = [0x2e5aa8, 0xa83232, 0x2f8f5a, 0xc8a02a, 0x7a3fa0, 0xd0702a, 0x2a8a9a, 0x5a5a62];
 export function makePreset(name, over = {}) { return fromModel(name, over) || makePerson({ ...PRESETS[name], ...over }); }
+const HUES = [0, 40, 90, 150, 200, 250, 300, 330, 20, 120], CROWD_SKINS = [0xf6d2b8, 0xe0a478, 0xa8704a, 0x7a5033, 0xf2c09a, 0xc58c5c];
 export function randomPatron(i = 0) {
   const base = PRESETS[PATRON_BASES[i % PATRON_BASES.length]], c = SHIRTS[(i * 3 + 1) % SHIRTS.length], sk = Object.values(SK)[(i * 2) % 5];
   const baseName = PATRON_BASES[i % PATRON_BASES.length];
   const hatO = i % 3 === 0 ? { color: SHIRTS[(i + 2) % SHIRTS.length], backwards: i % 2 === 0 } : undefined;
-  const mp = fromModel(baseName, { skin: sk, shirt: c, ...(hatO ? { hat: hatO } : {}) }); if (mp) return mp;
+  const mp = fromModel(baseName, { skin: sk, shirt: c, hue: HUES[(i * 5 + 2) % HUES.length], crowdSkin: i % 4 === 0 ? null : CROWD_SKINS[i % CROWD_SKINS.length], ...(hatO ? { hat: hatO } : {}) }); if (mp) return mp;
   return makePerson({ ...base, skin: sk, shirt: base.outfit === 'jersey' || base.outfit === 'floral' || base.outfit === 'button' ? (base.outfit === 'jersey' ? c : base.shirt) : c, number: String(((i * 7) % 90) + 3), hat: i % 3 === 0 ? { color: SHIRTS[(i + 2) % SHIRTS.length], backwards: i % 2 === 0 } : base.hat });
 }
 

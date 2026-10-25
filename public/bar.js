@@ -89,17 +89,23 @@ export function buildBar({ scene, BK, tv }) {
 
   // ---------- bar counter (right wall) ----------
   const wood = M(0x5a3520, { roughness: 0.6 }), lacquer = M(0x7a4a28, { roughness: 0.25, metalness: 0.1 });
+  if (hasProp('counter')) { [-0.575, 1.475, 3.525, 5.575].forEach((z) => { const c = prop('counter', { w: 2.06, h: 1.14, d: 1.0 }); c.rotation.y = -Math.PI / 2; c.position.set(10.1, 0, z); scene.add(c); }); }
+  else {
   box(1.0, 1.1, 8.2, MT(TX.paneling([4, 1]).t), 10.1, 0.55, 2.5); box(1.3, 0.09, 8.5, lacquer, 10.05, 1.14, 2.5);
   cyl(0.04, 0.04, 8.2, M(0xc9a24a, { metalness: 0.9, roughness: 0.25 }), 9.35, 0.22, 2.5, 8).rotation.x = Math.PI / 2;
+  }
   obstacles.push(...[-1, 0.5, 2, 3.5, 5, 6.4].map((z) => ({ x: 10.1, z, r: 1.15 })));
   // back bar
   plane(8.4, 3.6, MT(TX.brick([4, 2]).t), ROOM.x - 0.02, 2.2, 2.5, -Math.PI / 2);
+  if (hasProp('backbar')) { [-0.3, 2.5, 5.3].forEach((z) => { const u = prop('backbar', { w: 2.8, h: 2.05, d: 0.6 }); u.rotation.y = -Math.PI / 2; u.position.set(ROOM.x - 0.31, 0, z); scene.add(u); }); }
+  else {
   plane(7.6, 1.4, new THREE.MeshStandardMaterial({ color: 0x8aa4b0, roughness: 0.08, metalness: 0.9, emissive: 0x0a1218 }), ROOM.x - 0.05, 2.4, 2.5, -Math.PI / 2);
   [1.25, 1.85, 2.45].forEach((y) => { box(0.4, 0.05, 7.8, wood, ROOM.x - 0.25, y, 2.5); });
   const bottleCols = [0x2e7d32, 0x6d4c1f, 0xb0bec5, 0x8d1b2a, 0xe0a030, 0x1b5e8a];
   for (let r = 0; r < 3; r++) for (let i = 0; i < 20; i++) {
     const c = bottleCols[(i * 7 + r * 3) % bottleCols.length], z = -1.2 + i * 0.4 + (r % 2) * 0.1, y = 1.25 + r * 0.6, h = 0.26 + ((i + r) % 3) * 0.05;
     cyl(0.05, 0.06, h, M(c, { roughness: 0.2, metalness: 0.2, emissive: c, emissiveIntensity: 0.12 }), ROOM.x - 0.25, y + h / 2 + 0.03, z, 8, scene, false); cyl(0.02, 0.025, 0.1, M(c), ROOM.x - 0.25, y + h + 0.08, z, 6, scene, false);
+  }
   }
   [1, 2, 3, 4].forEach((z, i) => { cyl(0.025, 0.03, 0.3, M(0xc9c9d0, { metalness: 0.9, roughness: 0.2 }), 10.35, 1.34, z, 8); box(0.05, 0.16, 0.05, M([0xd22, 0x2a6, 0xe9a, 0x36c][i]), 10.35, 1.55, z, scene, false); });
   box(0.45, 0.28, 0.4, M(0xc8b080), 10.0, 1.32, 5.7); // register
@@ -124,14 +130,18 @@ export function buildBar({ scene, BK, tv }) {
   // ---------- booths ----------
   [-3.5, -0.5, 2.5].forEach((x, i) => {
     const vm = MT(TX.vinyl(i === 1 ? '#1d4e7a' : '#8b1d24').t, { roughness: 0.5 });
-    if (hasProp('booth')) { const b = prop('booth', { w: 2.2, d: 3.0, h: 1.25, rotY: Math.PI }); b.position.set(x, 0, ROOM.z - 1.5); scene.add(b); obstacles.push({ x: x - 0.6, z: ROOM.z - 0.5, r: 0.9 }, { x: x + 0.6, z: ROOM.z - 0.5, r: 0.9 }, { x, z: ROOM.z - 1.5, r: 0.7 }); return; }
+    if (hasProp('booth')) { const b = prop('booth', { w: 2.2, d: 3.0, h: 1.45, rotY: Math.PI }); b.position.set(x, 0, ROOM.z - 1.5); scene.add(b); obstacles.push({ x: x - 0.6, z: ROOM.z - 0.5, r: 0.9 }, { x: x + 0.6, z: ROOM.z - 0.5, r: 0.9 }, { x, z: ROOM.z - 1.5, r: 0.7 }); return; }
     box(2.2, 0.45, 0.7, vm, x, 0.23, ROOM.z - 0.4); box(2.2, 0.8, 0.18, vm, x, 0.85, ROOM.z - 0.1); box(1.1, 0.06, 0.8, M(0x6b4a2b, { roughness: 0.3 }), x, 0.78, ROOM.z - 1.5); box(0.12, 0.76, 0.12, M(0x333), x, 0.38, ROOM.z - 1.5);
     box(2.2, 0.45, 0.7, vm, x, 0.23, ROOM.z - 2.6); box(2.2, 0.8, 0.18, vm, x, 0.85, ROOM.z - 2.9, scene);
     obstacles.push({ x: x - 0.6, z: ROOM.z - 0.5, r: 0.9 }, { x: x + 0.6, z: ROOM.z - 0.5, r: 0.9 }, { x, z: ROOM.z - 1.5, r: 0.7 });
   });
   // couch + jukebox
+  if (hasProp('couch')) { const cc = prop('couch', { w: 2.2, h: 0.88, d: 0.98 }); cc.rotation.y = Math.PI; cc.position.set(8.0, 0, 7.0); scene.add(cc); obstacles.push({ x: 7.5, z: 7.0, r: 0.9 }, { x: 8.5, z: 7.0, r: 0.9 }); }
+  if (hasProp('jukebox')) { const jb = prop('jukebox', { h: 1.6, w: 1.05, d: 0.82 }); jb.rotation.y = Math.PI; jb.position.set(-11, 0, 7.25); scene.add(jb); obstacles.push({ x: -11, z: 7.2, r: 0.8 }); }
+  if (!hasProp('couch') || !hasProp('jukebox')) {
   const couchM = M(0x6b5a3a, { roughness: 1 }); box(2.2, 0.45, 0.9, couchM, 8.0, 0.23, 7.0); box(2.2, 0.7, 0.2, couchM, 8.0, 0.65, 7.5); box(0.25, 0.6, 0.9, couchM, 6.9, 0.3, 7.0); box(0.25, 0.6, 0.9, couchM, 9.1, 0.3, 7.0); obstacles.push({ x: 7.5, z: 7.0, r: 0.8 }, { x: 8.5, z: 7.0, r: 0.8 });
   box(0.9, 1.5, 0.6, M(0x7a1a2a, { roughness: 0.4 }), -11, 0.75, 7.2); plane(0.7, 0.5, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc040).multiplyScalar(1.8) }), -11, 1.2, 6.89, 0); obstacles.push({ x: -11, z: 7.2, r: 0.8 });
+  }
 
   // ---------- terminal (sportsbook) ----------
   const termAI = hasProp('terminal') ? prop('terminal', { h: 1.95 }) : null;
@@ -231,8 +241,10 @@ export function buildBar({ scene, BK, tv }) {
   const amb = (i, w, h, x, y, z, ry) => { tvFrame(w, h, x, y, z, ry); plane(w, h, tvMat(tv.amb[i]), x + (ry === 0 ? 0 : ry > 0 ? 0.09 : -0.09), y, z + (ry === 0 ? 0.09 : 0), ry); };
   amb(0, 2.4, 1.35, -ROOM.x + 0.12, 3.5, 3.4, Math.PI / 2); amb(1, 2.0, 1.12, -ROOM.x + 0.12, 3.5, 5.8, Math.PI / 2);
   amb(2, 2.0, 1.12, 9.2, 2.9, -ROOM.z + 0.1, 0); amb(1, 1.8, 1.0, -8.8, 3.3, -ROOM.z + 0.1, 0);
+  // framed jerseys (AI prop)
+  if (hasProp('jerseyframe')) [[-11.1, 2.25, -ROOM.z + 0.07, 0], [11.1, 2.25, -ROOM.z + 0.07, 0]].forEach(([x, y, z, ry]) => { const f = prop('jerseyframe', { h: 1.05, w: 0.88, d: 0.09 }); f.position.set(x, y - 0.525, z); f.rotation.y = ry; scene.add(f); });
   // warm strip lights under the back-bar shelves
-  [1.22, 1.82, 2.42].forEach((y) => box(0.04, 0.02, 7.6, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc060).multiplyScalar(1.3) }), ROOM.x - 0.1, y - 0.02, 2.5, scene, false));
+  if (!hasProp('backbar')) [1.22, 1.82, 2.42].forEach((y) => box(0.04, 0.02, 7.6, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc060).multiplyScalar(1.3) }), ROOM.x - 0.1, y - 0.02, 2.5, scene, false));
 
   // dust motes
   const dustN = 260, dustPos = new Float32Array(dustN * 3);
