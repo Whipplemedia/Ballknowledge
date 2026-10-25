@@ -13,8 +13,23 @@ export const hasProp = (n) => !!SRC[n];
 
 // Returns a Group whose origin is the bottom-centre (anchor 'bottom') or centre (anchor 'center') of the prop,
 // scaled so its bounding box is w x h x d (any may be null: it then follows the first given dimension uniformly).
-export function prop(name, { w = null, h = null, d = null, rotY = 0, rotX = 0, anchor = 'bottom', shadow = true } = {}) {
-  const inner = SRC[name].clone(true), rot = new THREE.Group(), g = new THREE.Group();
+// keep only the triangles whose centroid passes keep(x, y, z) in the model's own space (non-indexed copy so bounding boxes shrink too)
+function cropTris(root, keep) {
+  root.traverse((o) => {
+    if (!o.isMesh) return; const g = o.geometry, pos = g.attributes.position, nor = g.attributes.normal, uv = g.attributes.uv, idx = g.index, n = idx ? idx.count : pos.count;
+    const P = [], N = [], U = [];
+    for (let t = 0; t < n; t += 3) {
+      const a = idx ? idx.getX(t) : t, b = idx ? idx.getX(t + 1) : t + 1, c = idx ? idx.getX(t + 2) : t + 2;
+      const cx = (pos.getX(a) + pos.getX(b) + pos.getX(c)) / 3, cy = (pos.getY(a) + pos.getY(b) + pos.getY(c)) / 3, cz = (pos.getZ(a) + pos.getZ(b) + pos.getZ(c)) / 3;
+      if (!keep(cx, cy, cz)) continue;
+      for (const v of [a, b, c]) { P.push(pos.getX(v), pos.getY(v), pos.getZ(v)); if (nor) N.push(nor.getX(v), nor.getY(v), nor.getZ(v)); if (uv) U.push(uv.getX(v), uv.getY(v)); }
+    }
+    const ng = new THREE.BufferGeometry(); ng.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); if (nor) ng.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); if (uv) ng.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); o.geometry = ng;
+  });
+}
+export function prop(name, { w = null, h = null, d = null, rotY = 0, rotX = 0, anchor = 'bottom', shadow = true, crop = null } = {}) {
+  const inner = SRC[name].clone(true); if (crop) cropTris(inner, crop);
+  const _unused = null, rot = new THREE.Group(), g = new THREE.Group();
   rot.rotation.set(rotX, rotY, 0, 'YXZ'); rot.add(inner); g.add(rot); g.updateMatrixWorld(true);
   const b = new THREE.Box3().setFromObject(g), s = b.getSize(new THREE.Vector3());
   const k = (w ?? h ?? d) / (w != null ? s.x : h != null ? s.y : s.z);

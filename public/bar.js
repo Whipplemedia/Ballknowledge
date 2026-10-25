@@ -128,9 +128,14 @@ export function buildBar({ scene, BK, tv }) {
   obstacles.push({ x: PX - 1.1, z: PZ, r: 0.95 }, { x: PX, z: PZ, r: 0.95 }, { x: PX + 1.1, z: PZ, r: 0.95 });
 
   // ---------- booths ----------
+  const BOOTH = { zA: 6.9, zB: 6.1, seat: 0.51, table: 0.78, hipA: 7.29, hipB: 5.71 }; // bench seat-front edges, seat top, table top, pelvis z of a seated person on each side
   [-3.5, -0.5, 2.5].forEach((x, i) => {
     const vm = MT(TX.vinyl(i === 1 ? '#1d4e7a' : '#8b1d24').t, { roughness: 0.5 });
-    if (hasProp('booth')) { const b = prop('booth', { w: 2.2, d: 3.0, h: 1.45, rotY: Math.PI }); b.position.set(x, 0, ROOM.z - 1.5); scene.add(b); obstacles.push({ x: x - 0.6, z: ROOM.z - 0.5, r: 0.9 }, { x: x + 0.6, z: ROOM.z - 0.5, r: 0.9 }, { x, z: ROOM.z - 1.5, r: 0.7 }); return; }
+    if (hasProp('booth')) { // the generated booth is one bench + an oversized table: keep just the bench (crop), use it on both sides and build a proper table between them
+      const bench = (rotY, z) => { const b = prop('booth', { w: 2.2, h: 1.2, d: 1.1, rotY, crop: (cx, cy, cz) => cz < -0.07 && !(cy > -0.027 && cz > -0.4435) }); b.position.set(x, 0, z); scene.add(b); };
+      bench(Math.PI, BOOTH.zA + 0.55); bench(0, BOOTH.zB - 0.55);
+      const wm = M(0x8a5628, { roughness: 0.4 }); box(1.25, 0.045, 0.85, wm, x, BOOTH.table, ROOM.z - 1.5); cyl(0.07, 0.09, BOOTH.table - 0.04, M(0x16161a, { roughness: 0.5 }), x, (BOOTH.table - 0.04) / 2, ROOM.z - 1.5, 12); cyl(0.3, 0.3, 0.03, M(0x16161a, { roughness: 0.5 }), x, 0.015, ROOM.z - 1.5, 16);
+      obstacles.push({ x: x - 0.6, z: ROOM.z - 0.5, r: 0.9 }, { x: x + 0.6, z: ROOM.z - 0.5, r: 0.9 }, { x, z: ROOM.z - 1.5, r: 0.7 }, { x: x - 0.6, z: BOOTH.zB - 0.4, r: 0.8 }, { x: x + 0.6, z: BOOTH.zB - 0.4, r: 0.8 }); return; }
     box(2.2, 0.45, 0.7, vm, x, 0.23, ROOM.z - 0.4); box(2.2, 0.8, 0.18, vm, x, 0.85, ROOM.z - 0.1); box(1.1, 0.06, 0.8, M(0x6b4a2b, { roughness: 0.3 }), x, 0.78, ROOM.z - 1.5); box(0.12, 0.76, 0.12, M(0x333), x, 0.38, ROOM.z - 1.5);
     box(2.2, 0.45, 0.7, vm, x, 0.23, ROOM.z - 2.6); box(2.2, 0.8, 0.18, vm, x, 0.85, ROOM.z - 2.9, scene);
     obstacles.push({ x: x - 0.6, z: ROOM.z - 0.5, r: 0.9 }, { x: x + 0.6, z: ROOM.z - 0.5, r: 0.9 }, { x, z: ROOM.z - 1.5, r: 0.7 });
@@ -165,7 +170,7 @@ export function buildBar({ scene, BK, tv }) {
   const face = (x, z, tx, tz) => Math.atan2(-(tx - x), -(tz - z));
   const spawn = (P, x, z, ry, mode, lines, name, seat = null) => {
     P.group.position.set(x, 0, z); P.group.rotation.y = ry; scene.add(P.group);
-    if (seat !== null) { P.baseY = seat + 0.07 - 0.9; P.group.position.y = P.baseY; }
+    if (seat !== null) { P.baseY = seat + 0.09 - (P.hipY || 0.98); P.group.position.y = P.baseY; }
     const n = { P, mode, lines, name, base: { x, z, ry }, seated: seat !== null, bubble: null, next: 4 + Math.random() * 14, until: 0 };
     const bb = TX.bubble(); bb.sprite.position.set(0, 2.55, 0); P.group.add(bb.sprite); n.bubble = bb; npcs.push(n); return n;
   };
@@ -188,12 +193,12 @@ export function buildBar({ scene, BK, tv }) {
   spawn(makePreset('dieHard', { glasses: false, shirt: 0x9a3a8a, outfit: 'tee', hat: { color: 0x222222, backwards: true } }), 5.4, 3.4, face(5.4, 3.4, 4.4, 3.4), 'idle', ['Double or nothing?', 'Nice shot. Lucky.', 'I need a beer.'], 'Shark');
   spawn(randomPatron(2), 5.9, 4.9, face(5.9, 4.9, 4.4, 3.6), 'cheer', ['Sink it!', 'Ohhh!', 'Scratch!'], 'Watcher');
   // booths (front wall). benches at z=7.6 (face -z) and z=5.4 (face +z); seat top ~0.45
-  const benchA = (x, p, i) => spawn(p, x, 7.5, 0, 'drink', ['This booth is cursed.', 'Ssh, the game is on.', 'Order me a beer?'], 'Patron', 0.45);
-  const benchB = (x, p) => spawn(p, x, 5.5, Math.PI, 'idle', ['Told you. Told you.', 'Lock in the under.', '*laughs*'], 'Patron', 0.45);
+  const benchA = (x, p, i) => spawn(p, x, hasProp('booth') ? BOOTH.hipA : 7.5, 0, 'drink', ['This booth is cursed.', 'Ssh, the game is on.', 'Order me a beer?'], 'Patron', hasProp('booth') ? BOOTH.seat : 0.45);
+  const benchB = (x, p) => spawn(p, x, hasProp('booth') ? BOOTH.hipB : 5.5, Math.PI, 'idle', ['Told you. Told you.', 'Lock in the under.', '*laughs*'], 'Patron', hasProp('booth') ? BOOTH.seat : 0.45);
   benchA(-3.95, randomPatron(5)); benchA(-3.05, randomPatron(8)); benchB(-3.5, randomPatron(1));
   benchB(-0.95, randomPatron(4)); benchB(-0.05, randomPatron(7));
-  const sleeper = spawn(makePreset('rookie', { beard: 'stubble', hat: null, hairStyle: 'messy', hair: 0x5a4a3a, shirt: 0x6a6a2a, outfit: 'tee' }), 2.5, 7.3, 0, 'sleep', ['zzz... not the under...', '...five more minutes...'], 'Sleeper', 0.45);
-  spawn(makePreset('chill', { shirt: 0x3a5a3a }), 7.6, 6.7, 0, 'drink', ['This couch has seen things.', 'Don\'t sit here. I mean it.'], 'Couch guy', 0.45);
+  const sleeper = spawn(makePreset('rookie', { beard: 'stubble', hat: null, hairStyle: 'messy', hair: 0x5a4a3a, shirt: 0x6a6a2a, outfit: 'tee' }), 2.5, hasProp('booth') ? BOOTH.hipA : 7.3, 0, 'sleep', ['zzz... not the under...', '...five more minutes...'], 'Sleeper', hasProp('booth') ? BOOTH.seat : 0.45);
+  spawn(makePreset('chill', { shirt: 0x3a5a3a }), 7.6, hasProp('couch') ? 6.92 : 6.7, 0, 'drink', ['This couch has seen things.', 'Don\'t sit here. I mean it.'], 'Couch guy', 0.45);
   // roulette dealer, bowling & cornhole spectators
   spawn(makePreset('knowItAll', { glasses: false, outfit: 'suit', shirt: 0x1d2a22, tie: 0x2a8a4a, hairStyle: 'slick', hair: 0x1a1210, mouth: 'smile' }), -7.0, -6.75, Math.PI, 'idle', ['Place your bets.', 'No more bets.', 'Red or black?'], 'Dealer');
   tag('Dealer', -7.0, 2.7, -6.75);

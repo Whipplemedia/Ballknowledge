@@ -123,7 +123,7 @@ function fromSkinned(src, name, over) {
   const hp = (n) => wp(B[n]); const hips = hp('Hips');
   P.legs = [mk(hp('LeftUpLeg').x, hp('LeftUpLeg').y, 0), mk(hp('RightUpLeg').x, hp('RightUpLeg').y, 0)];
   P.arms = [mk(hp('LeftArm').x, hp('LeftArm').y, 0), mk(hp('RightArm').x, hp('RightArm').y, 0)];
-  const hd = hp('Head'); P.head = mk(0, hd.y + 0.08, 0); P.torso = mk(0, (hips.y + hp('Spine02').y) / 2, 0);
+  P.hipY = hips.y; const hd = hp('Head'); P.head = mk(0, hd.y + 0.08, 0); P.torso = mk(0, (hips.y + hp('Spine02').y) / 2, 0);
   const ID = new THREE.Quaternion(), rootWorld = {}; // world quat of the nodes above the hips
   const up = B.Hips.parent; const upW = up ? wq(up) : ID;
   const order = []; rig.traverse((o) => { if (o.isBone) order.push(o); });
