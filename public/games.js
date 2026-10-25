@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { makeHand } from './people.js';
 import { canvasTex, neon } from './textures.js';
 import { createPool } from './pool.js';
+import { hasProp, prop } from './props.js';
 
 // In-world arcade: darts, bowling, cornhole. Physical throwing in first person.
 // Scores are reported to the server as {type:'mg', game, pts}; the server caps and pays out.
@@ -132,16 +133,17 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
     drawMon(); const monMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.78), new THREE.MeshBasicMaterial({ map: mon.t, toneMapped: false })); monMesh.position.set(X0, 2.35, PIT + 0.18); scene.add(monMesh); box(2.15, 0.93, 0.1, 0x0a0a0c, X0, 2.35, PIT + 0.1);
     { const t = neon('BOWL', '#ff3a4a', { w: 512, h: 192, size: 120 }).t; const m = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.42), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, toneMapped: false })); m.position.set(X0 + 0.15, 3.05, PIT + 0.2); scene.add(m); }
     { const lt = new THREE.PointLight(0xfff0d0, 14, 7); lt.position.set(X0, 2.7, 2.2); scene.add(lt); }
+    if (hasProp('return')) { const r = prop('return', { w: 0.9, rotY: Math.PI / 2 }); r.position.set(X0 + 1.45, 0, 5.4); scene.add(r); obstacles.push({ x: X0 + 1.45, z: 5.4, r: 0.55 }); }
     const spot = { x: X0, z: 6.4, yaw: 0, pitch: -0.22 };
     stations.push({ x: X0, z: 6.4, r: 1.5, text: 'E - Bowling (challenge board)', act: () => BK.openChallenge('bowling') });
 
     const layout = [[0, 0], [-0.5, 1], [0.5, 1], [-1, 2], [0, 2], [1, 2], [-1.5, 3], [-0.5, 3], [0.5, 3], [1.5, 3]];
     const pins = layout.map(([c, r]) => {
-      const g = new THREE.Group(); cyl(0.04, 0.065, 0.3, 0xf4f4f4, 0, 0.15, 0, 10, g); const h = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), mat(0xf4f4f4)); h.position.y = 0.34; g.add(h); cyl(0.05, 0.05, 0.03, 0xd22, 0, 0.27, 0, 10, g);
+      const g = new THREE.Group(); if (hasProp('pin')) g.add(prop('pin', { h: 0.385 })); else { cyl(0.04, 0.065, 0.3, 0xf4f4f4, 0, 0.15, 0, 10, g); const h = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), mat(0xf4f4f4)); h.position.y = 0.34; g.add(h); cyl(0.05, 0.05, 0.03, 0xd22, 0, 0.27, 0, 10, g); }
       scene.add(g); return { g, hx: X0 + c * GAP, hz: HEAD - r * ROWH, x: 0, z: 0, vx: 0, vz: 0, st: 'up', fall: 0, dx: 0, dz: -1 };
     });
-    const ballM = new THREE.Mesh(new THREE.SphereGeometry(BR, 16, 12), mat(0x14223a, { roughness: 0.3 })); scene.add(ballM); ballM.visible = false;
-    const held = new THREE.Mesh(new THREE.SphereGeometry(BR, 20, 14), mat(0x1a2a6a, { roughness: 0.25, metalness: 0.3 })); const bowlG = new THREE.Group(); held.position.set(0, 0, 0); bowlG.add(held); bowlG.position.set(0.0, -0.3, -0.5);
+    const ballM = hasProp('ball') ? prop('ball', { h: BR * 2, anchor: 'center' }) : new THREE.Mesh(new THREE.SphereGeometry(BR, 16, 12), mat(0x14223a, { roughness: 0.3 })); scene.add(ballM); ballM.visible = false;
+    const held = hasProp('ball') ? prop('ball', { h: BR * 2, anchor: 'center', shadow: false }) : new THREE.Mesh(new THREE.SphereGeometry(BR, 20, 14), mat(0x1a2a6a, { roughness: 0.25, metalness: 0.3 })); const bowlG = new THREE.Group(); held.position.set(0, 0, 0); bowlG.add(held); bowlG.position.set(0.0, -0.3, -0.5);
     const hL = makeHand({ sleeve }), hRb = makeHand({ sleeve }); hL.position.set(-0.15, -0.32, -0.34); hL.rotation.set(0.1, 0.6, 0.5); hRb.position.set(0.15, -0.32, -0.34); hRb.rotation.set(0.1, -0.6, -0.5); const bowlHands = new THREE.Group(); bowlHands.add(bowlG, hL, hRb);
 
     let frame, ballNo, total, state, ball, charge, charging, wait, since, frameStart, cdir = 1;
@@ -247,7 +249,7 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
     stations.push({ x: BX, z: 0.3, r: 1.6, text: 'E - Cornhole (challenge board)', act: () => BK.openChallenge('cornhole') });
     obstacles.push({ x: BX, z: 4.6, r: 0.7 }, { x: BX, z: -0.9, r: 0.7 });
 
-    const bagMesh = (c) => { const g = new THREE.Group(); const b = box(0.16, 0.05, 0.16, c, 0, 0, 0, g); b.scale.set(1, 1, 1); box(0.14, 0.055, 0.02, 0xffffff, 0, 0, 0, g); return g; };
+    const bagMesh = (c) => { if (hasProp('bag')) return prop('bag', { w: 0.19, anchor: 'center', shadow: false }); const g = new THREE.Group(); const b = box(0.16, 0.05, 0.16, c, 0, 0, 0, g); b.scale.set(1, 1, 1); box(0.14, 0.055, 0.02, 0xffffff, 0, 0, 0, g); return g; };
     const heldBag = bagMesh(0x2f6fd0); const cHand = makeHand({ sleeve }); heldBag.position.set(0, 0.06, -0.16); cHand.add(heldBag); cHand.position.set(0.14, -0.32, -0.34); cHand.rotation.set(0.15, -0.2, 0);
     const LOFT = 0.45, ZONE = [0.25, 0.52];
     let thrown, score, state, charge, charging, bag, since, wind = 0, cdir = 1;

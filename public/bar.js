@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import * as TX from './textures.js';
+import { hasProp, prop } from './props.js';
 import { makePreset, makePerson, randomPatron, animate } from './people.js';
 import { BY_ID, applyCosmetics } from './cosmetics.js';
 
@@ -36,8 +37,10 @@ export function buildBar({ scene, BK, tv }) {
   // ---------- lighting ----------
   const pend = [[-6, -2], [0, 1], [6, -2], [3.5, 3.4]];
   pend.forEach(([x, z], i) => {
+    if (hasProp('lamp')) { const lm = prop('lamp', { h: 1.4 }); lm.position.set(x, 3.5, z); scene.add(lm); }
+    else {
     cyl(0.03, 0.03, 1.2, M(0x111111), x, 4.4, z, 6, scene, false);
-    const shade = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.34, 16, 1, true), M(0x1b3a2a, { side: THREE.DoubleSide })); shade.position.set(x, 3.75, z); scene.add(shade);
+    const shade = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.34, 16, 1, true), M(0x1b3a2a, { side: THREE.DoubleSide })); shade.position.set(x, 3.75, z); scene.add(shade); }
     const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffd9a0).multiplyScalar(3) })); bulb.position.set(x, 3.68, z); scene.add(bulb);
     const l = lamp(x, 3.5, z, 0xffd2a0, i === 1 ? 34 : 20, 14);
     if (i === 1) { l.castShadow = true; l.shadow.mapSize.set(1024, 1024); l.shadow.bias = -0.002; l.shadow.camera.near = 0.5; l.shadow.camera.far = 16; }
@@ -75,7 +78,9 @@ export function buildBar({ scene, BK, tv }) {
 
   // ---------- TVs ----------
   const tvMat = (tex) => new THREE.MeshBasicMaterial({ map: tex });
-  const tvFrame = (w, h, x, y, z, ry = 0) => { const m = box(w + 0.25, h + 0.25, 0.12, M(0x0a0a0c, { roughness: 0.4 }), x, y, z); m.rotation.y = ry; return m; };
+  const tvFrame = (w, h, x, y, z, ry = 0) => {
+    if (hasProp('tv')) { const g = new THREE.Group(), t = prop('tv', { w: w + 0.25, h: h + 0.25, d: 0.2, rotY: Math.PI, anchor: 'center' }); t.position.z = -0.04; g.add(t); g.position.set(x, y, z); g.rotation.y = ry; scene.add(g); return g; }
+    const m = box(w + 0.25, h + 0.25, 0.12, M(0x0a0a0c, { roughness: 0.4 }), x, y, z); m.rotation.y = ry; return m; };
   tvFrame(5, 2.8, 0, 2.95, -ROOM.z + 0.1); plane(5, 2.8, tvMat(tv.center), 0, 2.95, -ROOM.z + 0.18);
   tvFrame(3.4, 1.9, -4.8, 2.95, -ROOM.z + 0.1); plane(3.4, 1.9, tvMat(tv.left), -4.8, 2.95, -ROOM.z + 0.18);
   tvFrame(3.4, 1.9, 4.8, 2.95, -ROOM.z + 0.1); plane(3.4, 1.9, tvMat(tv.right), 4.8, 2.95, -ROOM.z + 0.18);
@@ -98,16 +103,20 @@ export function buildBar({ scene, BK, tv }) {
   }
   [1, 2, 3, 4].forEach((z, i) => { cyl(0.025, 0.03, 0.3, M(0xc9c9d0, { metalness: 0.9, roughness: 0.2 }), 10.35, 1.34, z, 8); box(0.05, 0.16, 0.05, M([0xd22, 0x2a6, 0xe9a, 0x36c][i]), 10.35, 1.55, z, scene, false); });
   box(0.45, 0.28, 0.4, M(0xc8b080), 10.0, 1.32, 5.7); // register
-  for (let i = 0; i < 6; i++) { const z = -0.2 + i * 1.2; cyl(0.22, 0.2, 0.08, TX.vinyl ? MT(TX.vinyl('#8b1d24').t) : M(0x8b1d24), 9.0, 0.78, z, 14); cyl(0.04, 0.04, 0.74, M(0x888888, { metalness: 0.8 }), 9.0, 0.38, z, 6); cyl(0.2, 0.2, 0.03, M(0x888888, { metalness: 0.8 }), 9.0, 0.02, z, 12, scene, false); obstacles.push({ x: 9.0, z, r: 0.28 }); }
+  if (hasProp('stool')) { for (let i = 0; i < 6; i++) { const t = prop('stool', { h: 0.86 }); t.position.set(9.0, 0, -0.2 + i * 1.2); t.rotation.y = i * 1.1; scene.add(t); } }
+  else  for (let i = 0; i < 6; i++) { const z = -0.2 + i * 1.2; cyl(0.22, 0.2, 0.08, TX.vinyl ? MT(TX.vinyl('#8b1d24').t) : M(0x8b1d24), 9.0, 0.78, z, 14); cyl(0.04, 0.04, 0.74, M(0x888888, { metalness: 0.8 }), 9.0, 0.38, z, 6); cyl(0.2, 0.2, 0.03, M(0x888888, { metalness: 0.8 }), 9.0, 0.02, z, 12, scene, false); obstacles.push({ x: 9.0, z, r: 0.28 }); }
   stations.push({ x: 8.1, z: 2.5, r: 2.4, text: 'E - Order a drink (bartender)', act: () => BK.openPanel('bar') });
   // crates + trash
   box(0.7, 0.4, 0.5, M(0x8a6a3a), 11.3, 0.2, 7.2); box(0.7, 0.4, 0.5, M(0x8a6a3a), 11.3, 0.62, 7.2); cyl(0.3, 0.26, 0.7, M(0x333c3c, { metalness: 0.5 }), 11.2, 0.35, -2.2, 12); obstacles.push({ x: 11.2, z: 7.2, r: 0.6 }, { x: 11.2, z: -2.2, r: 0.5 });
 
   // ---------- pool table ----------
   const feltM = MT(TX.felt('#0d6b35').t, { roughness: 1 }), PX = 3.4, PZ = 3.4;
+  if (hasProp('pool')) { const pt = prop('pool', { w: 2.9, d: 1.6, h: 0.96, rotX: -Math.PI / 2, rotY: Math.PI / 2 }); pt.position.set(PX, 0, PZ); scene.add(pt); }
+  else {
   box(2.9, 0.12, 1.6, M(0x4a2a14), PX, 0.82, PZ); box(2.6, 0.04, 1.3, feltM, PX, 0.9, PZ);
   [[-1.4, -0.75], [1.4, -0.75], [-1.4, 0.75], [1.4, 0.75]].forEach(([x, z]) => box(0.18, 0.8, 0.18, M(0x2a170b), PX + x, 0.4, PZ + z));
   [[-1.3, -0.65], [0, -0.67], [1.3, -0.65], [-1.3, 0.65], [0, 0.67], [1.3, 0.65]].forEach(([x, z]) => cyl(0.08, 0.08, 0.02, M(0x050505), PX + x, 0.925, PZ + z, 10, scene, false));
+  }
   const plb = box(2.4, 0.08, 0.3, M(0x1b3a2a), PX, 3.0, PZ); box(2.3, 0.02, 0.2, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff2c0).multiplyScalar(2) }), PX, 2.95, PZ, scene, false);
   cyl(0.02, 0.02, 2, M(0x111), PX - 1, 4, PZ, 6, scene, false); cyl(0.02, 0.02, 2, M(0x111), PX + 1, 4, PZ, 6, scene, false);
   obstacles.push({ x: PX - 1.1, z: PZ, r: 0.95 }, { x: PX, z: PZ, r: 0.95 }, { x: PX + 1.1, z: PZ, r: 0.95 });
@@ -115,6 +124,7 @@ export function buildBar({ scene, BK, tv }) {
   // ---------- booths ----------
   [-3.5, -0.5, 2.5].forEach((x, i) => {
     const vm = MT(TX.vinyl(i === 1 ? '#1d4e7a' : '#8b1d24').t, { roughness: 0.5 });
+    if (hasProp('booth')) { const b = prop('booth', { w: 2.2, d: 3.0, h: 1.25, rotY: Math.PI }); b.position.set(x, 0, ROOM.z - 1.5); scene.add(b); obstacles.push({ x: x - 0.6, z: ROOM.z - 0.5, r: 0.9 }, { x: x + 0.6, z: ROOM.z - 0.5, r: 0.9 }, { x, z: ROOM.z - 1.5, r: 0.7 }); return; }
     box(2.2, 0.45, 0.7, vm, x, 0.23, ROOM.z - 0.4); box(2.2, 0.8, 0.18, vm, x, 0.85, ROOM.z - 0.1); box(1.1, 0.06, 0.8, M(0x6b4a2b, { roughness: 0.3 }), x, 0.78, ROOM.z - 1.5); box(0.12, 0.76, 0.12, M(0x333), x, 0.38, ROOM.z - 1.5);
     box(2.2, 0.45, 0.7, vm, x, 0.23, ROOM.z - 2.6); box(2.2, 0.8, 0.18, vm, x, 0.85, ROOM.z - 2.9, scene);
     obstacles.push({ x: x - 0.6, z: ROOM.z - 0.5, r: 0.9 }, { x: x + 0.6, z: ROOM.z - 0.5, r: 0.9 }, { x, z: ROOM.z - 1.5, r: 0.7 });
@@ -124,9 +134,10 @@ export function buildBar({ scene, BK, tv }) {
   box(0.9, 1.5, 0.6, M(0x7a1a2a, { roughness: 0.4 }), -11, 0.75, 7.2); plane(0.7, 0.5, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc040).multiplyScalar(1.8) }), -11, 1.2, 6.89, 0); obstacles.push({ x: -11, z: 7.2, r: 0.8 });
 
   // ---------- terminal (sportsbook) ----------
-  box(1.8, 1.1, 0.9, M(0x1a2a4a, { roughness: 0.4 }), 0, 0.55, -6.6);
-  const scr = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.8), new THREE.MeshBasicMaterial({ map: tv.kiosk, toneMapped: false })); scr.position.set(0, 1.5, -6.42); scr.rotation.x = -0.25; scene.add(scr);
-  box(1.5, 0.9, 0.08, M(0x0a0a0c), 0, 1.5, -6.5);
+  const termAI = hasProp('terminal') ? prop('terminal', { h: 1.95 }) : null;
+  if (termAI) { termAI.position.set(0, 0, -6.6); scene.add(termAI); } else box(1.8, 1.1, 0.9, M(0x1a2a4a, { roughness: 0.4 }), 0, 0.55, -6.6);
+  const scr = termAI ? new THREE.Mesh(new THREE.PlaneGeometry(0.82, 0.98), new THREE.MeshBasicMaterial({ map: tv.kiosk, toneMapped: false })) : new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.8), new THREE.MeshBasicMaterial({ map: tv.kiosk, toneMapped: false })); if (termAI) { scr.position.set(0, 1.363, -6.487); scr.rotation.x = -0.377; } else { scr.position.set(0, 1.5, -6.42); scr.rotation.x = -0.25; } scene.add(scr);
+  if (!termAI) box(1.5, 0.9, 0.08, M(0x0a0a0c), 0, 1.5, -6.5);
   obstacles.push({ x: 0, z: -6.6, r: 1.1 });
   stations.push({ x: 0, z: -5.5, r: 2.2, text: 'E - Place bets (Sportsbook)', act: () => BK.openPanel('book') });
 

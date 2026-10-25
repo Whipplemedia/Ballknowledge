@@ -58,7 +58,7 @@ function scorebug(g, x, y, w, h, A, B, sa, sb, info, info2) {
 
 export function createTV(BK) {
   const mk = (w, h) => canvasTex(w, h, (g) => { g.fillStyle = '#071024'; g.fillRect(0, 0, w, h); });
-  const C = mk(1024, 576), L = mk(640, 360), R = mk(640, 360), K = mk(512, 300), AMB = [mk(512, 288), mk(512, 288), mk(512, 288)];
+  const C = mk(1024, 576), L = mk(640, 360), R = mk(640, 360), K = mk(512, 610), AMB = [mk(512, 288), mk(512, 288), mk(512, 288)];
   const bg = (g, w, h, c1 = '#0a1a3a', c2 = '#04060f') => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, c1); gr.addColorStop(1, c2); g.fillStyle = gr; g.fillRect(0, 0, w, h); };
   const upd = (o) => { o.t.needsUpdate = true; };
   const team = (S, name) => (S.teams && S.teams[name]) || { short: '?', color: '#555555' };
@@ -126,11 +126,11 @@ export function createTV(BK) {
   }
   function kiosk(S, now) {
     const { g, c } = K, W = c.width; bg(g, W, c.height, '#0b2a55', '#03101f');
-    fit(g, 'SPORTSBOOK', W / 2, 60, W - 20, '900 44px system-ui', '#fff');
+    fit(g, 'BALL KNOWLEDGE', W / 2, 70, W - 30, '900 48px system-ui', '#4da3ff'); fit(g, 'SPORTSBOOK', W / 2, 135, W - 30, '900 54px system-ui', '#fff');
     const cur = S.events.find((e) => e.status === 'open');
-    if (cur) { fit(g, cur.label, W / 2, 120, W - 30, '700 28px system-ui', '#ffc83d'); fit(g, `${cur.a} vs ${cur.b}`, W / 2, 165, W - 30, '700 30px system-ui'); fit(g, mmss(cur.closeAt - now), W / 2, 250, W - 30, '900 70px system-ui', cur.closeAt - now < 20000 ? '#ff4d5e' : '#27e08a'); }
-    else fit(g, 'No game open', W / 2, 170, W - 30, '700 36px system-ui', '#8f9bc7');
-    fit(g, 'PRESS E', W / 2, 285, W, '800 24px system-ui', '#ffc83d'); upd(K);
+    if (cur) { fit(g, cur.label, W / 2, 215, W - 40, '700 32px system-ui', '#ffc83d'); fit(g, cur.a, W / 2, 285, W - 40, '700 40px system-ui'); fit(g, 'vs', W / 2, 330, W - 40, '600 28px system-ui', '#8f9bc7'); fit(g, cur.b, W / 2, 380, W - 40, '700 40px system-ui'); fit(g, mmss(cur.closeAt - now), W / 2, 500, W - 40, '900 96px system-ui', cur.closeAt - now < 20000 ? '#ff5a5a' : '#2ee09a'); }
+    else fit(g, 'No game open', W / 2, 330, W - 40, '700 44px system-ui', '#8f9bc7');
+    fit(g, 'PRESS E', W / 2, 580, W, '800 32px system-ui', '#ffc83d'); upd(K);
   }
   let last = 0;
   return { center: C.t, left: L.t, right: R.t, kiosk: K.t, amb: AMB.map((o) => o.t),

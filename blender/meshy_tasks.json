@@ -40,5 +40,38 @@
   "hitman": {
     "gen": "01a17463-b953-720a-8bc4-d93f1c088831",
     "rig": "01a17469-99d6-7747-9bae-f92e1252ffa1"
+  },
+  "props": {
+    "stool": {
+      "gen": "01a17472-6491-75c2-bf7b-f42e878f6ecd"
+    },
+    "booth": {
+      "gen": "01a17472-68f5-7175-bb89-8bf36d4183d3"
+    },
+    "tv": {
+      "gen": "01a17472-6ce7-700b-bbc7-37efc742adb6"
+    },
+    "terminal": {
+      "gen": "01a17472-7149-71af-8a85-af2acf86d66b"
+    },
+    "pool": {
+      "gen": "01a17476-228b-739d-92e5-876f7b6b32b8",
+      "note": "rejected: sunken felt/oversized rails, kept procedural table"
+    },
+    "pin": {
+      "gen": "01a1748b-7ecd-701f-8c94-fff51f255685"
+    },
+    "ball": {
+      "gen": "01a1748b-8459-720a-bf09-7df8714b92af"
+    },
+    "return": {
+      "gen": "01a1748b-8899-76f0-a9ff-8b3742c703dd"
+    },
+    "bag": {
+      "gen": "01a1748b-8cb6-77ed-a296-82ab91af506a"
+    },
+    "lamp": {
+      "gen": "01a1748b-90f4-7470-bfc8-52fe7242c8fb"
+    }
   }
 }
