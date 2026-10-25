@@ -1,3 +1,4 @@
+import { audio } from './audio.js';
 import * as THREE from 'three';
 import { canvasTex } from './textures.js';
 
@@ -49,6 +50,7 @@ export function createPool({ scene, camera, BK, me, stations, obstacles, hud, V 
   const remaining = (owner) => balls.filter((b) => b.owner === owner && !b.in).length;
   const dirOf = (a) => ({ x: -Math.sin(a), z: -Math.cos(a) });
 
+  const lastS = {}; const snd = (n, x, z, v) => { const k = n, now = performance.now(); if (now - (lastS[k] || 0) < (n === 'ballHit' ? 18 : 35)) return; lastS[k] = now; audio.sfx(n, { v, pos: { x: PX + x, y: 0.95, z: PZ + z }, ref: 3 }); };
   const physics = (dt) => {
     for (const b of balls) {
       if (b.in) { b.dropT += dt; continue; }
@@ -56,11 +58,11 @@ export function createPool({ scene, camera, BK, me, stations, obstacles, hud, V 
       const sp = Math.hypot(b.vx, b.vz);
       if (sp > 0) { const ns = Math.max(0, sp - (0.75 + 0.32 * sp) * dt); b.vx *= ns / sp; b.vz *= ns / sp; if (ns < 0.012) { b.vx = b.vz = 0; } }
       // pockets
-      for (const [px, pz] of POCKETS) if (Math.hypot(b.x - px, b.z - pz) < PR) { b.in = true; b.dropT = 0; b.vx = b.vz = 0; st.pocketed.push(b.n); break; }
+      for (const [px, pz] of POCKETS) if (Math.hypot(b.x - px, b.z - pz) < PR) { b.in = true; b.dropT = 0; b.vx = b.vz = 0; st.pocketed.push(b.n); snd('pocket', px, pz, 1); break; }
       if (b.in) continue;
       // cushions
-      if (b.x < -HX + BR) { b.x = -HX + BR; b.vx = Math.abs(b.vx) * 0.78; } if (b.x > HX - BR) { b.x = HX - BR; b.vx = -Math.abs(b.vx) * 0.78; }
-      if (b.z < -HZ + BR) { b.z = -HZ + BR; b.vz = Math.abs(b.vz) * 0.78; } if (b.z > HZ - BR) { b.z = HZ - BR; b.vz = -Math.abs(b.vz) * 0.78; }
+      if (b.x < -HX + BR) { snd('cushion', b.x, b.z, Math.abs(b.vx) / 3); b.x = -HX + BR; b.vx = Math.abs(b.vx) * 0.78; } if (b.x > HX - BR) { snd('cushion', b.x, b.z, Math.abs(b.vx) / 3); b.x = HX - BR; b.vx = -Math.abs(b.vx) * 0.78; }
+      if (b.z < -HZ + BR) { snd('cushion', b.x, b.z, Math.abs(b.vz) / 3); b.z = -HZ + BR; b.vz = Math.abs(b.vz) * 0.78; } if (b.z > HZ - BR) { snd('cushion', b.x, b.z, Math.abs(b.vz) / 3); b.z = HZ - BR; b.vz = -Math.abs(b.vz) * 0.78; }
     }
     for (let i = 0; i < balls.length; i++) for (let j = i + 1; j < balls.length; j++) {
       const a = balls[i], b = balls[j]; if (a.in || b.in) continue;
@@ -68,7 +70,7 @@ export function createPool({ scene, camera, BK, me, stations, obstacles, hud, V 
       if (d2 < md * md && d2 > 1e-9) {
         const d = Math.sqrt(d2), nx = dx / d, nz = dz / d, rel = (a.vx - b.vx) * nx + (a.vz - b.vz) * nz;
         const ov = (md - d) / 2; a.x -= nx * ov; a.z -= nz * ov; b.x += nx * ov; b.z += nz * ov;
-        if (rel > 0) { const j2 = rel * 0.98; a.vx -= j2 * nx; a.vz -= j2 * nz; b.vx += j2 * nx; b.vz += j2 * nz; if (st.firstHit === null && (a.n === 0 || b.n === 0)) st.firstHit = a.n === 0 ? b.n : a.n; }
+        if (rel > 0) { if (st.breakNext && (a.n === 0 || b.n === 0)) { st.breakNext = false; snd('poolBreak', a.x, a.z, 1); } else snd('ballHit', (a.x + b.x) / 2, (a.z + b.z) / 2, rel / 4); const j2 = rel * 0.98; a.vx -= j2 * nx; a.vz -= j2 * nz; b.vx += j2 * nx; b.vz += j2 * nz; if (st.firstHit === null && (a.n === 0 || b.n === 0)) st.firstHit = a.n === 0 ? b.n : a.n; }
       }
     }
   };
@@ -101,7 +103,7 @@ export function createPool({ scene, camera, BK, me, stations, obstacles, hud, V 
 
   // ----- turn handling -----
   const shoot = (ang, speed) => {
-    const d = dirOf(ang); cueBall.vx = d.x * speed; cueBall.vz = d.z * speed; st.phase = 'rolling'; st.firstHit = null; st.pocketed = []; st.shots++; st.stroke = 0.25; st.strokeAng = ang; st.strokePull = 0.0;
+    const d = dirOf(ang); audio.sfx('cue', { v: Math.min(1, speed / 6), pos: { x: PX + cueBall.x, y: 0.95, z: PZ + cueBall.z }, ref: 3 }); if (st.shots === 0) st.breakNext = true; cueBall.vx = d.x * speed; cueBall.vz = d.z * speed; st.phase = 'rolling'; st.firstHit = null; st.pocketed = []; st.shots++; st.stroke = 0.25; st.strokeAng = ang; st.strokePull = 0.0;
     aimLine.visible = false; ghost.visible = false;
   };
   const say = (t, ms = 2200) => { st.msg = t; st.msgT = ms / 1000; };

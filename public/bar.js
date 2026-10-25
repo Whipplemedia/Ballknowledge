@@ -255,6 +255,8 @@ export function buildBar({ scene, BK, tv }) {
   const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
   scene.add(new THREE.Points(dg, new THREE.PointsMaterial({ color: 0xffe8c0, size: 0.03, transparent: true, opacity: 0.5, depthWrite: false })));
 
+  // jukebox: E cycles through the songs (4 procedural tracks), long-press not needed
+  stations.push({ x: -10.9, z: 6.3, r: 1.25, text: 'E - Jukebox (next song)', act: () => { const n = BK.audio && BK.audio.music.next(); BK.sfx && BK.sfx('click'); if (n) BK.toast('🎵 ' + n, 'info'); } });
   // ---------- seats the player can take (E). hip = where the pelvis goes, yaw = facing (same convention as me.yaw), sit = seat-top height ----------
   const seats = [];
   const addSeat = (o) => seats.push(o);

@@ -590,6 +590,12 @@ function handle(room, p, m) {
       if (!to || to === p || !inPlay(room) || !(amt > 0 && amt <= p.money)) break;
       p.money -= amt; to.money += amt; toast(to, `${p.name} sent you ${money(amt)}`, 'win'); broadcast(room); break;
     }
+    case 'rtc': { // WebRTC signaling relay for voice chat (offers/answers/ICE/hello). Only within the room; payload is opaque and size-capped.
+      const raw = JSON.stringify(m.data || null); if (raw.length > 12000) break;
+      const to = room.players.get(m.to); if (to && to !== p) send(to, { type: 'rtc', from: p.id, data: m.data });
+      else if (m.to === '*') for (const q of room.players.values()) if (q !== p) send(q, { type: 'rtc', from: p.id, data: m.data });
+      break;
+    }
     case 'pos': {
       const x = Number(m.x), z = Number(m.z), ry = Number(m.ry);
       if (![x, z, ry].every(Number.isFinite)) break;
@@ -607,8 +613,10 @@ function handle(room, p, m) {
 }
 
 // ---------- transport ----------
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json', '.glb': 'model/gltf-binary', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg' };
+const ICE = () => { const ice = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }]; if (process.env.TURN_URL) ice.push({ urls: process.env.TURN_URL.split(','), username: process.env.TURN_USER || '', credential: process.env.TURN_PASS || '' }); return ice; };
 const server = http.createServer((req, res) => {
+  if (req.url.split('?')[0] === '/ice.json') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); return res.end(JSON.stringify(ICE())); }
   const path0 = req.url.split('?')[0], f = path0 === '/' ? '/index.html' : path0;
   const file = path.join(__dirname, 'public', path.normalize(f).replace(/^(\.\.[/\\])+/, ''));
   if (!file.startsWith(path.join(__dirname, 'public'))) { res.writeHead(403); return res.end(); }

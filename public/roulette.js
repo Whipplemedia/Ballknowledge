@@ -1,3 +1,4 @@
+import { audio } from './audio.js';
 import * as THREE from 'three';
 import { canvasTex, felt, label, neon } from './textures.js';
 
@@ -83,6 +84,10 @@ export function createRoulette({ scene, BK, me, stations, obstacles }) {
         y = 0.11 - 0.05 * e + (u > 0.35 ? Math.abs(Math.sin(t * 9)) * 0.025 * (1 - e) : 0);
       } else { th = spin.thetaK + psi; r = 0.265; y = 0.075; }
       ball.position.set(r * Math.sin(th), y + 0.0, r * Math.cos(th));
+      { const wp = { x: -5.75, y: 1.0, z: -3.6 }; // sound: wheel whir while spinning, pocket ticks as the ball skitters over the pockets, a drop-in rattle at the end
+        if (t < T) { if (!spin.snd) { spin.snd = audio.loop('wheel', { pos: wp, g: 0.2 }); spin.cell = -1; } spin.snd.set(0.2 * (1 - t / T) + 0.02);
+          if (t / T > 0.55) { const cell = Math.floor(trueMod(th - psi) / STEP); if (cell !== spin.cell) { spin.cell = cell; audio.sfx('rTick', { pos: wp, pitch: 0.85 + Math.random() * 0.4, ref: 2.5 }); } } }
+        else if (!spin.dropped) { spin.dropped = true; if (spin.snd) { spin.snd.stop(); spin.snd = null; } audio.sfx('rDrop', { pos: wp, ref: 2.5 }); } }
       if (t >= T && !spin.shown) { spin.shown = true; pop.textContent = `${spin.n}  ${spin.color.toUpperCase()}`; pop.style.color = spin.color === 'red' ? '#ff4d5e' : spin.color === 'green' ? '#27e08a' : '#e8ecff'; pop.classList.remove('hidden'); setTimeout(() => pop.classList.add('hidden'), 4200); }
     },
   };

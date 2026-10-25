@@ -22,6 +22,7 @@ function connect(msg) {
     if (m.type === 'state') { S = m; skew = m.now - Date.now(); stateAt = Date.now(); err = ''; render(); }
     else if (m.type === 'toast') toast(m.text, m.kind);
     else if (m.type === 'pos') window.BK.onPos && window.BK.onPos(m);
+    else if (m.type === 'rtc') window.BK.onRtc && window.BK.onRtc(m);
     else if (m.type === 'spin') window.BK.onSpin && window.BK.onSpin(m);
     else if (m.type === 'error') { err = m.text; ws.close(); S = null; render(); }
   };
@@ -29,6 +30,7 @@ function connect(msg) {
 }
 const send = (m) => ws && ws.readyState === 1 && ws.send(JSON.stringify(m));
 function toast(text, kind = 'info') {
+  const B = window.BK; if (B && B.sfx) B.sfx(kind === 'win' ? 'win' : kind === 'err' ? 'buzz' : kind === 'mob' ? 'knock' : 'tick');
   const d = document.createElement('div'); d.className = 'toast ' + kind; d.textContent = text;
   $('#toasts').appendChild(d); setTimeout(() => d.remove(), 5000);
 }
@@ -195,7 +197,7 @@ function slipInfo() {
   return { dec: 1.91, text: `${pick === 'over' ? 'Over' : 'Under'} ${mk.total.line} (Total points)` };
 }
 function updWin() { const el = $('#towin'); if (!el || !ui.sel) return; const i = slipInfo(); el.textContent = $$(ui.stake * (i.dec - 1)); }
-function placeSel() { if (!ui.sel) return; send({ type: 'bet', ev: S.cur.idx, market: ui.sel.market, pick: ui.sel.pick, stake: ui.stake }); ui.sel = null; }
+function placeSel() { if (!ui.sel) return; window.BK.sfx && window.BK.sfx('bet'); send({ type: 'bet', ev: S.cur.idx, market: ui.sel.market, pick: ui.sel.pick, stake: ui.stake }); ui.sel = null; }
 
 function bookView() {
   if (!S.cur) {
@@ -299,7 +301,7 @@ function barView() {
   const d = Math.round(drunkLevel()), b = d < 15 ? 'sober' : d < 40 ? 'tipsy' : d < 65 ? 'buzzed' : d < 85 ? 'drunk' : 'wasted';
   return `<div class="chalk"><div class="chalk-h">DRINKS</div>
     <div class="chalk-say">Bartender: "What'll it be? First one's always full price."</div>
-    ${S.drinks.map((x) => `<div class="chalk-row"><span class="cn">${x.emoji} ${esc(x.name)}</span><span class="cd"></span><span class="cp">${$$(x.price)}</span><button class="chalkbtn" ${S.me.money < x.price || d >= 100 ? 'disabled' : ''} onclick="send({type:'drink',id:'${x.id}'})">Order</button></div><div class="chalk-sub">${esc(x.blurb)} (+${x.add} buzz)</div>`).join('')}
+    ${S.drinks.map((x) => `<div class="chalk-row"><span class="cn">${x.emoji} ${esc(x.name)}</span><span class="cd"></span><span class="cp">${$$(x.price)}</span><button class="chalkbtn" ${S.me.money < x.price || d >= 100 ? 'disabled' : ''} onclick="BK.sfx&&(BK.sfx('pour'),BK.sfx('gulp',{delay:1.1}),BK.sfx('glass',{delay:0.95}));send({type:'drink',id:'${x.id}'})">Order</button></div><div class="chalk-sub">${esc(x.blurb)} (+${x.add} buzz)</div>`).join('')}
     <div class="dmeter" style="margin-top:14px"><div style="width:${d}%"></div></div>
     <div class="chalk-sub">You are <b>${b}</b> (${d}%). Drunk confidence gives you gut feelings on the games. Too far gone and they turn into nonsense. It wears off over time.</div></div>`;
 }
@@ -318,7 +320,7 @@ function wheelView() {
 function spinNow() {
   const pick = ui.rPick === 'num' ? ui.rNum : ui.rPick;
   if (pick === '' || pick === undefined) return toast('Pick red, black, green or a number.', 'err');
-  send({ type: 'roulette', pick, stake: ui.rStake }); closePanel();
+  window.BK.sfx && window.BK.sfx('chip'); send({ type: 'roulette', pick, stake: ui.rStake }); closePanel();
 }
 
 function endView() {
@@ -419,7 +421,7 @@ function buyCrates(n) {
   const cost = n === 1 ? CRATE : CRATE * 5 - 15; if (save.tix < cost) return toast('Not enough tickets. Play a season to earn more.', 'err');
   save.tix -= cost; const got = [];
   for (let i = 0; i < n; i++) { const it = BKC.rollCrate(); const dup = save.inv.includes(it.id); if (dup) save.tix += DUP_REFUND; else save.inv.push(it.id); got.push({ id: it.id, dup }); }
-  persist(); ui.reveal = got; render();
+  persist(); ui.reveal = got; if (window.BK.sfx) window.BK.sfx(got.some((g) => BKC.BY_ID[g.id].rarity === 'legendary' || BKC.BY_ID[g.id].rarity === 'epic') ? 'rare' : 'crate'); render();
 }
 function revealView() {
   return `<div class="reveal" onclick="ui.reveal=null;render()"><div class="rv-row">${ui.reveal.map(({ id, dup }) => { const it = BKC.BY_ID[id], R = BKC.RARITY[it.rarity]; return `<div class="rv-card" style="--rc:${R.color}"><div class="rv-r">${R.label.toUpperCase()}</div><div class="rv-i">${SLOT_ICON[it.slot]}</div><div class="rv-n">${esc(it.name)}</div><div class="muted">${dup ? 'Duplicate - scrapped for +6 🎟' : 'NEW! Added to your locker'}</div></div>`; }).join('')}</div><div class="muted" style="margin-top:12px">Click to continue</div></div>`;

@@ -5,6 +5,9 @@ import { createTV } from './tv.js';
 import { createRoulette } from './roulette.js';
 import { createFX } from './fx.js';
 import { makePreset, animate } from './people.js';
+import { audio } from './audio.js';
+import { createVoice } from './voice.js';
+import { createAudioUI } from './audioui.js';
 import { label } from './textures.js';
 import { CATALOG, BY_ID, RARITY, SLOTS, rollCrate, createPreview, applyCosmetics, tickCosmetics } from './cosmetics.js';
 
@@ -43,11 +46,17 @@ BK.onSpin = (m) => roulette.onSpin(m);
 BK.leaveGames = () => games.leave();
 BK.startGame = (name, ch) => games.start(name, ch);
 const fx = createFX(renderer, scene, camera);
+// ---------- sound + voice ----------
+const voice = createVoice(BK), audioUI = createAudioUI(voice, BK);
+BK.audio = audio; BK.voice = voice; BK.sfx = (n, o) => audio.sfx(n, o); BK.onRtc = (m) => voice.onSignal(m);
+document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('button,[onclick]') && !e.target.closest('#audiopanel')) audio.sfx('click'); }, true);
+const sfxAt = (n, x, z, y = 1.2, o = {}) => audio.sfx(n, { pos: { x, y, z }, ...o });
+BK.sfxAt = sfxAt;
 
 // ---- sitting: take a seat from bar.seats; camera drops to seated eye height and movement locks until E/Space/WASD ----
 me.sit = null;
-BK.sit = (s) => { if (me.sit || games.active()) return; me.sit = s; me.x = s.x; me.z = s.z; me.yaw = s.yaw; me.pitch = -0.05; BK.toast && BK.toast('Sitting - press E, Space or WASD to stand up'); };
-BK.stand = () => { const s = me.sit; if (!s) return; me.sit = null; me.x = s.exit[0]; me.z = s.exit[1]; };
+BK.sit = (s) => { if (me.sit || games.active()) return; audio.sfx('sit'); me.sit = s; me.x = s.x; me.z = s.z; me.yaw = s.yaw; me.pitch = -0.05; BK.toast && BK.toast('Sitting - press E, Space or WASD to stand up'); };
+BK.stand = () => { const s = me.sit; if (!s) return; audio.sfx('stand'); me.sit = null; me.x = s.exit[0]; me.z = s.exit[1]; };
 const active = () => { const S = BK.S; return S && ['play', 'hunt'].includes(S.phase); };
 const nearest = () => stations.filter((s) => Math.hypot(s.x - me.x, s.z - me.z) < s.r).sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
 
@@ -86,7 +95,7 @@ function syncAvatars() {
       const P = makePreset('bub', { shirt: SHIRTS[p.color % 6], skin: SKINS[(p.color + 2) % 6], hair: HAIRS[(p.color + 1) % 6], hairStyle: p.color % 3 === 2 ? 'long' : 'short', hat: p.color % 3 === 1 ? null : { color: CAPS[p.color % 6], backwards: p.color % 2 === 0 }, shorts: p.color % 2 === 0, pants: p.color % 2 === 0 ? 0x2a2a30 : 0x2c3e50, backpack: p.color % 2 === 0 });
       const l = label(p.name, '#fff', 0.8); l.position.y = 2.2; P.group.add(l); scene.add(P.group);
       const pm = pending.get(p.id); P.group.position.set(pm ? pm.x : -3 + p.color * 1.2, 0, pm ? pm.z : 2);
-      a = { P, tx: P.group.position.x, tz: P.group.position.z, try: pm ? pm.ry : 0, px: P.group.position.x, pz: P.group.position.z, drunk: 0 }; avatars.set(p.id, a);
+      a = { id: p.id, P, tx: P.group.position.x, tz: P.group.position.z, try: pm ? pm.ry : 0, px: P.group.position.x, pz: P.group.position.z, drunk: 0 }; avatars.set(p.id, a);
     }
     a.drunk = p.drunk;
     const ck = JSON.stringify(p.cos || {}); if (a.cosKey !== ck) { a.cosKey = ck; applyCosmetics(a.P, p.cos || {}); }
@@ -102,6 +111,7 @@ function makeHitman() {
 }
 function syncHitmen() {
   const on = BK.S && (BK.S.phase === 'hunt' || BK.S.shake);
+  if (on && !hitmen.length) { audio.sfx('sting'); audio.sfx('knock', { delay: 0.6 }); }
   if (on && !hitmen.length) for (let i = 0; i < 3; i++) { const P = makeHitman(); P.group.position.set(-2 + i * 2, 0, ROOM.z - 2); scene.add(P.group); hitmen.push({ P, flash: 0, ph: i * 2 }); }
   if (!on && hitmen.length) { hitmen.forEach((h) => scene.remove(h.P.group)); hitmen.length = 0; }
 }
@@ -128,7 +138,7 @@ canvas.addEventListener('mousedown', () => {
     BK.send({ type: 'attack' });
     ray.setFromCamera({ x: 0, y: 0 }, camera);
     const hit = ray.intersectObjects(hitmen.map((h) => h.P.group), true)[0];
-    if (hit) { const h = hitmen.find((q) => q.P === hit.object.userData.hitman); if (h) h.flash = 1; }
+    if (hit) { const h = hitmen.find((q) => q.P === hit.object.userData.hitman); if (h) { h.flash = 1; audio.sfx('punch', { pos: { x: h.P.group.position.x, y: 1.3, z: h.P.group.position.z } }); } }
   }
 });
 
@@ -187,6 +197,16 @@ function frame(now) {
   const off = games.camOffset(now);
   camera.rotation.set(me.pitch + off.p + Math.sin(t * 0.7) * drunkAmt * 0.03, me.yaw + off.y + Math.sin(t * 0.5) * drunkAmt * 0.05, Math.sin(t * 0.9) * drunkAmt * 0.07);
   games.update(dt); games.rig(camera);
+  // ---- audio frame: listener, footsteps, bar-event cues, voice
+  audio.update(dt, camera); audioUI.show(active()); voice.update(dt, avatars);
+  { const mvd = Math.hypot(me.x - (me._lx ?? me.x), me.z - (me._lz ?? me.z)); me._lx = me.x; me._lz = me.z;
+    if (!me.sit && !games.active() && mvd < 1.2) { me._step = (me._step || 0) + mvd; if (me._step > (keys.ShiftLeft ? 0.95 : 0.7)) { me._step = 0; audio.sfx('step', { v: keys.ShiftLeft ? 0.9 : 0.6 }); } } }
+  { const be = BK.S && BK.S.barEvent, kind = be ? be.kind : null; if (kind !== audio._ev) { const prev = audio._ev; audio._ev = kind;
+      if (kind === 'happy') { audio.sfx('horn'); audio.sfx('cheer', { v: 0.8, delay: 0.3 }); } else if (kind === 'fight') { audio.sfx('whoosh'); audio.sfx('cheer', { v: 0.6, delay: 0.4 }); } else if (kind === 'blackout') audio.sfx('blackout'); else if (kind === 'tip') audio.sfx('coin');
+      if (prev === 'blackout') audio.sfx('powerOn'); }
+    if (kind === 'fight' && Math.random() < dt * 2.2) audio.sfx(Math.random() < 0.8 ? 'punch' : 'groan', { pos: { x: 1, y: 1.3, z: -2.2 } });
+    const sh = !!(BK.S && BK.S.shake); if (sh !== audio._shake) { audio._shake = sh; if (sh) { audio.sfx('sting'); audio.sfx('knock', { delay: 0.5 }); } }
+    const evs = BK.S && BK.S.events; if (evs) { const open = evs.find((e) => e.status === 'open'), oi = open ? open.idx : -1; if (oi !== audio._open) { if (audio._open !== undefined && oi >= 0) audio.sfx('bell'); audio._open = oi; } } }
   const ev = BK.S && BK.S.barEvent, blackout = !!(ev && ev.kind === 'blackout'), happy = !!(ev && ev.kind === 'happy');
   tv.blackout = blackout;
   { const tgt = blackout ? (Math.random() < 0.06 ? 0.5 : 0.05) : 1; for (const [l, base] of lightList) l.intensity += (base * tgt - l.intensity) * Math.min(1, dt * 9); party.intensity += ((happy ? 26 : 0) - party.intensity) * Math.min(1, dt * 4); party.color.setHSL((t * 0.25) % 1, 1, 0.55); }
@@ -197,6 +217,9 @@ function frame(now) {
     let d = a.try - g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); g.rotation.y += d * k;
     const sp = Math.hypot(g.position.x - a.px, g.position.z - a.pz) / Math.max(dt, 0.001); a.px = g.position.x; a.pz = g.position.z;
     const sitY = a.sit ? a.sit + 0.09 - (a.P.hipY || 0.98) : 0; a.P.baseY = (a.P.baseY || 0) + (sitY - (a.P.baseY || 0)) * Math.min(1, dt * 10);
+    if (!!a.sit !== !!a._sat) { a._sat = !!a.sit; audio.sfx(a.sit ? 'sit' : 'stand', { pos: { x: g.position.x, y: 0.6, z: g.position.z } }); }
+    if (!a.sit && sp > 0.6) { a._sd = (a._sd || 0) + sp * dt; if (a._sd > 0.8) { a._sd = 0; audio.sfx('step', { v: 0.5, pos: { x: g.position.x, y: 0.1, z: g.position.z } }); } }
+    if (!a.mic) { a.mic = label('🎙', '#2ee09a', 0.55); a.mic.position.y = 2.65; a.mic.visible = false; g.add(a.mic); } const spk = voice.speaking(a.id); if (a.mic.visible !== spk) a.mic.visible = spk;
     animate(a.P, a.sit ? 'sit' : a.drunk >= 40 && sp < 0.4 ? 'stagger' : sp > 0.5 ? 'walk' : 'idle', t, Math.min(1.4, sp / 3.5)); tickCosmetics(a.P, t);
   }
   hitmen.forEach((h, i) => {

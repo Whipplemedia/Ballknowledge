@@ -20,6 +20,12 @@ Dev: `BK_SPEED=10 npm start` divides every timer by 10 (full game in about a min
 ## Controls
 WASD move, mouse look, E interact, C crew/wire money, Esc releases the mouse / closes menus.
 
+## Sound & voice
+- **Sound is fully synthesized in the browser** (`public/audio.js`, no audio files): ~55 effects, a spatial crowd/room ambience, and four procedural jukebox songs (E at the jukebox cycles them). Impacts exist for pool (cue, balls, cushions, pockets, break), darts (throw, board, bull), bowling (release, rolling rumble, pin hits, strikes, gutters), cornhole (throw, thud, hole), roulette (wheel whir, pocket ticks, drop), plus UI, drinks, footsteps, sitting, bar events (happy hour horn, blackout, fights), mob knocks/stings and crowd reactions to scoring plays on the TV. Sounds with a world position are 3D (HRTF) and follow the camera.
+- **Voice chat** (`public/voice.js`): peer-to-peer WebRTC mesh (max 6 players); the server only relays signaling (`type:'rtc'`). Remote voices come out of their avatar's position, so you hear people where they stand (or "Whole bar" in settings). Join with the speaker button (bottom-right) or **O**; **hold V** to talk (or Open mic), **M** mutes. A green mic floats over whoever is speaking.
+- Settings (volumes, mic mode, range, song) persist in `localStorage` (`bk_audio_v1`).
+- **Deployment note:** browsers only allow the microphone on https (Railway is) or localhost. STUN is Google's public server; players behind strict NATs/corporate networks may need a TURN relay: set `TURN_URL` (comma-separated), `TURN_USER`, `TURN_PASS` on the server and `/ice.json` will hand it to clients.
+
 ## Files
 - `seasons.js` - season data (real results). `server.js` - authoritative game state over WebSocket.
 - **Look**: chunky faceted cartoon cast (Bub, the bartender, six regulars, Uncle Sal, hitmen, a crowd), dive-bar set with beams, windows, neon, chalkboard menu, ambient stylized sports broadcasts on the TVs, a live bar behind the title screen, bloom + color grade, and a four-stage drunk look.
