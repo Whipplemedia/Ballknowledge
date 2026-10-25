@@ -16,6 +16,44 @@ if (typeof location !== 'undefined' && !/[?&]models=0/.test(location.search)) {
 const TINTED_SHIRT = { jock: 0, knowItAll: 0, dieHard: 0, gambler: 0, sal: 0, hitman: 0, bartender: 0 }; // shirts with baked prints/suits keep their colors
 const MODEL_OK = new Set(['skin', 'shirt', 'pants', 'hair', 'hat', 'backpack', 'glasses', 'stache', 'scale', 'hairStyle', 'shorts', 'mouth', 'look', 'number']);
 const ROLE_K = { skin2: 0.9, shirt2: 0.92, hat2: 0.78 };
+
+// ---- per-player recolor of the baked AI texture (region masks by color: skin / hair / shirt), cached by key ----
+const RECOLOR_CACHE = new Map();
+const NOT_SHIRT_BONES = new Set(['LeftLeg', 'RightLeg', 'LeftFoot', 'RightFoot', 'LeftToeBase', 'RightToeBase']); // socks + soles share the shirt's cream color
+function buildShirtMask(mesh, N) { // UV-space mask of every triangle except those touching the lower-leg/foot bones
+  const g = mesh.geometry, uv = g.attributes.uv, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, bones = mesh.skeleton.bones;
+  const mc = document.createElement('canvas'); mc.width = mc.height = N; const c = mc.getContext('2d'); c.fillStyle = '#fff'; c.strokeStyle = '#fff'; c.lineWidth = 3;
+  const ok = (v) => { let bi = 0, bw = -1; for (let k = 0; k < 4; k++) { const w = sw.getComponent(v, k); if (w > bw) { bw = w; bi = si.getComponent(v, k); } } return NOT_SHIRT_BONES.has(bones[bi].name); };
+  const idx = g.index, n = idx ? idx.count : uv.count;
+  for (let t = 0; t < n; t += 3) {
+    const a = idx ? idx.getX(t) : t, b = idx ? idx.getX(t + 1) : t + 1, d = idx ? idx.getX(t + 2) : t + 2;
+    if ((ok(a) ? 1 : 0) + (ok(b) ? 1 : 0) + (ok(d) ? 1 : 0) >= 1) continue;
+    c.beginPath(); c.moveTo(uv.getX(a) * N, uv.getY(a) * N); c.lineTo(uv.getX(b) * N, uv.getY(b) * N); c.lineTo(uv.getX(d) * N, uv.getY(d) * N); c.closePath(); c.fill(); c.stroke();
+  }
+  const dd = c.getImageData(0, 0, N, N).data, out = new Uint8Array(N * N); for (let i = 0; i < N * N; i++) out[i] = dd[i * 4] > 128 ? 1 : 0; return out;
+}
+function recolorTexture(srcTex, { shirt, skin, hair }, shirtMask) {
+  const key = [shirt, skin, hair, shirtMask ? 1 : 0].join('|'); if (RECOLOR_CACHE.has(key)) return RECOLOR_CACHE.get(key);
+  const N = 1024, cv = document.createElement('canvas'); cv.width = cv.height = N; const cx = cv.getContext('2d', { willReadFrequently: true });
+  cx.drawImage(srcTex.image, 0, 0, N, N); const im = cx.getImageData(0, 0, N, N), d = im.data;
+  const T = (c) => (c == null ? null : [((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255]);
+  const tS = T(shirt), tK = T(skin), tH = T(hair); const BASE = { skin: 0.762, hair: 0.172, shirt: 0.774 };
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255, mx = Math.max(r, g, b), mn = Math.min(r, g, b), sat = mx > 0 ? (mx - mn) / mx : 0, dd = Math.max(mx - mn, 1e-6);
+    let h = mx === r ? ((g - b) / dd) % 6 : mx === g ? (b - r) / dd + 2 : (r - g) / dd + 4; h *= 60; if (h < 0) h += 360;
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b; let t = null, base = 1;
+    if (tK && sat > 0.30 && mx > 0.62 && h > 5 && h < 40) { t = tK; base = BASE.skin; }
+    else if (tH && mx < 0.40 && sat > 0.35 && h > 5 && h < 40) { t = tH; base = BASE.hair; }
+    else if (tS && (!shirtMask || shirtMask[i >> 2]) && sat > 0.07 && sat <= 0.30 && mx > 0.55 && mx < 0.95 && h > 10 && h < 50) { t = tS; base = BASE.shirt; }
+    if (!t) continue;
+    const k = Math.min(1.6, lum / base);
+    d[i] = Math.min(255, t[0] * k * 255); d[i + 1] = Math.min(255, t[1] * k * 255); d[i + 2] = Math.min(255, t[2] * k * 255);
+  }
+  cx.putImageData(im, 0, 0);
+  const tex = new THREE.CanvasTexture(cv); tex.flipY = srcTex.flipY; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = srcTex.anisotropy; tex.wrapS = srcTex.wrapS; tex.wrapT = srcTex.wrapT;
+  RECOLOR_CACHE.set(key, tex); return tex;
+}
+
 // ---- Meshy (AI-generated) skinned characters: public/models/<name>_ai.glb, Mixamo-style skeleton ----
 const Q0 = new THREE.Quaternion(), V_DOWN = new THREE.Vector3(0, -1, 0);
 const qAlign = (from, to) => new THREE.Quaternion().setFromUnitVectors(from.clone().normalize(), to.clone().normalize());
@@ -82,9 +120,13 @@ function fromSkinned(src, name, over) {
       else if (!cur.has(b)) keep(b);
     }
   };
-  // AI models have baked colors: overrides can't recolor them, but a faint tint from the requested shirt color keeps crowds from being exact clones
-  const vary = over.shirt ?? over.skin;
-  if (vary != null) { const tc = new THREE.Color(0xffffff).lerp(new THREE.Color(vary), 0.16); const cl = new Map(); rig.traverse((o) => { if (!o.isMesh) return; if (!cl.has(o.material)) { const m = o.material.clone(); m.color.multiply(tc); cl.set(o.material, m); } o.material = cl.get(o.material); }); }
+  // Bub's texture is split into flat color regions, so skin / hair / shirt can be recolored per player. Other characters keep their art (only a faint crowd tint).
+  if (name === 'bub' && (over.shirt != null || over.skin != null || over.hair != null)) {
+    const cl = new Map(); rig.traverse((o) => { if (!o.isMesh || !o.material.map) return; if (!cl.has(o.material)) { const m = o.material.clone(); if (o.isSkinnedMesh && !src.userData.shirtMask) src.userData.shirtMask = buildShirtMask(o, 1024); m.map = recolorTexture(o.material.map, over, src.userData.shirtMask); cl.set(o.material, m); } o.material = cl.get(o.material); });
+  } else {
+    const vary = over.shirt ?? over.skin;
+    if (vary != null) { const tc = new THREE.Color(0xffffff).lerp(new THREE.Color(vary), 0.16); const cl = new Map(); rig.traverse((o) => { if (!o.isMesh) return; if (!cl.has(o.material)) { const m = o.material.clone(); m.color.multiply(tc); cl.set(o.material, m); } o.material = cl.get(o.material); }); }
+  }
   if (over.scale) outer.scale.setScalar(over.scale);
   P.skinUpdate();
   return P;
