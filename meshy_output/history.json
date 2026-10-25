@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "projects": [
+    {
+      "folder": "20261025_181314_multi-image-to-3d_01a17444",
+      "prompt": "",
+      "task_type": "multi-image-to-3d",
+      "root_task_id": "01a17444-43ba-7730-a108-01c533836ae4",
+      "created_at": "2026-10-25T18:13:14.344Z",
+      "updated_at": "2026-10-25T18:13:14.344Z",
+      "task_count": 0
+    }
+  ]
+}
