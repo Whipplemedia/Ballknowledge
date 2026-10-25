@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // Static AI-generated props (public/models/props/<name>.glb, made via Meshy, see blender/meshy_tasks.json).
 // Everything is optional: callers check hasProp() and fall back to their procedural meshes.
-const NAMES = ['stool', 'booth', 'tv', 'terminal', 'pin', 'ball', 'return', 'bag', 'lamp', 'pool'];
+const NAMES = ['stool', 'booth', 'tv', 'terminal', 'pin', 'ball', 'return', 'bag', 'lamp', 'pool', 'cornboard'];
 const SRC = {};
 if (typeof location !== 'undefined' && !/[?&]props=0/.test(location.search)) {
   const loader = new GLTFLoader();

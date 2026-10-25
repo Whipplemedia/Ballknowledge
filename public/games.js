@@ -231,6 +231,9 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
     const BX = -6.0, FRONT = 4.0, BACK = 5.2, SLOPE = 0.25, HOLE = { x: BX, z: 4.95 }, HR = 0.12, HW = 0.3;
     const surf = (z) => 0.09 + (z - FRONT) * SLOPE;
     const mkBoard = (cz, flip) => {
+      if (hasProp('cornboard')) { // AI board: ramp slope scaled to the physics SLOPE, high end at the back (z+) for the near board, mirrored for the far one
+        const b = prop('cornboard', { w: 0.62, d: 1.278, h: 0.3955, rotY: flip ? Math.PI / 2 : -Math.PI / 2 }); b.position.set(BX, 0, cz); scene.add(b); return b;
+      }
       const g = new THREE.Group(); g.position.set(BX, 0, cz);
       const top = box(0.62, 0.04, 1.24, 0xd9b574, 0, 0.23 - 0.0, 0, g); top.rotation.x = -Math.atan(SLOPE) * (flip ? -1 : 1);
       const stripe = box(0.08, 0.045, 1.24, 0xc0392b, 0.2, 0.23, 0, g); stripe.rotation.x = top.rotation.x;
@@ -239,7 +242,7 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
       scene.add(g); return g;
     };
     mkBoard(4.6, false); mkBoard(-0.9, true);
-    const hole = cyl(HR, HR, 0.01, 0x050505, HOLE.x, surf(HOLE.z) + 0.03, HOLE.z, 20); hole.rotation.x = -Math.atan(SLOPE);
+    const hole = cyl(HR, HR, 0.01, 0x050505, HOLE.x, surf(HOLE.z) + (hasProp('cornboard') ? 0.0165 : 0.03), HOLE.z, 20); hole.rotation.x = -Math.atan(SLOPE);
     const l = label('🌽 CORNHOLE'); l.position.set(BX + 1.5, 1.0, 5.0); scene.add(l);
     const csb = scoreTex(256, 180, () => {}); let lastScore = 0;
     const drawCsb = (blue, red) => csb.redraw((c, w, h) => { c.fillStyle = '#0c1226'; c.fillRect(0, 0, w, h); c.strokeStyle = '#5a6aa8'; c.lineWidth = 4; c.strokeRect(2, 2, w - 4, h - 4); c.font = '900 52px system-ui'; c.textAlign = 'left'; c.fillStyle = '#5aa0ff'; c.fillText('BLUE', 16, 72); c.fillStyle = '#ff5a5a'; c.fillText('RED', 16, 148); c.textAlign = 'right'; c.fillStyle = '#fff'; c.fillText(String(blue), w - 18, 72); c.fillText(String(red), w - 18, 148); });
@@ -249,7 +252,7 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
     stations.push({ x: BX, z: 0.3, r: 1.6, text: 'E - Cornhole (challenge board)', act: () => BK.openChallenge('cornhole') });
     obstacles.push({ x: BX, z: 4.6, r: 0.7 }, { x: BX, z: -0.9, r: 0.7 });
 
-    const bagMesh = (c) => { if (hasProp('bag')) return prop('bag', { w: 0.19, anchor: 'center', shadow: false }); const g = new THREE.Group(); const b = box(0.16, 0.05, 0.16, c, 0, 0, 0, g); b.scale.set(1, 1, 1); box(0.14, 0.055, 0.02, 0xffffff, 0, 0, 0, g); return g; };
+    const bagMesh = (c) => { if (hasProp('bag')) return prop('bag', { w: 0.165, anchor: 'center', shadow: false }); const g = new THREE.Group(); const b = box(0.16, 0.05, 0.16, c, 0, 0, 0, g); b.scale.set(1, 1, 1); box(0.14, 0.055, 0.02, 0xffffff, 0, 0, 0, g); return g; };
     const heldBag = bagMesh(0x2f6fd0); const cHand = makeHand({ sleeve }); heldBag.position.set(0, 0.06, -0.16); cHand.add(heldBag); cHand.position.set(0.14, -0.32, -0.34); cHand.rotation.set(0.15, -0.2, 0);
     const LOFT = 0.45, ZONE = [0.25, 0.52];
     let thrown, score, state, charge, charging, bag, since, wind = 0, cdir = 1;

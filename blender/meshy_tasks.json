@@ -73,6 +73,11 @@
     },
     "lamp": {
       "gen": "01a1748b-90f4-7470-bfc8-52fe7242c8fb"
+    },
+    "cornboard": {
+      "gen": "01a174c4-e4ae-77ce-9627-092e8109c288",
+      "ref": "image-to-image 01a174c4-908b-744a-acfc-9004bd7465e3",
+      "note": "hole-less board; hole is the procedural disc at the physics position"
     }
   }
 }

@@ -609,7 +609,7 @@ function handle(room, p, m) {
 // ---------- transport ----------
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json' };
 const server = http.createServer((req, res) => {
-  const f = req.url === '/' ? '/index.html' : req.url.split('?')[0];
+  const path0 = req.url.split('?')[0], f = path0 === '/' ? '/index.html' : path0;
   const file = path.join(__dirname, 'public', path.normalize(f).replace(/^(\.\.[/\\])+/, ''));
   if (!file.startsWith(path.join(__dirname, 'public'))) { res.writeHead(403); return res.end(); }
   fs.readFile(file, (err, data) => {
