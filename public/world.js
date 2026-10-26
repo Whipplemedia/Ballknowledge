@@ -69,7 +69,14 @@ addEventListener('contextmenu', (e) => { if (document.pointerLockElement === can
 // ---- sitting: take a seat from bar.seats; camera drops to seated eye height and movement locks until E/Space/WASD ----
 me.sit = null;
 BK.sit = (s) => { if (me.sit || games.active()) return; audio.sfx('sit'); me.sit = s; me.x = s.x; me.z = s.z; me.yaw = s.yaw; me.pitch = -0.05; BK.toast && BK.toast('Sitting - press E, Space or WASD to stand up'); };
-BK.stand = () => { const s = me.sit; if (!s) return; audio.sfx('stand'); me.sit = null; me.x = s.exit[0]; me.z = s.exit[1]; };
+const clearAt = (x, z, m = 0.32) => Math.abs(x) < ROOM.x - 0.7 && Math.abs(z) < ROOM.z - 0.7 && !obstacles.some((o) => Math.hypot(x - o.x, z - o.z) < o.r + m);
+// standing up drops you at the nearest clear floor spot (booth ends are walled in by neighbouring booths, so booths exit into the aisle)
+function exitSpot(s) {
+  let best = null;
+  for (let r = 0.9; r < 4.5 && !best; r += 0.25) for (let k = 0; k < 24; k++) { const a = (k / 24) * Math.PI * 2, x = s.x + Math.cos(a) * r, z = s.z + Math.sin(a) * r; if (s.text === 'booth' && z > 5.0) continue; if (clearAt(x, z, 0.55) && (!best || Math.hypot(x - s.exit[0], z - s.exit[1]) < best.d)) best = { x, z, d: Math.hypot(x - s.exit[0], z - s.exit[1]) }; }
+  return best ? [best.x, best.z] : s.exit;
+}
+BK.stand = () => { const s = me.sit; if (!s) return; audio.sfx('stand'); me.sit = null; const e = clearAt(s.exit[0], s.exit[1]) ? s.exit : exitSpot(s); me.x = e[0]; me.z = e[1]; };
 const active = () => { const S = BK.S; return S && ['play', 'hunt'].includes(S.phase); };
 const nearest = () => stations.filter((s) => Math.hypot(s.x - me.x, s.z - me.z) < s.r).sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
 
@@ -78,6 +85,7 @@ addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (me.sit && (e.code === 'KeyE' || e.code === 'Space' || ['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code))) { BK.stand(); return; }
   if (koNow()) return;
+  if (e.code === 'Space' && !e.repeat && !games.active() && !me.sit && !(me.jy > 0)) { me.vy = 4.2; audio.sfx('step', { v: 0.5 }); }
   if (e.code === 'KeyE') { if (games.active()) games.leave(); else { const s = nearest(); if (s) s.act(); } }
   if (e.code === 'KeyC') { games.leave(); BK.openPanel('crew'); }
 });
@@ -96,7 +104,7 @@ canvas.addEventListener('mouseup', () => games.up());
 // ---------- avatars ----------
 const SHIRTS = [0xe74c3c, 0x3498db, 0x2ecc71, 0xf1c40f, 0x9b59b6, 0xe67e22], SKINS = [0xf0c8a0, 0xc58c5c, 0xe0b890, 0x8d5a3a, 0xf5d0b0, 0xd8a070], HAIRS = [0x2a1a0a, 0x111111, 0x8a5a2a, 0x3a3a3a, 0xb06a2a, 0x5a3a1a], CAPS = [0x9c9ca2, 0xb02a2a, 0x2a5aa8, 0x2f8f5a, 0xd0a020, 0x7a3fa0];
 const avatars = new Map(), pending = new Map();
-BK.onPos = (m) => { const a = avatars.get(m.id); if (a) { a.tx = m.x; a.tz = m.z; a.try = m.ry; a.sit = m.sit || 0; } else pending.set(m.id, m); };
+BK.onPos = (m) => { const a = avatars.get(m.id); if (a) { a.tx = m.x; a.tz = m.z; a.try = m.ry; a.sit = m.sit || 0; a.jy = m.jy || 0; } else pending.set(m.id, m); };
 function syncAvatars() {
   const S = BK.S, inGame = active();
   const ids = new Set(inGame ? S.players.filter((p) => p.id !== S.you).map((p) => p.id) : []);
@@ -173,8 +181,8 @@ function move(dt, t, drunkAmt) {
 let lastSend = 0, lastPos = '', lastBeat = 0;
 function netSend(t) {
   if (t - lastSend < 80) return; lastSend = t;
-  const sitH = me.sit ? me.sit.sit : 0, k = `${me.x.toFixed(2)},${me.z.toFixed(2)},${me.yaw.toFixed(2)},${sitH}`;
-  if (k === lastPos && !(sitH && t - lastBeat > 2500)) return; lastPos = k; lastBeat = t; BK.send({ type: 'pos', x: me.x, z: me.z, ry: me.yaw, sit: sitH });
+  const sitH = me.sit ? me.sit.sit : 0, jy = +(me.jy || 0).toFixed(2), k = `${me.x.toFixed(2)},${me.z.toFixed(2)},${me.yaw.toFixed(2)},${sitH},${jy}`;
+  if (k === lastPos && !(sitH && t - lastBeat > 2500)) return; lastPos = k; lastBeat = t; BK.send({ type: 'pos', x: me.x, z: me.z, ry: me.yaw, sit: sitH, jy });
 }
 
 // ---------- loop ----------
@@ -205,13 +213,15 @@ function frame(now) {
   const look = roulette.lookTarget();
   if (look) { const k = Math.min(1, dt * 3); me.x += (look.x - me.x) * k; me.z += (look.z - me.z) * k; me.yaw += (look.yaw - me.yaw) * k; me.pitch += (look.pitch - me.pitch) * k; }
   else move(dt, t, drunkAmt);
+  if (me.jy > 0 || me.vy > 0) { if (me.sit || games.active() || koNow()) { me.jy = me.vy = 0; } else { me.vy -= 14 * dt; me.jy = Math.max(0, (me.jy || 0) + me.vy * dt); if (me.jy === 0) { me.vy = 0; audio.sfx('step', { v: 0.8 }); } } }
   netSend(now);
   const moving = !games.active() && !BK.ui.open && (keys.KeyW || keys.KeyS || keys.KeyA || keys.KeyD);
   if (me.sit) { const s = me.sit, fx = -Math.sin(s.yaw) * 0.1, fz = -Math.cos(s.yaw) * 0.1; camera.position.set(s.x + fx, s.sit + 0.09 + (EYE - 0.98) + Math.sin(now / 900) * 0.004, s.z + fz); }
-  else camera.position.set(me.x, EYE + Math.sin(now / 180) * (moving ? 0.03 : 0.004), me.z);
+  else camera.position.set(me.x, EYE + (me.jy || 0) + Math.sin(now / 180) * (moving ? 0.03 : 0.004), me.z);
   const off = games.camOffset(now);
   camera.rotation.set(me.pitch + off.p + Math.sin(t * 0.7) * drunkAmt * 0.03, me.yaw + off.y + Math.sin(t * 0.5) * drunkAmt * 0.05, Math.sin(t * 0.9) * drunkAmt * 0.07);
   games.update(dt); games.rig(camera);
+  { const gOn = games.active(); for (const n of bar.npcs) { const g = n.P.group, hide = gOn && Math.hypot(g.position.x - camera.position.x, g.position.z - camera.position.z) < 1.1 && !n.seated; if (g.visible === hide) g.visible = !hide; } }
   // ---- audio frame: listener, footsteps, bar-event cues, voice
   audio.update(dt, camera); audioUI.show(active()); voice.update(dt, avatars);
   bottles.update(dt); { const left = koNow() ? (me.koUntil - BK.now()) / 1000 : 0; bottles.setKo(left); if (!left && me.koUntil) { me.koUntil = 0; audio.sfx('boing'); } if (left) { camera.position.y = 0.32; camera.rotation.z = 1.25; camera.rotation.x = 0.4; } }
@@ -232,7 +242,7 @@ function frame(now) {
     const g = a.P.group, k = Math.min(1, dt * 10); g.position.x += (a.tx - g.position.x) * k; g.position.z += (a.tz - g.position.z) * k;
     let d = a.try - g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); g.rotation.y += d * k;
     const sp = Math.hypot(g.position.x - a.px, g.position.z - a.pz) / Math.max(dt, 0.001); a.px = g.position.x; a.pz = g.position.z;
-    const sitY = a.sit ? a.sit + 0.09 - (a.P.hipY || 0.98) : 0; a.P.baseY = (a.P.baseY || 0) + (sitY - (a.P.baseY || 0)) * Math.min(1, dt * 10);
+    const sitY = (a.sit ? a.sit + 0.09 - (a.P.hipY || 0.98) : 0) + (a.jy || 0); a.P.baseY = (a.P.baseY || 0) + (sitY - (a.P.baseY || 0)) * Math.min(1, dt * 10);
     if (!!a.sit !== !!a._sat) { a._sat = !!a.sit; audio.sfx(a.sit ? 'sit' : 'stand', { pos: { x: g.position.x, y: 0.6, z: g.position.z } }); }
     if (!a.sit && sp > 0.6) { a._sd = (a._sd || 0) + sp * dt; if (a._sd > 0.8) { a._sd = 0; audio.sfx('step', { v: 0.5, pos: { x: g.position.x, y: 0.1, z: g.position.z } }); } }
     { const dx = g.position.x - me.x, dz = g.position.z - me.z, dist = Math.hypot(dx, dz);

@@ -1,10 +1,11 @@
 import { audio } from './audio.js';
 import * as THREE from 'three';
 import { canvasTex } from './textures.js';
+import { hasProp } from './props.js';
 
 // Simplified 8-ball vs an NPC. You: solids (4 balls). NPC: stripes (4 balls). Clear yours, then sink the 8.
 // Top-down 2D physics on the felt of the table in bar.js (PX,PZ) = (3.4, 3.4).
-const PX = 3.4, PZ = 3.4, Y = 0.92, BR = 0.04, HX = 1.3, HZ = 0.65, PR = 0.082;
+const PX = 3.4, PZ = 3.4, Y = 0.92, BR = 0.04, HX = hasProp('pool') ? 1.21 : 1.3, HZ = hasProp('pool') ? 0.565 : 0.65, PR = 0.09; // HX/HZ = inner rail edges (the AI table's rails sit at |x|=1.21, |z|=0.565)
 const POCKETS = [[-HX, -HZ], [HX, -HZ], [-HX, HZ], [HX, HZ], [0, -HZ - 0.03], [0, HZ + 0.03]];
 const COLORS = { 1: '#f2c230', 2: '#2a5ad8', 3: '#d82a2a', 4: '#7a2ab8', 8: '#101010', 9: '#f2c230', 10: '#2a5ad8', 11: '#d82a2a', 12: '#7a2ab8' };
 const SKILL = { rookie: { aim: 0.06, pow: 0.2, name: 'the Rookie', think: 1.1 }, shark: { aim: 0.011, pow: 0.05, name: 'The Shark', think: 1.5 } };
@@ -171,7 +172,7 @@ export function createPool({ scene, camera, BK, me, stations, obstacles, hud, V 
       if (st.phase === 'aim' || st.phase === 'npcAim' && false) {
         const d = dirOf(st.aim), cx = PX + cueBall.x, cz = PZ + cueBall.z;
         cam.position.set(cx - d.x * 0.85, Y + 0.5, cz - d.z * 0.85); cam.lookAt(cx + d.x * 0.7, Y + 0.02, cz + d.z * 0.7);
-      } else { cam.position.set(PX, Y + 1.55, PZ + 1.35); cam.lookAt(PX, Y, PZ + 0.05); }
+      } else { cam.position.set(PX - 1.0, Y + 1.25, PZ + 1.2); cam.lookAt(PX + 0.1, Y, PZ); }
     },
   };
   game.poolReady = () => st;

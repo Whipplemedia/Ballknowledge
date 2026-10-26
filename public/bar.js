@@ -262,9 +262,8 @@ export function buildBar({ scene, BK, tv }) {
   const seats = [];
   const addSeat = (o) => seats.push(o);
   [-3.5, -0.5, 2.5].forEach((bx) => { for (const dx of [-0.5, 0.5]) {
-    const ex = bx + (dx < 0 ? -1.5 : 1.5);
-    addSeat({ x: bx + dx, z: BOOTH.hipA, yaw: 0, sit: BOOTH.seat, exit: [ex, 6.4], text: 'booth' });
-    addSeat({ x: bx + dx, z: BOOTH.hipB, yaw: Math.PI, sit: BOOTH.seat, exit: [ex, 6.6], text: 'booth' });
+    addSeat({ x: bx + dx, z: BOOTH.hipA, yaw: 0, sit: BOOTH.seat, exit: [bx + dx, 4.4], text: 'booth' });
+    addSeat({ x: bx + dx, z: BOOTH.hipB, yaw: Math.PI, sit: BOOTH.seat, exit: [bx + dx, 4.4], text: 'booth' });
   } });
   [-0.2, 1.0, 2.2, 3.4, 4.6, 5.8].forEach((z) => addSeat({ x: 9.05, z, yaw: -Math.PI / 2, sit: 0.8, exit: [8.1, z], text: 'bar stool' }));
   [7.4, 8.0, 8.6].forEach((x) => addSeat({ x, z: 6.92, yaw: 0, sit: 0.45, exit: [x, 5.9], text: 'couch' }));
