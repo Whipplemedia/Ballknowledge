@@ -49,7 +49,7 @@ The ten cast members are authored in Blender from the reference pack and exporte
 ## Data notes (please double-check before shipping)
 Game results were verified against web sources where possible (2016 NBA Finals + ECF, 2011 NBA Finals + most of the WCF, 2016 NLCS, 2019 Stanley Cup Final, 2018 NCAA Elite Eight/Final Four, most 2018 conference title games). Less verified: 2019 NHL West Final scores (one secondary source), 2016 World Series games 3-4, 2004 ALCS games 1-2/5-6 and World Series games 2-4, 2011 WCF Game 5, NFL playoff brackets (from memory), 2018 CFP/Rose Bowl scores. Team **records and star stat lines are from memory** - college records are approximate.
 
-Second batch (Oct 2026), all game scores and home teams checked against web search results: NFL 2014 and 2019, college football 2014 and 2019, NBA 2014 and 2019, NCAA tournament 2016 and 2019, NHL 2010 and 2011, MLB 2011 and 2019. The library is now 22 seasons (NFL 5, NBA 4, MLB 4, college football 3, college basketball 3, hockey 3). Records and stat lines in this batch are also from memory.
+Second batch (Oct 2026), all game scores and home teams checked against web search results: NFL 2014 and 2019, college football 2014 and 2019, NBA 2014 and 2019, NCAA tournament 2016 and 2019, NHL 2010 and 2011, MLB 2011 and 2019. College football later added 2016, 2017, 2022 and 2023 (every score checked the same way). The library is now 26 seasons (college football 7, NFL 5, NBA 4, MLB 4, college basketball 3, hockey 3). Records and stat lines in this batch are also from memory.
 
 ## Seasons: real or made-up
 - The host picks **Real season** or **Made-up season** in the lobby (`{type:'setMode', mode}`).
