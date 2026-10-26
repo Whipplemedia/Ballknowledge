@@ -5,6 +5,8 @@ const crypto = require('crypto');
 const zlib = require('zlib');
 const { WebSocketServer } = require('ws');
 const { SPORTS, SEASONS } = require('./seasons');
+const { winProb } = require('./odds');
+const { makeFakeSeason } = require('./fakeseason');
 const createGoons = require('./goons');
 
 const PORT = process.env.PORT || 3000;
@@ -12,6 +14,10 @@ const SPEED = Number(process.env.BK_SPEED || 1); // dev: divide all timers
 const PACES = {
   normal: { label: 'Normal (2 min windows)', window: 120000, air: 180000, lead: 30000 },
   quick: { label: 'Quick (50 sec windows)', window: 50000, air: 70000, lead: 15000 },
+};
+const MODES = {
+  real: { label: '🎞️ Real season', blurb: 'A real season from history. The year is hidden - the team names are not.' },
+  fake: { label: '🎲 Made-up season', blurb: 'A fictional league generated tonight. Nobody can know the results - they are rolled from the odds.' },
 };
 const START_MONEY = 2000;
 const LOAN = 1000, LOAN_DEBT = 1250, MAX_LOANS = 3, MOB_CUT = 0.2, HUNT_MS = 100000;
@@ -73,16 +79,12 @@ function seeded(str) { // mulberry32 over a string hash
 }
 
 // ---------- odds ----------
-const parsePct = (rec) => { const n = String(rec).split('-').map(Number); const g = n.reduce((a, b) => a + b, 0); return g ? n[0] / g : 0.5; };
-const dec = (p, vig = 1.05) => Math.max(1.03, Math.round((1 / (clamp(p, 0.04, 0.96) * vig)) * 100) / 100);
+const dec =(p, vig = 1.05) => Math.max(1.03, Math.round((1 / (clamp(p, 0.04, 0.96) * vig)) * 100) / 100);
 const american = (d) => (d >= 2 ? '+' + Math.round((d - 1) * 100) : String(-Math.round(100 / (d - 1))));
 const half = (x) => Math.round(x * 2) / 2;
 
 function buildMarkets(sport, season, ev, rng) {
-  const pa = clamp(parsePct(season.teams[ev.a].rec), 0.12, 0.88), pb = clamp(parsePct(season.teams[ev.b].rec), 0.12, 0.88);
-  let p = (pa * (1 - pb)) / (pa * (1 - pb) + pb * (1 - pa));
-  if (!ev.n) p += sport.home;
-  p = clamp(p, 0.1, 0.9);
+  const p = winProb(sport, season.teams[ev.a].rec, season.teams[ev.b].rec, !ev.n);
   const ml = { a: { dec: dec(p) }, b: { dec: dec(1 - p) } };
   const fav = p >= 0.5 ? 'a' : 'b', dog = fav === 'a' ? 'b' : 'a', pf = Math.max(p, 1 - p);
   let m, specDec;
@@ -180,7 +182,7 @@ function newPlayer(id, name, ws) {
     finalCorrect: null, fate: null, lastMg: 0, lastHit: 0, lastBottle: 0, lastTake: 0, credits: [], koUntil: 0, koImmune: 0, lastDrink: 0, remaining: 0, color: 0, x: 0, z: 2, ry: 0, tickets: 0, bounties: [], challenge: null, pool: null, streak: { darts: 0, bowling: 0, cornhole: 0 }, cos: {} };
 }
 function createRoom() {
-  const room = { code: newCode(), hostId: null, btaken: {}, players: new Map(), phase: 'lobby', sport: 'nba', pace: 'normal', season: null, sportDef: null, events: [], feed: [],
+  const room = { code: newCode(), hostId: null, btaken: {}, players: new Map(), phase: 'lobby', sport: 'nba', pace: 'normal', mode: 'real', season: null, sportDef: null, events: [], feed: [],
     tick: null, quota: [], shake: null, barEvent: null, nextBarEvent: 0, lastBarKind: null, hp: 0, maxHp: 0, huntEnd: 0, finalWinner: null, altered: false, summary: null, spin: null, t0: 0 };
   rooms.set(room.code, room); return room;
 }
@@ -202,10 +204,18 @@ function award(room, p, type, data = {}) {
 }
 function awardAll(room, type, data) { for (const p of room.players.values()) award(room, p, type, data); }
 
+// real seasons: prefer one nobody in the crew has played (each browser reports what it has seen), then the least-seen
+const seasonId = (sport, s) => `${sport}:${s.year}`;
+function pickSeason(room) {
+  const all = SEASONS[room.sport], seen = (s) => { const id = seasonId(room.sport, s); let n = (room.recent || []).includes(id) ? 10 : 0; for (const p of room.players.values()) if (p.seen && p.seen.has(id)) n++; return n; };
+  const low = Math.min(...all.map(seen)), s = pick(all.filter((x) => seen(x) === low));
+  room.recent = [...(room.recent || []), seasonId(room.sport, s)].slice(-12);
+  return s;
+}
 function startGame(room) {
   const sport = SPORTS[room.sport];
   room.sportDef = sport;
-  const season = pick(SEASONS[room.sport]); room.season = season;
+  const season = room.mode === 'fake' ? makeFakeSeason(room.sport, sport, seeded(room.code + ':fake:' + Date.now())) : pickSeason(room); room.season = season;
   const pc = PACES[room.pace], win = dur(pc.window), air = dur(pc.air), lead = dur(pc.lead);
   const now = Date.now(); room.t0 = now;
   room.events = season.events.map((e, i) => {
@@ -224,7 +234,7 @@ function startGame(room) {
   room.quota = [{ kind: 'mid', idx: Math.max(0, Math.round(nE * 0.33) - 1) }, { kind: 'mid', idx: Math.max(1, Math.round(nE * 0.7) - 1) }, { kind: 'final', idx: nE - 1 }].map((q, i) => ({ ...q, target: Math.round(start * QUOTA_MULT[i]), status: 'pending', crew: 0 }));
   room.shake = null; room.barEvent = null; room.nextBarEvent = now + dur(55000 + rnd(30000)); room.lastBarKind = null;
   room.altered = false; room.finalWinner = null; room.phase = 'play';
-  feed(room, `${sport.emoji} A season has been assigned. Nobody will tell you which one. Place your bets before the clock runs out.`);
+  feed(room, season.fake ? `${sport.emoji} Welcome to the ${season.league}. None of these teams exist and nothing is written yet - every result is rolled live from the odds.` : `${sport.emoji} A season has been assigned. Nobody will tell you which one. Place your bets before the clock runs out.`);
   room.cine = { kind: 'opening', start: now, until: now + 9500, quota: room.quota[0].target, at: room.quota[0].idx + 1 };
   clearInterval(room.tick); room.tick = setInterval(() => tick(room), 400);
   broadcast(room);
@@ -415,7 +425,7 @@ function finish(room) {
   const tier = crewWon && quotaMet ? 'legendary' : crewWon || quotaMet ? 'survived' : 'busted';
   const crewBonus = Math.floor({ legendary: TICKETS.crewWin, survived: 6, busted: 0 }[tier] / (vacated ? 2 : 1));
   const mvp = [...ps].sort((a, b) => (b.bk || 0) - (a.bk || 0) || b.money - a.money)[0];
-  room.summary = { year: s.year, league: s.league, champion: s.champion, finalWinner: room.finalWinner, altered: room.altered, blurb: s.blurb,
+  room.summary = { t0: room.t0, fake: !!s.fake, sid: s.fake ? null : seasonId(room.sport, s), year: s.year, league: s.league, champion: s.champion, finalWinner: room.finalWinner, altered: room.altered, blurb: s.blurb,
     crewWon, vacated, voidedFinal, correct, total: ps.length, tier, quotaMet, mvp: mvp && (mvp.bk || 0) > 0 ? { id: mvp.id, name: mvp.name, bk: mvp.bk } : null,
     players: ps.map((p) => ({ id: p.id, name: p.name, finalCorrect: p.finalCorrect, fate: p.fate, money: Math.round(p.money), bk: p.bk || 0, tickets: Math.floor((TICKETS.base + p.tickets + (p.fate === 'dead' ? 0 : 3) + crewBonus) / (p.fate === 'dead' ? 2 : 1)), bounties: p.bounties.filter((b) => b.done).length })) };
   room.phase = 'ended'; broadcast(room);
@@ -502,8 +512,8 @@ function evSummary(ev, forTv) {
 }
 function view(room, p) {
   const d = Math.round(drunkNow(p));
-  const v = { type: 'state', now: Date.now(), code: room.code, you: p.id, host: room.hostId === p.id, phase: room.phase, sport: room.sport, pace: room.pace,
-    sports: Object.entries(SPORTS).map(([id, s]) => ({ id, label: s.label, emoji: s.emoji })), paces: Object.entries(PACES).map(([id, x]) => ({ id, label: x.label })),
+  const v = { type: 'state', now: Date.now(), code: room.code, you: p.id, host: room.hostId === p.id, phase: room.phase, sport: room.sport, pace: room.pace, mode: room.mode, seasonCount: SEASONS[room.sport].length, league: room.season && room.season.fake ? room.season.league : null,
+    sports: Object.entries(SPORTS).map(([id, s]) => ({ id, label: s.label, emoji: s.emoji })), paces: Object.entries(PACES).map(([id, x]) => ({ id, label: x.label })), modes: Object.entries(MODES).map(([id, x]) => ({ id, label: x.label, blurb: x.blurb })),
     feed: room.feed.slice(-25), drinks: DRINKS, btaken: room.btaken, drops: (room.drops || []).map((d) => ({ id: d.id, x: d.x, z: d.z, amt: d.amt })), // bottle spots on tables: index -> respawn time
 
     players: plist(room).map((q) => ({ id: q.id, name: q.name, color: q.color, cos: q.cos || {}, money: Math.round(q.money), connected: q.connected, fate: q.fate, drunk: Math.round(drunkNow(q)),
@@ -542,6 +552,8 @@ const inPlay = (room) => room.phase === 'play' || room.phase === 'hunt';
 function handle(room, p, m) {
   switch (m.type) {
     case 'setSport': if (room.hostId === p.id && room.phase === 'lobby' && SPORTS[m.sport]) { room.sport = m.sport; broadcast(room); } break;
+    case 'setMode': if (room.hostId === p.id && room.phase === 'lobby' && MODES[m.mode]) { room.mode = m.mode; broadcast(room); } break;
+    case 'seen': p.seen = new Set((Array.isArray(m.ids) ? m.ids : []).slice(-200).map(String)); break;
     case 'setPace': if (room.hostId === p.id && room.phase === 'lobby' && PACES[m.pace]) { room.pace = m.pace; broadcast(room); } break;
     case 'start': if (room.hostId === p.id && room.phase === 'lobby') startGame(room); break;
     case 'rematch': if (room.hostId === p.id && room.phase === 'ended') {
@@ -790,7 +802,7 @@ wss.on('connection', (ws) => {
 
 // ---------- snapshots: rooms survive a server restart/redeploy when BK_STATE_DIR points at persistent storage (e.g. a Railway volume) ----------
 const STATE_DIR = process.env.BK_STATE_DIR || '', STATE_FILE = STATE_DIR && path.join(STATE_DIR, 'rooms.json');
-const SKIP = new Set(['ws', 'tick', 'reap', 'sportDef', 'goonTimer']);
+const SKIP = new Set(['ws', 'tick', 'reap', 'sportDef', 'goonTimer', 'seen']);
 function snapshot() {
   if (!STATE_FILE) return;
   const out = [...rooms.values()].filter((r) => r.phase !== 'lobby').map((r) => JSON.parse(JSON.stringify({ ...r, players: [...r.players.values()] }, (k, v) => (SKIP.has(k) ? undefined : v))));

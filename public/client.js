@@ -27,7 +27,7 @@ let sess = (() => { try { const o = JSON.parse(localStorage.getItem(SESS_KEY)); 
 const saveSess = () => { try { if (sess) localStorage.setItem(SESS_KEY, JSON.stringify(sess)); else localStorage.removeItem(SESS_KEY); } catch {} };
 function connect(msg) {
   const sock = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host); ws = sock;
-  sock.onopen = () => { sock.send(JSON.stringify(msg)); sock.send(JSON.stringify({ type: 'cosmetics', cos: wearing() })); };
+  sock.onopen = () => { sock.send(JSON.stringify(msg)); sock.send(JSON.stringify({ type: 'cosmetics', cos: wearing() })); sock.send(JSON.stringify({ type: 'seen', ids: save.seen || [] })); };
   sock.onmessage = (e) => {
     const m = JSON.parse(e.data);
     if (m.type === 'state') { S = m; skew = m.now - Date.now(); stateAt = Date.now(); err = ''; if (sess && Date.now() - sess.at > 60000) { sess.at = Date.now(); saveSess(); } render(); }
@@ -140,7 +140,7 @@ function render() {
   if (S && ui.pendingPool) { if (S.me.pool) { ui.pendingPool = null; window.BK.startGame && window.BK.startGame('pool', S.me.pool); } else if (Date.now() - ui.pendingPool.at > 4000) ui.pendingPool = null; }
   if (S && ui.pending) { if (S.me.challenge && S.me.challenge.game === ui.pending.game) { const g = ui.pending.game; ui.pending = null; window.BK.startGame && window.BK.startGame(g, S.me.challenge); } else if (Date.now() - ui.pending.at > 4000) ui.pending = null; }
   document.body.classList.toggle('ingame', !!S && ['play', 'hunt'].includes(S.phase));
-  if (S && S.phase === 'ended' && S.summary) { const mine = S.summary.players.find((p) => p.id === S.you), key = S.code + ':' + S.summary.year; if (mine && ui.paid !== key) { ui.paid = key; save.tix += mine.tickets; save.toeTag = mine.fate === 'dead' ? 'pending' : save.toeTag === 'wearing' ? null : save.toeTag; persist(); toast(`+${mine.tickets} 🎟 tickets earned!`, 'win'); } }
+  if (S && S.phase === 'ended' && S.summary) { const mine = S.summary.players.find((p) => p.id === S.you), key = S.code + ':' + (S.summary.t0 || S.summary.year); if (mine && ui.paid !== key) { ui.paid = key; save.tix += mine.tickets; if (S.summary.sid) { save.seen = [...(save.seen || []).filter((x) => x !== S.summary.sid), S.summary.sid].slice(-200); send({ type: 'seen', ids: save.seen }); } save.toeTag = mine.fate === 'dead' ? 'pending' : save.toeTag === 'wearing' ? null : save.toeTag; persist(); toast(`+${mine.tickets} 🎟 tickets earned!`, 'win'); } }
   if (window.BKC) window.BKC.preview.setHost(ui.shop && !ui.reveal ? '#shopPrev' : null);
   const a = document.activeElement, keep = a && a.id ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
   const app = $('#app');
@@ -184,15 +184,18 @@ const playerList = () => S.players.map((p) => `<div class="pl"><span>${esc(p.nam
 function lobbyView() {
   return `<div class="wrap"><div class="card col">
     <div class="top"><div class="logo sm">BALL <span>KNOWLEDGE</span><i class="ball"></i></div><div class="pill">Room <b>${S.code}</b></div></div>
-    <div class="muted">Share the room code. Up to 6 players, co-op. Everyone starts with $2,000. A full season of <b>10 real games</b> is waiting - one new game opens for betting every couple of minutes.</div>
+    <div class="muted">Share the room code. Up to 6 players, co-op. Everyone starts with $2,000. A full playoff run of <b>about 10 games</b> is waiting - one new game opens for betting every couple of minutes.</div>
     ${loadBar()}
     <div class="title">Crew</div>${playerList()}
     <div class="title">${S.host ? 'Choose your sport' : 'The host is choosing a sport...'}</div>
     <div class="sports">${S.sports.map((s) => `<button class="sport ${S.sport === s.id ? 'sel' : ''}" ${S.host ? '' : 'disabled'} onclick="send({type:'setSport',sport:'${s.id}'})"><span class="e">${s.emoji}</span>${esc(s.label)}</button>`).join('')}</div>
+    <div class="title">Season</div>
+    <div class="row">${S.modes.map((x) => `<button class="sport ${S.mode === x.id ? 'sel' : ''}" ${S.host ? '' : 'disabled'} onclick="send({type:'setMode',mode:'${x.id}'})">${esc(x.label)}</button>`).join('')}</div>
+    <div class="muted">${esc((S.modes.find((x) => x.id === S.mode) || {}).blurb || '')}${S.mode === 'real' ? ` ${S.seasonCount} real seasons in this sport; you won't get one you've played until you've seen them all.` : ''}</div>
     <div class="title">Pace</div>
     <div class="row">${S.paces.map((p) => `<button class="sport ${S.pace === p.id ? 'sel' : ''}" ${S.host ? '' : 'disabled'} onclick="send({type:'setPace',pace:'${p.id}'})">${esc(p.label)}</button>`).join('')}</div>
     <button class="ghost" onclick="openShop()">🛍️ Pro Shop · 🎟 ${save.tix} tickets</button>
-    ${S.host ? `<button onclick="send({type:'start'})">Start - assign a mystery season</button>` : ''}
+    ${S.host ? `<button onclick="send({type:'start'})">${S.mode === 'fake' ? 'Start - generate a made-up season' : 'Start - assign a mystery season'}</button>` : ''}
   </div></div>`;
 }
 
@@ -309,7 +312,7 @@ function bookView() {
   const crew = cur.crew, ctot = crew.a + crew.b, sport = (S.sports.find((s) => s.id === S.sport) || {}).label || '';
   const sp = (s) => `${s.short} ${mk.spread[s === A ? 'a' : 'b'].line > 0 ? '+' : ''}${mk.spread[s === A ? 'a' : 'b'].line}`;
   return `<div class="sb">
-    <div class="sb-head"><div><div class="title">${esc(sport.toUpperCase())} · MYSTERY SEASON</div><div class="big">${esc(ev.label)}</div><div class="muted">Game ${ev.idx + 1} of ${S.events.length}${cur.series ? ' · ' + esc(cur.series) : ''}${ev.final ? ' · 🏆 CHAMPIONSHIP' : ''}</div></div>
+    <div class="sb-head"><div><div class="title">${esc(sport.toUpperCase())} · ${S.league ? esc(S.league.toUpperCase()) : 'MYSTERY SEASON'}</div><div class="big">${esc(ev.label)}</div><div class="muted">Game ${ev.idx + 1} of ${S.events.length}${cur.series ? ' · ' + esc(cur.series) : ''}${ev.final ? ' · 🏆 CHAMPIONSHIP' : ''}</div></div>
       <div class="clock"><div class="muted">BETTING CLOSES IN</div><div id="tl2" class="tl2"></div></div></div>
     <div class="tlbar"><div id="tlbar"></div></div>
     <div class="matchup">${teamCard(A, 'a', cur, ev)}<div class="vs">VS</div>${teamCard(B, 'b', cur, ev)}</div>
@@ -448,11 +451,11 @@ function endView() {
     <div class="tiers"><span class="${s.crewWon ? 'ok' : 'bad'}">${s.crewWon ? '✅' : '❌'} Called the champion (${s.correct}/${s.total})</span><span class="${s.quotaMet ? 'ok' : 'bad'}">${s.quotaMet ? '✅' : '❌'} Hit Sal's final number</span></div>
     ${s.mvp ? `<div class="mvp">🏅 MVP of the night: <b>${esc(s.mvp.name)}</b> · ${s.mvp.bk} Ball Knowledge</div>` : ''}
     ${s.vacated ? '<div class="bad">* The championship was fixed. The league struck your title from the books (half the crew bonus).</div>' : ''}${s.voidedFinal ? '<div class="bad">🚨 The league caught a fix on the championship and voided it. Nobody gets the title.</div>' : ''}
-    <div class="title">The season was</div>
-    <div class="big">${s.year} ${esc(s.league)}</div>
+    <div class="title">${s.fake ? 'A made-up season' : 'The season was'}</div>
+    <div class="big">${s.fake ? '' : s.year + ' '}${esc(s.league)}</div>
     <div class="muted">${esc(s.blurb || '')}</div>
-    <div>Real champion: <b>${esc(s.champion)}</b></div>
-    <div>${s.altered ? `History was rewritten - your champion was <b>${esc(s.finalWinner)}</b>.` : 'History played out as it happened.'}</div>
+    <div>${s.fake ? 'Champion by the dice' : 'Real champion'}: <b>${esc(s.champion)}</b></div>
+    <div>${s.altered ? `${s.fake ? 'Your fix overruled the dice' : 'History was rewritten'} - your champion was <b>${esc(s.finalWinner)}</b>.` : s.fake ? 'The dice played it straight.' : 'History played out as it happened.'}</div>
     ${s.players.map((p) => `<div class="pl"><span>${esc(p.name)} ${p.finalCorrect ? '✅' : '❌'}</span><span>${p.fate === 'dead' ? '💀 dead (half tickets, wears a toe tag next season)' : esc(p.fate)} · ${$$(p.money)} · 🧠 ${p.bk || 0} · +${p.tickets}🎟</span></div>`).join('')}
     <button class="ghost" onclick="openShop()">🛍️ Spend tickets · 🎟 ${save.tix}</button>
     ${host ? `<button onclick="send({type:'rematch'})">Back to lobby</button>` : '<div class="muted">Waiting for host...</div>'}</div></div>`;

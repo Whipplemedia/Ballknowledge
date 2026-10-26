@@ -49,6 +49,13 @@ The ten cast members are authored in Blender from the reference pack and exporte
 ## Data notes (please double-check before shipping)
 Game results were verified against web sources where possible (2016 NBA Finals + ECF, 2011 NBA Finals + most of the WCF, 2016 NLCS, 2019 Stanley Cup Final, 2018 NCAA Elite Eight/Final Four, most 2018 conference title games). Less verified: 2019 NHL West Final scores (one secondary source), 2016 World Series games 3-4, 2004 ALCS games 1-2/5-6 and World Series games 2-4, 2011 WCF Game 5, NFL playoff brackets (from memory), 2018 CFP/Rose Bowl scores. Team **records and star stat lines are from memory** - college records are approximate.
 
+Second batch (Oct 2026), all game scores and home teams checked against web search results: NFL 2014 and 2019, college football 2014 and 2019, NBA 2014 and 2019, NCAA tournament 2016 and 2019, NHL 2010 and 2011, MLB 2011 and 2019. The library is now 22 seasons (NFL 5, NBA 4, MLB 4, college football 3, college basketball 3, hockey 3). Records and stat lines in this batch are also from memory.
+
+## Seasons: real or made-up
+- The host picks **Real season** or **Made-up season** in the lobby (`{type:'setMode', mode}`).
+- Real: the server prefers a season nobody in the crew has played. Each browser keeps the seasons it has finished in `save.seen` (`bk_save_v1`) and reports them on connect (`{type:'seen', ids}`); the room also remembers its last 12 picks. When everyone has seen everything, the least-seen season is picked.
+- Made-up (`fakeseason.js`): a fictional league, 6-13 teams with invented cities, nicknames, colors, records and star players, and a full postseason in the real format of that sport (NFL-style 12-team bracket, conference title games + bowls + 4-team playoff, Sweet 16 onward, or a conference final + best-of-7 final with 2-2-1-1-1 / 2-3-2 home games). Every winner is rolled from the same win probability the sportsbook prices (`odds.js`), so the posted odds are honest and nothing can be remembered. Scores are shaped per sport (touchdowns and field goals, Poisson goals and runs, overtime and extra innings on ties). Generated fresh each night from a seed; the season is part of the room snapshot.
+
 ## Known gaps / next
 - Highlights are a generated recap, not real play-by-play. Player props, parlays, and cascading alt-history after a fix are not built.
 - Tickets/cosmetics live in the browser and are trusted. Mini-game and pool results are client-reported (server caps them) - move physics server-side before real stakes.
