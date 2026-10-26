@@ -13,6 +13,7 @@ const PACES = {
 const START_MONEY = 2000;
 const LOAN = 1000, LOAN_DEBT = 1250, MAX_LOANS = 3, MOB_CUT = 0.2, HUNT_MS = 100000;
 const SPIN_MS = 8000, DRUNK_DECAY_MS = 6000;
+const BOTTLE_RESPAWN_MS = 45000;
 const DRINKS = [
   { id: 'beer', name: 'Cold Domestic', emoji: '🍺', price: 30, add: 18, blurb: 'Lukewarm, but it works.' },
   { id: 'shot', name: 'Well Shot', emoji: '🥃', price: 60, add: 30, blurb: 'Does not taste like anything good.' },
@@ -165,10 +166,10 @@ function newCode() {
 }
 function newPlayer(id, name, ws) {
   return { id, name, ws, connected: true, money: START_MONEY, debt: 0, loans: 0, mobTied: false, bets: {}, fix: {}, results: {}, drunk: 0, drunkT: 0,
-    finalCorrect: null, fate: null, lastMg: 0, lastHit: 0, lastBottle: 0, credits: [], koUntil: 0, koImmune: 0, lastDrink: 0, remaining: 0, color: 0, x: 0, z: 2, ry: 0, tickets: 0, bounties: [], challenge: null, pool: null, streak: { darts: 0, bowling: 0, cornhole: 0 }, cos: {} };
+    finalCorrect: null, fate: null, lastMg: 0, lastHit: 0, lastBottle: 0, lastTake: 0, credits: [], koUntil: 0, koImmune: 0, lastDrink: 0, remaining: 0, color: 0, x: 0, z: 2, ry: 0, tickets: 0, bounties: [], challenge: null, pool: null, streak: { darts: 0, bowling: 0, cornhole: 0 }, cos: {} };
 }
 function createRoom() {
-  const room = { code: newCode(), hostId: null, players: new Map(), phase: 'lobby', sport: 'nba', pace: 'normal', season: null, sportDef: null, events: [], feed: [],
+  const room = { code: newCode(), hostId: null, btaken: {}, players: new Map(), phase: 'lobby', sport: 'nba', pace: 'normal', season: null, sportDef: null, events: [], feed: [],
     tick: null, quota: [], shake: null, barEvent: null, nextBarEvent: 0, lastBarKind: null, hp: 0, maxHp: 0, huntEnd: 0, huntTimer: null, finalWinner: null, altered: false, summary: null, spin: null, t0: 0 };
   rooms.set(room.code, room); return room;
 }
@@ -437,7 +438,8 @@ function view(room, p) {
   const d = Math.round(drunkNow(p));
   const v = { type: 'state', now: Date.now(), code: room.code, you: p.id, host: room.hostId === p.id, phase: room.phase, sport: room.sport, pace: room.pace,
     sports: Object.entries(SPORTS).map(([id, s]) => ({ id, label: s.label, emoji: s.emoji })), paces: Object.entries(PACES).map(([id, x]) => ({ id, label: x.label })),
-    feed: room.feed.slice(-25), drinks: DRINKS,
+    feed: room.feed.slice(-25), drinks: DRINKS, btaken: room.btaken, // bottle spots on tables: index -> respawn time
+
     players: plist(room).map((q) => ({ id: q.id, name: q.name, color: q.color, cos: q.cos || {}, money: Math.round(q.money), connected: q.connected, fate: q.fate, drunk: Math.round(drunkNow(q)),
       hunted: room.phase === 'hunt' && q.remaining > 0, finalCorrect: room.phase === 'ended' ? q.finalCorrect : null })),
     me: { money: Math.round(p.money), debt: Math.round(p.debt), loans: p.loans, mobTied: p.mobTied, remaining: Math.round(p.remaining), drunk: d, decay: dur(DRUNK_DECAY_MS), band: band(d), bets: p.bets, fix: p.fix, results: p.results, tickets: p.tickets || 0, streak: p.streak || {}, challenge: p.challenge, pool: p.pool ? { opp: p.pool.opp, stake: p.pool.stake } : null,
@@ -595,6 +597,12 @@ function handle(room, p, m) {
       const to = room.players.get(m.to); if (to && to !== p) send(to, { type: 'rtc', from: p.id, data: m.data });
       else if (m.to === '*') for (const q of room.players.values()) if (q !== p) send(q, { type: 'rtc', from: p.id, data: m.data });
       break;
+    }
+    case 'takeBottle': { // pick up a bottle from a table spot; it respawns for everyone after BOTTLE_RESPAWN_MS
+      const i = Number(m.i), t = Date.now();
+      if (!Number.isInteger(i) || i < 0 || i >= 64 || !inPlay(room) || t - p.lastTake < 300 || p.koUntil > t) break;
+      if ((room.btaken[i] || 0) > t) break; p.lastTake = t;
+      room.btaken[i] = t + BOTTLE_RESPAWN_MS; send(p, { type: 'bottleGot', i }); broadcast(room); break;
     }
     case 'bottle': { // a thrown bottle: relay so everyone sees/hears it; give the thrower one hit credit (valid for 4s)
       const t = Date.now(); if (!inPlay(room) || t - p.lastBottle < 700) break; p.lastBottle = t;

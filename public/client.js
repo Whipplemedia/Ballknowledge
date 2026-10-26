@@ -24,6 +24,7 @@ function connect(msg) {
     else if (m.type === 'pos') window.BK.onPos && window.BK.onPos(m);
     else if (m.type === 'rtc') window.BK.onRtc && window.BK.onRtc(m);
     else if (m.type === 'bottle') window.BK.onBottle && window.BK.onBottle(m);
+    else if (m.type === 'bottleGot') window.BK.onBottleGot && window.BK.onBottleGot(m);
     else if (m.type === 'ko') window.BK.onKo && window.BK.onKo(m);
     else if (m.type === 'spin') window.BK.onSpin && window.BK.onSpin(m);
     else if (m.type === 'error') { err = m.text; ws.close(); S = null; render(); }

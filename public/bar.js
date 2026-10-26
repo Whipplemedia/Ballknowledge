@@ -256,6 +256,20 @@ export function buildBar({ scene, BK, tv }) {
   const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
   scene.add(new THREE.Points(dg, new THREE.PointsMaterial({ color: 0xffe8c0, size: 0.03, transparent: true, opacity: 0.5, depthWrite: false })));
 
+  // ---------- high-top tables + bottles on tables around the bar (bottles.js makes the grabbable bottles) ----------
+  const topM = M(0x3a2414, { roughness: 0.35 }), metalM = M(0x1a1a1e, { metalness: 0.7, roughness: 0.35 });
+  const HIGHTOPS = [[-2.6, -3.9], [5.0, -3.9], [-3.2, -0.6], [6.3, 0.2]];
+  for (const [x, z] of HIGHTOPS) {
+    cyl(0.34, 0.34, 0.045, topM, x, 1.05, z, 20); cyl(0.36, 0.36, 0.02, metalM, x, 1.025, z, 20, scene, false);
+    cyl(0.035, 0.035, 1.02, metalM, x, 0.52, z, 10); cyl(0.24, 0.26, 0.03, metalM, x, 0.015, z, 18, scene, false);
+    obstacles.push({ x, z, r: 0.4 });
+  }
+  // surface spots: [x, top-of-surface y, z, station radius]; booth/counter spots need a longer reach since you can't walk right up to them
+  const bottleSpots = [];
+  HIGHTOPS.forEach(([x, z]) => { bottleSpots.push([x - 0.1, 1.075, z + 0.06, 1.15], [x + 0.12, 1.075, z - 0.05, 1.15]); });
+  [-3.5, -0.5, 2.5].forEach((bx) => bottleSpots.push([bx + 0.32, BOOTH.table + 0.022, ROOM.z - 1.8, 1.9]));
+  [-1.2, 1.6, 4.0].forEach((z) => bottleSpots.push([9.72, 1.13, z, 1.45]));
+  bottleSpots.push([9.95, 0.78, -6.2, 1.5], [-7.55, 1.065, 6.55, 1.75]);
   stations.push({ x: 8.45, z: 5.4, r: 1.1, text: 'E - Grab bottles (throw with F / right-click)', act: () => BK.bottles && BK.bottles.grab() });
   // jukebox: E cycles through the songs (4 procedural tracks), long-press not needed
   stations.push({ x: -10.9, z: 6.3, r: 1.25, text: 'E - Jukebox (next song)', act: () => { const n = BK.audio && BK.audio.music.next(); BK.sfx && BK.sfx('click'); if (n) BK.toast('🎵 ' + n, 'info'); } });
@@ -324,5 +338,5 @@ export function buildBar({ scene, BK, tv }) {
     const p = dg.attributes.position; for (let i = 0; i < dustN; i++) { p.array[i * 3 + 1] += dt * 0.03 * (1 + (i % 3)); if (p.array[i * 3 + 1] > 4.6) p.array[i * 3 + 1] = 0.1; p.array[i * 3] += Math.sin(t * 0.2 + i) * dt * 0.02; }
     p.needsUpdate = true;
   }
-  return { stations, obstacles, npcs, seats, update, wanderPos, life };
+  return { stations, obstacles, npcs, seats, update, wanderPos, life, bottleSpots };
 }

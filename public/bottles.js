@@ -7,7 +7,7 @@ export function createBottles({ scene, camera, BK, me, obstacles, getAvatars, ge
   const G = 9.8, SPEED = 12.5;
   const glass = new THREE.MeshStandardMaterial({ color: 0x2f8a46, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.82 });
   const label = new THREE.MeshStandardMaterial({ color: 0xf1e6c8, roughness: 0.8 }), cap = new THREE.MeshStandardMaterial({ color: 0xc8a24a, metalness: 0.8, roughness: 0.3 });
-  const make = () => { const g = new THREE.Group();
+  const make = (gm = glass) => { const g = new THREE.Group(); const glass = gm;
     const body = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.04, 0.2, 10), glass); body.position.y = 0.0; g.add(body);
     const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.036, 0.1, 10), glass); neck.position.y = 0.15; g.add(neck);
     const lip = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.015, 0.03, 8), cap); lip.position.y = 0.215; g.add(lip);
@@ -29,7 +29,7 @@ export function createBottles({ scene, camera, BK, me, obstacles, getAvatars, ge
 
   const api = {
     get held() { return st.held; }, get flying() { return st.flying; },
-    grab() { st.held = 3; audio.sfx('bottle'); BK.toast && BK.toast('Grabbed 3 bottles - F or right-click to throw', 'info'); paint(); },
+    grab() { st.held = Math.max(st.held, 3); audio.sfx('bottle'); BK.toast && BK.toast('Grabbed bottles - F or right-click to throw', 'info'); paint(); },
     throw() {
       if (st.held <= 0 || busy() || (BK.S && !['play', 'hunt'].includes(BK.S.phase))) return false; st.held--; paint();
       const d = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion), pos = camera.getWorldPosition(new THREE.Vector3()).add(d.clone().multiplyScalar(0.45)); pos.y -= 0.12;
@@ -61,5 +61,32 @@ export function createBottles({ scene, camera, BK, me, obstacles, getAvatars, ge
     setKo(secsLeft) { ko.classList.toggle('hidden', !(secsLeft > 0)); if (secsLeft > 0) ko.innerHTML = `<b>💫 KNOCKED OUT 💫</b><span>${Math.ceil(secsLeft)}</span>`; },
     paint,
   };
+  // ---- bottles standing on tables around the bar: E (or aim + E) takes one; the server hides it for everyone and respawns it later
+  const MAX = 5, spots = [], pending = {};
+  const mats = [glass, new THREE.MeshStandardMaterial({ color: 0x5a3010, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.88 }), new THREE.MeshStandardMaterial({ color: 0xcfe6e0, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.55 })];
+  const free = (i) => ((BK.S && BK.S.btaken && BK.S.btaken[i]) || 0) <= BK.now() && !(pending[i] > performance.now());
+  const take = (i) => {
+    if (st.held >= MAX) { BK.toast && BK.toast(`Your hands are full (${MAX} bottles)`, 'info'); return; }
+    if (!free(i)) return; pending[i] = performance.now() + 1500; spots[i].m.visible = false; BK.send({ type: 'takeBottle', i });
+  };
+  BK.onBottleGot = () => { st.held = Math.min(MAX, st.held + 1); audio.sfx('bottle'); paint(); };
+  api.addSpots = (list, stations) => list.forEach(([x, y, z, r], i) => {
+    const m = make(mats[(i * 7) % 3]); m.scale.setScalar(0.92); m.position.set(x, y + 0.092, z); m.rotation.y = i * 1.7; m.traverse((o) => { if (o.isMesh) o.castShadow = true; }); scene.add(m);
+    const S = { x, z, r, text: 'E - Grab bottle (throw with F / right-click)', on: () => free(i), act: () => take(i), bottle: i };
+    spots.push({ i, x, y: y + 0.12, z, r, m, S, pop: 1 }); stations.push(S);
+  });
+  // the spot whose bottle the crosshair points at (within reach): beats plain proximity, so a bottle on a booth table wins over the seat beside it
+  const _o = new THREE.Vector3(), _d = new THREE.Vector3(), _p = new THREE.Vector3();
+  api.aimedStation = () => {
+    camera.getWorldPosition(_o); _d.set(0, 0, -1).applyQuaternion(camera.quaternion); let best = null, bs = 1e9;
+    for (const sp of spots) {
+      if (!sp.m.visible || Math.hypot(sp.x - me.x, sp.z - me.z) > sp.r + 0.35) continue;
+      _p.set(sp.x, sp.y, sp.z).sub(_o); const along = _p.dot(_d); if (along <= 0) continue;
+      const off = Math.sqrt(Math.max(0, _p.lengthSq() - along * along)); if (off > 0.22 + along * 0.08) continue;
+      if (off < bs) { bs = off; best = sp.S; }
+    }
+    return best;
+  };
+  api.updateSpots = (dt) => { for (const sp of spots) { const v = free(sp.i); if (v && !sp.m.visible) { sp.m.visible = true; sp.pop = 0; } else if (!v) sp.m.visible = false; if (sp.pop < 1) { sp.pop = Math.min(1, sp.pop + dt * 3); sp.m.scale.setScalar(0.92 * (0.3 + 0.7 * sp.pop)); } } };
   return api;
 }

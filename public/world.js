@@ -56,7 +56,7 @@ BK.sfxAt = sfxAt;
 // ---------- bottles + knockouts ----------
 const koNow = () => !!(me.koUntil && BK.now() < me.koUntil);
 const bottles = createBottles({ scene, camera, BK, me, obstacles, getAvatars: () => avatars, getNpcs: () => bar.npcs, ROOM, busy: () => games.active() || BK.ui.open || BK.ui.shop || koNow() });
-BK.bottles = bottles; BK.onBottle = (m) => bottles.remote(m);
+BK.bottles = bottles; BK.onBottle = (m) => bottles.remote(m); bottles.addSpots(bar.bottleSpots, stations);
 BK.onKo = (m) => {
   const until = m.until;
   if (m.id && m.id === (BK.S && BK.S.you)) { me.koUntil = until; if (me.sit) BK.stand(); games.leave(); audio.sfx('bonk'); audio.sfx('groan', { delay: 0.2 }); BK.toast && BK.toast('💫 You got bottled! Out cold for 5 seconds.', 'err'); }
@@ -78,7 +78,7 @@ function exitSpot(s) {
 }
 BK.stand = () => { const s = me.sit; if (!s) return; audio.sfx('stand'); me.sit = null; const e = clearAt(s.exit[0], s.exit[1]) ? s.exit : exitSpot(s); me.x = e[0]; me.z = e[1]; };
 const active = () => { const S = BK.S; return S && ['play', 'hunt'].includes(S.phase); };
-const nearest = () => stations.filter((s) => Math.hypot(s.x - me.x, s.z - me.z) < s.r).sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
+const nearest = () => (bottles.aimedStation && bottles.aimedStation()) || stations.filter((s) => (!s.on || s.on()) && Math.hypot(s.x - me.x, s.z - me.z) < s.r).sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
 
 addEventListener('keydown', (e) => {
   if (!active() || BK.ui.open || BK.ui.shop) return;
@@ -240,7 +240,7 @@ function frame(now) {
   { const gOn = games.active(); for (const n of bar.npcs) { const g = n.P.group, hide = gOn && Math.hypot(g.position.x - camera.position.x, g.position.z - camera.position.z) < 1.1 && !n.seated; if (g.visible === hide) g.visible = !hide; } }
   // ---- audio frame: listener, footsteps, bar-event cues, voice
   audio.update(dt, camera); audioUI.show(active()); voice.update(dt, avatars);
-  bottles.update(dt); { const left = koNow() ? (me.koUntil - BK.now()) / 1000 : 0; bottles.setKo(left); if (!left && me.koUntil) { me.koUntil = 0; audio.sfx('boing'); } if (left) { camera.position.y = 0.32; camera.rotation.z = 1.25; camera.rotation.x = 0.4; } }
+  bottles.update(dt); bottles.updateSpots(dt); { const left = koNow() ? (me.koUntil - BK.now()) / 1000 : 0; bottles.setKo(left); if (!left && me.koUntil) { me.koUntil = 0; audio.sfx('boing'); } if (left) { camera.position.y = 0.32; camera.rotation.z = 1.25; camera.rotation.x = 0.4; } }
   { const mvd = Math.hypot(me.x - (me._lx ?? me.x), me.z - (me._lz ?? me.z)); me._lx = me.x; me._lz = me.z;
     if (!me.sit && !games.active() && mvd < 1.2) { me._step = (me._step || 0) + mvd; if (me._step > (keys.ShiftLeft ? 0.95 : 0.7)) { me._step = 0; audio.sfx('step', { v: keys.ShiftLeft ? 0.9 : 0.6 }); } } }
   { const be = BK.S && BK.S.barEvent, kind = be ? be.kind : null; if (kind !== audio._ev) { const prev = audio._ev; audio._ev = kind;
