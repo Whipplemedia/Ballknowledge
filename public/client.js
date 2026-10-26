@@ -47,6 +47,28 @@ function drunkLevel() { if (!S) return 0; return Math.max(0, S.me.drunk - (Date.
 
 // ---------- render ----------
 let lastPhase = null;
+// ---------- HUD hotkeys: pop-ups (bar fight, collectors, hitmen) appear while the mouse is captured for looking around,
+// so every visible HUD button gets a number key (1-9) and Tab frees the cursor to click instead
+function hudHotkeys() {
+  let k = 0;
+  for (const b of document.querySelectorAll('#app .hud button')) {
+    const old = b.querySelector('kbd.hk'); if (old) old.remove();
+    if (b.disabled || !b.offsetParent || k >= 9) { b.removeAttribute('data-hk'); continue; }
+    k++; b.dataset.hk = k; b.insertAdjacentHTML('afterbegin', `<kbd class="hk">${k}</kbd>`);
+  }
+  // first time a pop-up with buttons shows up, say how to use it
+  const sig = [...document.querySelectorAll('#app .hud button[data-hk]')].map((b) => b.closest('.hud-event,.hunt')?.className || '').join('|');
+  if (k && sig && sig !== ui.hkSig && document.pointerLockElement) toast(`Press 1${k > 1 ? '-' + k : ''} to choose, or Tab to use the mouse`, 'info');
+  ui.hkSig = k ? sig : '';
+  const help = document.querySelector('#app .hud-help'); if (help) help.textContent = `WASD move · Space jump · Mouse look · E interact · C crew/wire${k ? ' · 1-' + k + ' pop-up buttons · Tab free the mouse' : ''} · Esc menu`;
+}
+addEventListener('keydown', (e) => {
+  if (!S || !['play', 'hunt'].includes(S.phase) || ui.open || ui.shop || /INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '')) return;
+  if (e.code === 'Tab') { e.preventDefault(); if (document.pointerLockElement) document.exitPointerLock(); else { try { document.getElementById('world').requestPointerLock(); } catch {} } return; }
+  const m = /^(?:Digit|Numpad)([1-9])$/.exec(e.code); if (!m || e.repeat) return;
+  const b = document.querySelector(`#app .hud button[data-hk="${m[1]}"]`); if (!b || b.disabled) return;
+  e.preventDefault(); b.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); b.click(); window.BK.sfx && window.BK.sfx('click');
+});
 function render() {
   if (S && S.phase !== lastPhase) {
     if (S.phase !== 'play') ui.open = false;
@@ -67,7 +89,7 @@ function render() {
   else app.innerHTML = gameView();
   if (ui.shop) app.insertAdjacentHTML('beforeend', shopView());
   if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { el.setSelectionRange(keep.s, keep.e); } catch {} } }
-  tick();
+  tick(); hudHotkeys();
   window.BK.onRender && window.BK.onRender();
 }
 
@@ -376,18 +398,13 @@ function bountyHud() {
 const FIGHT_STAKES = [50, 100, 300];
 function fightOpen() { const be = S && S.barEvent; return !!(be && be.kind === 'fight' && !be.mine && now() < be.betUntil); }
 function fightBet(side) { if (!fightOpen()) return; if (S.me.money < ui.fightStake) return toast(`You need ${$$(ui.fightStake)} to bet that.`, 'err'); window.BK.sfx && window.BK.sfx('chip'); send({ type: 'fightBet', side, stake: ui.fightStake }); }
-addEventListener('keydown', (e) => {
-  if (e.repeat || !fightOpen() || ui.open || ui.shop || /INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '')) return;
-  if (e.code === 'Digit1' || e.code === 'Numpad1') fightBet('red');
-  else if (e.code === 'Digit2' || e.code === 'Numpad2') fightBet('blue');
-  else if (e.code === 'Digit3' || e.code === 'Numpad3') { ui.fightStake = FIGHT_STAKES[(FIGHT_STAKES.indexOf(ui.fightStake) + 1) % FIGHT_STAKES.length]; render(); }
-});
+function fightStakeNext() { ui.fightStake = FIGHT_STAKES[(FIGHT_STAKES.indexOf(ui.fightStake) + 1) % FIGHT_STAKES.length]; render(); }
 function eventBanner() {
   const be = S.barEvent; if (!be) return '';
   const base = `<div class="hud-event ${be.kind}"><div class="et">${esc(be.title)} <span class="pill time">${mmss(be.until - now())}</span></div><div>${esc(be.text)}</div>`;
   if (be.kind === 'fight') {
     if (be.mine) return base + `<div class="muted">You bet ${$$(be.mine.stake)} on ${esc(be.mine.side === 'red' ? be.red : be.blue)}.</div></div>`;
-    if (now() < be.betUntil) { const st = ui.fightStake; return base + `<div class="row"><button class="red" onclick="fightBet('red')"><kbd>1</kbd> 🔴 ${esc(be.red)} · ${$$(st)}</button><button class="blue" onclick="fightBet('blue')"><kbd>2</kbd> 🔵 ${esc(be.blue)} · ${$$(st)}</button></div><div class="muted" style="margin-top:4px">Press <kbd>1</kbd> or <kbd>2</kbd> to bet · <kbd>3</kbd> changes the stake</div></div>`; }
+    if (now() < be.betUntil) { const st = ui.fightStake; return base + `<div class="row"><button class="red" onclick="fightBet('red')">🔴 ${esc(be.red)} · ${$$(st)}</button><button class="blue" onclick="fightBet('blue')">🔵 ${esc(be.blue)} · ${$$(st)}</button><button class="ghost fit" onclick="fightStakeNext()">Stake ${$$(st)} ▸</button></div></div>`; }
   }
   return base + '</div>';
 }

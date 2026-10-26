@@ -265,3 +265,5 @@ body:not(.ingame) .center .card,body:not(.ingame) .wrap .card{background:#101830
 @media (max-width:640px){.rgrid{grid-template-columns:34px repeat(12,1fr) 34px;grid-template-rows:repeat(3,40px) 34px 34px}.rc{font-size:11px}}
 
 .hud-event kbd,.muted kbd{display:inline-block;min-width:18px;padding:0 5px;margin-right:4px;border-radius:5px;background:#0008;border:1px solid #fff6;font:800 12px system-ui;color:#fff}
+.hud button kbd.hk{display:inline-block;min-width:18px;padding:0 5px;margin-right:6px;border-radius:5px;background:#0008;border:1px solid #fff8;font:800 12px system-ui;color:#fff;vertical-align:1px}
+body.ingame #app .hud button{pointer-events:auto}
