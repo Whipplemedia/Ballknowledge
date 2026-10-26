@@ -141,7 +141,7 @@ function fromSkinned(src, name, over) {
     idle[sd + 'UpLeg'] = qAlign(dir(sd + 'UpLeg', sd + 'Leg'), V_DOWN).multiply(rest[sd + 'UpLeg']);
     idle[sd + 'Leg'] = qAlign(dir(sd + 'Leg', sd + 'Foot'), V_DOWN).multiply(rest[sd + 'Leg']);
   }
-  const S = { ...PRESETS.bub, ...over }; const P = { group: outer, phase: Math.random() * 6, spec: S, model: true, skinned: true };
+  const S = { ...PRESETS.bub, ...over }; const P = { group: outer, phase: Math.random() * 6, spec: S, model: true, skinned: true, bones: B };
   // invisible pivots in the same layout as the procedural rig: animate() drives them, the skeleton follows, cosmetics attach to them
   const mk = (x, y, z, par = outer) => { const o = new THREE.Object3D(); o.position.set(x, y, z); par.add(o); return o; };
   const hp = (n) => wp(B[n]); const hips = hp('Hips');
@@ -159,7 +159,7 @@ function fromSkinned(src, name, over) {
     const keep = (b) => { const pw = cur.get(b.parent) || ID; b.quaternion.copy(b.userData.restQ); cur.set(b, pw.clone().multiply(b.userData.restQ)); };
     const chainArm = (sd) => {
       const a = arms[sd], dA = qEuler(a), D = dT.clone().multiply(dA), raise = Math.max(0, a.rotation.x - 0.6);
-      const flex = 0.22 + Math.min(1.9, raise * 1.2);
+      const flex = a.userData.flex ?? (0.22 + Math.min(1.9, raise * 1.2)); // seated.js sets an explicit elbow bend
       put(B[sd + 'Arm'], D.clone().multiply(idle[sd + 'Arm']));
       const Wf = D.clone().multiply(qAxisX(flex)).multiply(idle[sd + 'ForeArm']); put(B[sd + 'ForeArm'], Wf);
       put(B[sd + 'Hand'], Wf.clone().multiply(rest[sd + 'ForeArm'].clone().invert().multiply(rest[sd + 'Hand'])));
@@ -381,13 +381,14 @@ export function makeHand({ skin = SK.light, sleeve = 0x7a7a80, sleeveLen = 0.34 
 // mode: idle | walk | drink | polish | pool | sleep | cheer | stagger
 export function animate(P, mode, t, speed = 1) {
   const [lL, lR] = P.legs, [aL, aR] = P.arms, ph = P.phase + t, base = P.baseY || 0;
-  const reset = () => { P.group.position.y = base; P.group.rotation.z = 0; lL.rotation.x = lR.rotation.x = aL.rotation.x = aR.rotation.x = 0; aL.rotation.z = aR.rotation.z = 0; P.head.rotation.set(0, 0, 0); P.torso.rotation.set(0, 0, 0); };
+  const reset = () => { aL.userData.flex = aR.userData.flex = null; aL.rotation.y = aR.rotation.y = 0; lL.rotation.z = lR.rotation.z = 0; P.group.position.y = base; P.group.rotation.z = 0; lL.rotation.x = lR.rotation.x = aL.rotation.x = aR.rotation.x = 0; aL.rotation.z = aR.rotation.z = 0; P.head.rotation.set(0, 0, 0); P.torso.rotation.set(0, 0, 0); };
   reset();
   if (mode === 'walk') { const s = Math.sin(ph * 9 * speed) * 0.7 * Math.min(1, speed); lL.rotation.x = s; lR.rotation.x = -s; aL.rotation.x = -s * 0.8; aR.rotation.x = s * 0.8; P.group.position.y = base + Math.abs(Math.sin(ph * 9 * speed)) * 0.03; }
   else if (mode === 'drink') { const c = (Math.sin(ph * 0.7) + 1) / 2, up = c > 0.72 ? (c - 0.72) / 0.28 : 0; aR.rotation.x = -2.2 * up; aR.rotation.z = 0.2 * up; P.head.rotation.x = -0.15 * up; P.head.rotation.y = Math.sin(ph * 0.3) * 0.4; }
   else if (mode === 'polish') { aR.rotation.x = -1.2 + Math.sin(ph * 6) * 0.25; aL.rotation.x = -1.0; P.head.rotation.y = Math.sin(ph * 0.4) * 0.5; }
   else if (mode === 'pool') { const k = Math.sin(ph * 1.4); aR.rotation.x = -1.0 + k * 0.5; aL.rotation.x = -1.2; P.torso.rotation.x = 0.5; P.head.rotation.x = 0.3; }
   else if (mode === 'sit') { lL.rotation.x = lR.rotation.x = 1.45; aL.rotation.x = aR.rotation.x = -0.55; P.head.rotation.y = Math.sin(ph * 0.35) * 0.3; }
+  else if (mode === 'seated' && P.sp) { const q = P.sp; aL.rotation.set(q.aLx, q.aLy, q.aLz, 'YXZ'); aR.rotation.set(q.aRx, q.aRy, q.aRz, 'YXZ'); aL.userData.flex = q.aLf; aR.userData.flex = q.aRf; P.torso.rotation.set(q.tx, q.ty, q.tz, 'YXZ'); P.head.rotation.set(q.hx, q.hy, q.hz, 'YXZ'); lL.rotation.x = q.lLx; lR.rotation.x = q.lRx; lL.rotation.z = q.lLz; lR.rotation.z = q.lRz; }
   else if (mode === 'sleep') { P.head.rotation.x = 0.9; P.torso.rotation.x = 0.4; aL.rotation.x = aR.rotation.x = -1.3; }
   else if (mode === 'cheer') { aL.rotation.x = -2.6 + Math.sin(ph * 5) * 0.3; aR.rotation.x = -2.4 + Math.cos(ph * 5) * 0.3; P.group.position.y = base + Math.abs(Math.sin(ph * 5)) * 0.06; }
   else if (mode === 'stagger') { P.group.rotation.z = Math.sin(ph * 1.7) * 0.12; P.head.rotation.z = Math.sin(ph * 1.1) * 0.25; }

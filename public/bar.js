@@ -3,6 +3,7 @@ import * as TX from './textures.js';
 import { hasProp, prop } from './props.js';
 import { makePreset, makePerson, randomPatron, animate } from './people.js';
 import { BY_ID, applyCosmetics } from './cosmetics.js';
+import { createSeatedLife } from './seated.js';
 
 export const ROOM = { x: 12, z: 8, h: 5 };
 
@@ -286,6 +287,12 @@ export function buildBar({ scene, BK, tv }) {
     if (d < 0.4 || u >= wd) { const poi = POI[Math.floor(rng(n.seed * 31 + (((k % CYC) + CYC) % CYC))() * POI.length)]; return { x: c[0], z: c[1], walking: false, ry: Math.atan2(-(poi[0] - c[0]), -(poi[1] - c[1])) }; }
     const f = u / wd, e = f * f * (3 - 2 * f) * 0.35 + f * 0.65; return { x: a[0] + (c[0] - a[0]) * e, z: a[1] + (c[1] - a[1]) * e, walking: true, ry: Math.atan2(-(c[0] - a[0]), -(c[1] - a[1])) };
   };
+  // seated NPCs get a living seated pose (seated.js): drinks in hand, gaze, gestures, reactions to TV scores
+  const life = createSeatedLife({ scene });
+  npcs.forEach((n, i) => { if (!n.seated || !n.P.skinned) return;
+    const couch = n.name === 'Couch guy', boss = n.name === 'Uncle Sal', sleep = n.mode === 'sleep';
+    const stoolN = n.name === 'Regular'; life.add(n, { kind: couch ? 'lap' : 'table', table: stoolN ? 1.14 : 0.78, seat: stoolN ? 0.8 : boss ? 0.52 : couch ? 0.45 : BOOTH.seat, reach: stoolN ? 0.55 : boss ? 0.32 : 0.4, style: boss ? 'boss' : sleep ? 'sleep' : couch ? 'couch' : n.mode, glass: sleep ? null : boss ? 'tumbler' : n.mode === 'drink' || couch ? 'pint' : i % 2 ? 'bottle' : 'pint' }); });
+  BK.onScore = () => life.onScore();
   npcs.forEach((n, i) => { if (!n.seated && ['Spectator', 'Patron', 'Watcher'].includes(n.name)) { n.wander = true; n.seed = 1000 + i * 17; n.phase = (i * 5.3) % SEG; n.wp = null; n.off = { x: 0, z: 0 }; } });
 
   function update(t, dt, me) {
@@ -293,7 +300,7 @@ export function buildBar({ scene, BK, tv }) {
       const koNow = n.ko && n.ko > BK.now();
       if (koNow || n._koOn) { // knocked out by a bottle: stars, slump (seated) or fall flat on the back (standing)
         if (koNow && !n._koOn) { n._koOn = true; n.P.group.rotation.order = 'YXZ'; if (!n.star) { n.star = TX.label('💫 KO 💫', '#ffd04a', 0.7); n.star.position.y = 2.35; n.P.group.add(n.star); } n.star.visible = true; }
-        if (koNow) { animate(n.P, n.seated ? 'sleep' : 'idle', t); if (!n.seated) { n.P.group.rotation.x += (Math.PI / 2 - n.P.group.rotation.x) * Math.min(1, dt * 12); n.P.group.position.y = (n.P.baseY || 0) + 0.2; } else n.P.legs.forEach((l) => (l.rotation.x = 1.45)); n.star.material.rotation = Math.sin(t * 6) * 0.15; if (n.bubble) n.bubble.set(''); continue; }
+        if (koNow) { animate(n.P, n.seated ? 'sleep' : 'idle', t); if (n.life) life.place(n.life); if (!n.seated) { n.P.group.rotation.x += (Math.PI / 2 - n.P.group.rotation.x) * Math.min(1, dt * 12); n.P.group.position.y = (n.P.baseY || 0) + 0.2; } else n.P.legs.forEach((l) => (l.rotation.x = 1.45)); n.star.material.rotation = Math.sin(t * 6) * 0.15; if (n.bubble) n.bubble.set(''); continue; }
         n._koOn = false; if (n.wander) { const s = wanderPos(n, BK.now() / 1000); n.off.x = n.P.group.position.x - s.x; n.off.z = n.P.group.position.z - s.z; n._sx = n.P.group.position.x; n._sz = n.P.group.position.z; } n.P.group.rotation.x = 0; n.P.group.position.y = n.P.baseY || 0; if (n.star) n.star.visible = false; BK.sfx && BK.sfx('boing', { pos: { x: n.P.group.position.x, y: 1.4, z: n.P.group.position.z } });
       }
       let mode = n.mode;
@@ -306,8 +313,8 @@ export function buildBar({ scene, BK, tv }) {
         let d = face - g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); g.rotation.y += d * Math.min(1, dt * 7);
         if (mv) { mode = 'walk'; n.P.moveSpeed = 1.2; }
       }
-      animate(n.P, mode, t);
-      if (n.seated) n.P.legs.forEach((l) => (l.rotation.x = 1.45));
+      if (n.life) { life.tick(n.life, t, dt, { me, cam: { x: me.x, y: me.sit ? me.sit.sit + 0.76 : 1.65, z: me.z }, npcs }); animate(n.P, 'seated', t); life.place(n.life); }
+      else { animate(n.P, mode, t); if (n.seated) n.P.legs.forEach((l) => (l.rotation.x = 1.45)); }
       const near = Math.hypot(n.P.group.position.x - me.x, n.P.group.position.z - me.z) < 7;
       if (n.bubble) {
         if (t > n.until && n.bubble.sprite.visible) n.bubble.set('');
