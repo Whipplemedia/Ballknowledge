@@ -216,7 +216,7 @@ function startGame(room) {
   room.events[0].openAt = now;
   for (const p of room.players.values()) {
     Object.assign(p, { money: START_MONEY, debt: 0, loans: 0, mobTied: false, bets: {}, fix: {}, results: {}, drunk: 0, drunkT: now, finalCorrect: null, fate: null, remaining: 0, tickets: 0, challenge: null, pool: null, streak: { darts: 0, bowling: 0, cornhole: 0 }, lastChallenge: 0 });
-    p.heat = 0; p.banUntil = null;
+    p.heat = 0; p.banUntil = null; p.bk = 0; p.dead = false;
     p.tol = Math.round((Math.random() * 2 - 1) * 10); p.tips = {}; p.over = false; p.hangUntil = 0; // hidden drink sweet spot for this season
     p.bounties = [...BOUNTIES].sort(() => Math.random() - 0.5).slice(0, 3).map((b) => ({ ...b, done: false }));
   }
@@ -225,6 +225,7 @@ function startGame(room) {
   room.shake = null; room.barEvent = null; room.nextBarEvent = now + dur(55000 + rnd(30000)); room.lastBarKind = null;
   room.altered = false; room.finalWinner = null; room.phase = 'play';
   feed(room, `${sport.emoji} A season has been assigned. Nobody will tell you which one. Place your bets before the clock runs out.`);
+  room.cine = { kind: 'opening', start: now, until: now + 9500, quota: room.quota[0].target, at: room.quota[0].idx + 1 };
   clearInterval(room.tick); room.tick = setInterval(() => tick(room), 400);
   broadcast(room);
 }
@@ -254,6 +255,7 @@ function tick(room) {
     if (ev.status === 'airing' && now >= ev.resolveAt) { finalizeEvent(room, ev); changed = true; }
   }
   if (room.shake && now >= room.shake.until && (!room.goons || room.goons.phase === 'fight')) { endShake(room, false); changed = true; }
+  if (room.drops && room.drops.some((d) => now >= d.until)) { room.drops = room.drops.filter((d) => now < d.until); changed = true; }
   if (room.barEvent && now >= room.barEvent.until) { endBarEvent(room); changed = true; }
   else if (!room.barEvent && !room.shake && !room.goons && now >= room.nextBarEvent) { startBarEvent(room); changed = true; }
   if (changed) {
@@ -297,7 +299,7 @@ function settleBets(room, ev) {
       if (mk === 'ml') { won = b.pick === win; label = `${b.pick === 'a' ? ev.a : ev.b} ML`; }
       else if (mk === 'spread') { const my = b.pick === 'a' ? r.sa : r.sb, other = b.pick === 'a' ? r.sb : r.sa; won = my + b.line > other; label = `${b.pick === 'a' ? ev.a : ev.b} ${b.line > 0 ? '+' : ''}${b.line}`; }
       else { const tot = r.sa + r.sb; won = b.pick === 'over' ? tot > b.line : tot < b.line; label = `${b.pick === 'over' ? 'Over' : 'Under'} ${b.line}`; }
-      if (won) { const pay = b.stake * b.dec; ret += pay; delta += pay - b.stake; notes.push(`✅ ${label}: +${money(pay - b.stake)}`); award(room, p, 'betWin', { mk, dec: b.dec, stake: b.stake, band: b.band || 0 }); } else { delta -= b.stake; notes.push(`❌ ${label}: -${money(b.stake)}`); }
+      if (won) { p.bk = (p.bk || 0) + (mk === 'ml' ? Math.round(100 * b.dec) * (ev.final ? 2 : 1) : 50); /* Ball Knowledge: long shots count more, the final double */ const pay = b.stake * b.dec; ret += pay; delta += pay - b.stake; notes.push(`✅ ${label}: +${money(pay - b.stake)}`); award(room, p, 'betWin', { mk, dec: b.dec, stake: b.stake, band: b.band || 0 }); } else { delta -= b.stake; notes.push(`❌ ${label}: -${money(b.stake)}`); }
     }
     p.money += ret;
     if (ev.final) p.finalCorrect = !!(bets.ml && bets.ml.pick === win);
@@ -360,7 +362,7 @@ function startBarEvent(room) {
 function endBarEvent(room) {
   const be = room.barEvent; room.barEvent = null; room.nextBarEvent = Date.now() + dur(65000 + rnd(50000));
   if (be.kind === 'fight') {
-    const win = Math.random() < 0.5 ? 'red' : 'blue'; feed(room, `🥊 ${win === 'red' ? be.red : be.blue} wins the bar fight!`);
+    const h = be.hits || { red: 0, blue: 0 }, pRed = clamp(0.5 + 0.12 * (h.blue - h.red), 0.15, 0.85), win = Math.random() < pRed ? 'red' : 'blue'; /* every bottle on a fighter tips it against him */ feed(room, `🥊 ${win === 'red' ? be.red : be.blue} wins the bar fight!`);
     for (const [pid, b] of Object.entries(be.bets)) { const p = room.players.get(pid); if (!p) continue; if (b.side === win) { p.money += b.stake * 1.9; toast(p, `Your fighter won! +${money(b.stake * 0.9)}`, 'win'); award(room, p, 'fightWin'); } else toast(p, `Your fighter got flattened. -${money(b.stake)}`, 'err'); }
   }
 }
@@ -408,10 +410,14 @@ function finish(room) {
   for (const p of ps) if (!p.fate) p.fate = p.mobTied ? 'paid up' : 'safe';
   const correct = ps.filter((p) => p.finalCorrect).length, fin = room.events[room.events.length - 1], fr = (fin && fin.result) || {};
   const crewWon = correct >= Math.ceil(ps.length / 2) && correct > 0, vacated = crewWon && !!fr.fixed, voidedFinal = !!fr.voided;
-  const crewBonus = crewWon ? (vacated ? Math.floor(TICKETS.crewWin / 2) : TICKETS.crewWin) : 0;
+  // the night's result: called the champion AND kept Sal happy = legendary; one of the two = survived; neither = busted
+  const lastQ = room.quota[room.quota.length - 1], quotaMet = !!(lastQ && lastQ.status === 'met');
+  const tier = crewWon && quotaMet ? 'legendary' : crewWon || quotaMet ? 'survived' : 'busted';
+  const crewBonus = Math.floor({ legendary: TICKETS.crewWin, survived: 6, busted: 0 }[tier] / (vacated ? 2 : 1));
+  const mvp = [...ps].sort((a, b) => (b.bk || 0) - (a.bk || 0) || b.money - a.money)[0];
   room.summary = { year: s.year, league: s.league, champion: s.champion, finalWinner: room.finalWinner, altered: room.altered, blurb: s.blurb,
-    crewWon, vacated, voidedFinal, correct, total: ps.length,
-    players: ps.map((p) => ({ id: p.id, name: p.name, finalCorrect: p.finalCorrect, fate: p.fate, money: Math.round(p.money), tickets: TICKETS.base + p.tickets + (p.fate === 'dead' ? 0 : 3) + crewBonus, bounties: p.bounties.filter((b) => b.done).length })) };
+    crewWon, vacated, voidedFinal, correct, total: ps.length, tier, quotaMet, mvp: mvp && (mvp.bk || 0) > 0 ? { id: mvp.id, name: mvp.name, bk: mvp.bk } : null,
+    players: ps.map((p) => ({ id: p.id, name: p.name, finalCorrect: p.finalCorrect, fate: p.fate, money: Math.round(p.money), bk: p.bk || 0, tickets: Math.floor((TICKETS.base + p.tickets + (p.fate === 'dead' ? 0 : 3) + crewBonus) / (p.fate === 'dead' ? 2 : 1)), bounties: p.bounties.filter((b) => b.done).length })) };
   room.phase = 'ended'; broadcast(room);
 }
 
@@ -498,7 +504,7 @@ function view(room, p) {
   const d = Math.round(drunkNow(p));
   const v = { type: 'state', now: Date.now(), code: room.code, you: p.id, host: room.hostId === p.id, phase: room.phase, sport: room.sport, pace: room.pace,
     sports: Object.entries(SPORTS).map(([id, s]) => ({ id, label: s.label, emoji: s.emoji })), paces: Object.entries(PACES).map(([id, x]) => ({ id, label: x.label })),
-    feed: room.feed.slice(-25), drinks: DRINKS, btaken: room.btaken, // bottle spots on tables: index -> respawn time
+    feed: room.feed.slice(-25), drinks: DRINKS, btaken: room.btaken, drops: (room.drops || []).map((d) => ({ id: d.id, x: d.x, z: d.z, amt: d.amt })), // bottle spots on tables: index -> respawn time
 
     players: plist(room).map((q) => ({ id: q.id, name: q.name, color: q.color, cos: q.cos || {}, money: Math.round(q.money), connected: q.connected, fate: q.fate, drunk: Math.round(drunkNow(q)),
       hunted: room.phase === 'hunt' && q.remaining > 0, finalCorrect: room.phase === 'ended' ? q.finalCorrect : null })),
@@ -509,7 +515,7 @@ function view(room, p) {
     v.teams = Object.fromEntries(Object.entries(room.season.teams).map(([n, t]) => [n, { short: t.short, color: t.color }]));
     v.quota = room.quota.map((q) => ({ kind: q.kind, idx: q.idx, target: q.target, status: q.status, crew: q.crew }));
     v.crewNow = Math.round(plist(room).reduce((a, q) => a + networth(room, q), 0));
-    v.barEvent = room.barEvent ? { kind: room.barEvent.kind, until: room.barEvent.until, betUntil: room.barEvent.betUntil, red: room.barEvent.red, blue: room.barEvent.blue, title: room.barEvent.title, text: room.barEvent.text, mine: room.barEvent.bets ? room.barEvent.bets[p.id] || null : null } : null;
+    v.barEvent = room.barEvent ? { kind: room.barEvent.kind, until: room.barEvent.until, betUntil: room.barEvent.betUntil, red: room.barEvent.red, blue: room.barEvent.blue, hits: room.barEvent.hits || null, title: room.barEvent.title, text: room.barEvent.text, mine: room.barEvent.bets ? room.barEvent.bets[p.id] || null : null } : null;
     v.shake = room.shake ? { tax: room.shake.tax, paid: room.shake.paid, hp: goons.hpLeft(room), maxHp: goons.hpMax(room), until: room.shake.until } : null;
     v.spinning = room.spin ? { by: room.spin.name, until: room.spin.until } : null;
     const cur = room.events.find((e) => e.status === 'open');
@@ -626,7 +632,7 @@ function handle(room, p, m) {
       p.money -= stake; be.bets[p.id] = { side: m.side, stake }; broadcast(room); break;
     }
     case 'cosmetics': {
-      const cos = {}; for (const k of ['head', 'face', 'body', 'hand', 'back']) { const v = m.cos && m.cos[k]; if (typeof v === 'string' && /^[a-z0-9_]{1,24}$/.test(v)) cos[k] = v; }
+      const cos = {}; for (const k of ['head', 'face', 'body', 'hand', 'back', 'tag']) { const v = m.cos && m.cos[k]; if (typeof v === 'string' && /^[a-z0-9_]{1,24}$/.test(v)) cos[k] = v; }
       p.cos = cos; broadcast(room); break;
     }
     case 'roulette': { // m.bets = [{ pick, stake }]: a number '0'-'36', red/black, odd/even, low/high, d1-d3 (dozens), c1-c3 (columns)
@@ -660,6 +666,10 @@ function handle(room, p, m) {
       else if (m.to === '*') for (const q of room.players.values()) if (q !== p) send(q, { type: 'rtc', from: p.id, data: m.data });
       break;
     }
+    case 'pickup': { // knocked-out players drop chips; walk over them to grab
+      const d = (room.drops || []).find((x) => x.id === m.id); if (!d || !inPlay(room) || Math.hypot(p.x - d.x, p.z - d.z) > 1.4) break;
+      room.drops = room.drops.filter((x) => x !== d); p.money += d.amt; toast(p, `+${money(d.amt)} in loose chips`, 'win'); broadcast(room); break;
+    }
     case 'takeBottle': { // pick up a bottle from a table spot; it respawns for everyone after BOTTLE_RESPAWN_MS
       const i = Number(m.i), t = Date.now();
       if (!Number.isInteger(i) || i < 0 || i >= 64 || !inPlay(room) || t - p.lastTake < 300 || p.koUntil > t) break;
@@ -676,11 +686,13 @@ function handle(room, p, m) {
     case 'bottleHit': { // thrower reports a hit on a player or an NPC; knocks them out for 5s (3s immunity after waking)
       const t = Date.now(); p.credits = p.credits.filter((c) => t - c < 4000); if (!p.credits.length || !inPlay(room)) break; p.credits.shift();
       room.npcKo = room.npcKo || {};
+      if (m.kind === 'brawler') { const be = room.barEvent; if (!be || be.kind !== 'fight' || t > be.until || !['red', 'blue'].includes(m.side)) break; be.hits = be.hits || { red: 0, blue: 0 }; be.hits[m.side]++; feed(room, `🍾 ${p.name} beaned ${m.side === 'red' ? be.red : be.blue} with a bottle!`); broadcast(room); break; }
       if (m.kind === 'goon') { if (goons.hit(room, p, String(m.target), 8, true)) { feed(room, `🍾 ${p.name} broke a bottle over a ${room.goons && room.goons.kind === 'hunt' ? 'hitman' : 'collector'}!`); broadcast(room); } break; }
       if (m.kind === 'npc') { const i = Math.floor(Number(m.npc)); if (!(i >= 0 && i < 80) || t < (room.npcKo[i] || 0)) break; room.npcKo[i] = t + 5000 + 2000;
         for (const q of room.players.values()) send(q, { type: 'ko', npc: i, until: t + 5000, by: p.id }); feed(room, `🍾 ${p.name} bottled a bar regular.`); broadcast(room); break; }
       const v = room.players.get(m.target); if (!v || v === p || t < v.koImmune) break;
       v.koUntil = t + 5000; v.koImmune = t + 5000 + 3000;
+      { const amt = Math.min(Math.floor(v.money), 25 + rnd(26)); if (amt > 0) { v.money -= amt; room.drops = room.drops || []; room.drops.push({ id: crypto.randomBytes(4).toString('hex'), x: v.x + (Math.random() - 0.5) * 0.6, z: v.z + (Math.random() - 0.5) * 0.6, amt, until: t + 30000 }); toast(v, `You dropped ${money(amt)} in chips. Someone's going to grab them...`, 'err'); } }
       for (const q of room.players.values()) send(q, { type: 'ko', id: v.id, until: v.koUntil, by: p.id }); feed(room, `🍾 ${p.name} knocked out ${v.name} with a bottle!`); broadcast(room); break;
     }
     case 'pos': {

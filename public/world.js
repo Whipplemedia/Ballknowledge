@@ -59,7 +59,7 @@ const sfxAt = (n, x, z, y = 1.2, o = {}) => audio.sfx(n, { pos: { x, y, z }, ...
 BK.sfxAt = sfxAt;
 // ---------- bottles + knockouts ----------
 const koNow = () => !!(me.koUntil && BK.now() < me.koUntil);
-const bottles = createBottles({ scene, camera, BK, me, obstacles, getAvatars: () => avatars, getNpcs: () => bar.npcs, getGoons: () => goons.list(), ROOM, busy: () => games.active() || BK.ui.open || BK.ui.shop || koNow() });
+const bottles = createBottles({ scene, camera, BK, me, obstacles, getAvatars: () => avatars, getNpcs: () => bar.npcs, getGoons: () => goons.list(), getBrawlers: () => brawlers.map((b) => ({ P: b.P, side: b.i ? 'blue' : 'red' })), ROOM, busy: () => games.active() || BK.ui.open || BK.ui.shop || koNow() });
 BK.bottles = bottles; BK.onBottle = (m) => bottles.remote(m); bottles.addSpots(bar.bottleSpots, stations);
 // small or see-through static things (bottles, chips, glasses, little decor) don't need to cast shadows: fewer objects in the shadow pass
 { const _s = new THREE.Vector3(); scene.updateMatrixWorld(true);
@@ -137,6 +137,14 @@ function syncAvatars() {
   }
 }
 
+// ---------- loose chips (dropped by knocked-out players): walk over a stack to grab it ----------
+const drops = new Map(), chipGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.009, 14), chipMats = [0xc0182a, 0x1d8a4a, 0x1c1c20, 0xe0a020].map((c) => stdMat(c, { roughness: 0.4 }));
+function syncDrops() {
+  const want = new Set(((BK.S && BK.S.drops) || []).map((d) => d.id));
+  for (const [id, o] of drops) if (!want.has(id)) { scene.remove(o.g); drops.delete(id); audio.sfx('chip', { pos: { x: o.x, y: 0.1, z: o.z } }); }
+  for (const d of (BK.S && BK.S.drops) || []) if (!drops.has(d.id)) { const g = new THREE.Group(); for (let k = 0; k < Math.min(8, Math.ceil(d.amt / 6)); k++) { const m = new THREE.Mesh(chipGeo, chipMats[k % 4]); m.position.set((k % 3) * 0.05 - 0.05, 0.006 + Math.floor(k / 3) * 0.0095, (k % 2) * 0.04); g.add(m); } g.position.set(d.x, 0, d.z); scene.add(g); drops.set(d.id, { g, x: d.x, z: d.z, asked: 0 }); }
+}
+function grabDrops() { for (const [id, o] of drops) if (Math.hypot(o.x - me.x, o.z - me.z) < 1.1 && performance.now() - o.asked > 800) { o.asked = performance.now(); BK.send({ type: 'pickup', id }); } }
 // ---------- Sal's muscle: hitmen + collectors are simulated on the server (goons.js) and streamed here ----------
 const goons = createGoonsView({ scene, BK, audio }); BK.goons = goons;
 const cine = createCine({ camera, BK, doors: bar.doors, goons, audio });
@@ -221,7 +229,7 @@ BK.setQuality = (q) => { if (q === 'low') { perf.done = true; setLowQuality(); }
 function resize() { renderer.setSize(innerWidth, innerHeight, false); fx.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 BK.onRender = () => {
-  syncAvatars(); syncBrawlers();
+  syncAvatars(); syncBrawlers(); syncDrops();
   if (active() && !spawned) { spawned = true; const S = BK.S, mp = S.players.find((p) => p.id === S.you); me.x = -3 + (mp ? mp.color : 0) * 1.2; me.z = 2; me.yaw = 0; me.pitch = 0; }
   if (!active()) spawned = false;
 };
@@ -254,11 +262,14 @@ function frame(now) {
   { const cOn = !!(BK.S && BK.S.cine && BK.now() < BK.S.cine.until), gOn = games.active() || cOn; for (const n of bar.npcs) { const g = n.P.group, hide = gOn && Math.hypot(g.position.x - camera.position.x, g.position.z - camera.position.z) < (cOn ? 2.6 : 1.1) && !n.seated; if (g.visible === hide) g.visible = !hide; } }
   // ---- audio frame: listener, footsteps, bar-event cues, voice
   audio.update(dt, camera); audioUI.show(active()); voice.update(dt, avatars);
+  grabDrops(); for (const o of drops.values()) o.g.rotation.y += dt * 0.6;
   bottles.update(dt); bottles.updateSpots(dt); { const left = koNow() ? (me.koUntil - BK.now()) / 1000 : 0; myDizzy.update(dt, t, null, left > 0); bottles.setKo(left); if (!left && me.koUntil) { me.koUntil = 0; audio.sfx('boing'); } if (left) { camera.position.y = 0.32; camera.rotation.z = 1.25; camera.rotation.x = 0.4; } }
   { const h = heldBy(), o = h && goons.get(h); // grabbed: you're turned to face him and shaken about
     if (o) { const g = o.P.group.position, want = Math.atan2(-(g.x - me.x), -(g.z - me.z)); let d = want - me.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); me.yaw += d * Math.min(1, dt * 6); me.pitch += (-0.22 - me.pitch) * Math.min(1, dt * 4); camera.rotation.set(me.pitch + Math.sin(t * 13) * 0.02, me.yaw + Math.sin(t * 9) * 0.03, Math.sin(t * 7) * 0.05); } }
   if (me.punch) { me.punch = Math.max(0, me.punch - dt * 6); camera.position.y -= me.punch * 0.04; camera.rotation.z += me.punch * 0.03; }
   const cineOn = !!cine.update(dt, BK.S && BK.S.you); if (cineOn) cross.style.display = 'none';
+  { const c = BK.S && BK.S.cine, sal = bar.npcs.find((n) => n.name === 'Uncle Sal'); // Sal talks through the opening scene
+    if (sal && sal.life) { const talk = cineOn && c && c.kind === 'opening'; if (talk) { sal.life.act = 'talk'; sal.life.actT = 1; sal.life.dur = 99; sal.life.gaze.target = { local: { y: 0, p: 0.05 } }; sal.life.gaze.next = 2; } else if (sal.life.dur === 99) { sal.life.act = null; sal.life.dur = 1; } } }
   { const mvd = Math.hypot(me.x - (me._lx ?? me.x), me.z - (me._lz ?? me.z)); me._lx = me.x; me._lz = me.z;
     if (!me.sit && !games.active() && mvd < 1.2) { me._step = (me._step || 0) + mvd; if (me._step > (keys.ShiftLeft ? 0.95 : 0.7)) { me._step = 0; audio.sfx('step', { v: keys.ShiftLeft ? 0.9 : 0.6 }); } } }
   { const be = BK.S && BK.S.barEvent, kind = be ? be.kind : null; if (kind !== audio._ev) { const prev = audio._ev; audio._ev = kind;

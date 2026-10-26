@@ -18,6 +18,8 @@ const SAVE_KEY = 'bk_save_v1';
 function loadSave() { try { const o = JSON.parse(localStorage.getItem(SAVE_KEY)); if (o && Array.isArray(o.inv)) return o; } catch {} return { tix: 60, inv: [], eq: {} }; }
 let save = loadSave();
 function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch {} }
+// what we wear: equipped cosmetics, plus a toe tag for the season after you got taken to the back room
+const wearing = () => (save.toeTag === 'wearing' ? { ...save.eq, tag: 'toe_tag' } : save.eq);
 
 // ---------- session: the server hands out a rejoin token; we keep it so a refresh, dropped wifi or server restart puts you back in your seat ----------
 const SESS_KEY = 'bk_session_v1', SESS_MAX_AGE = 3 * 3600 * 1000;
@@ -25,7 +27,7 @@ let sess = (() => { try { const o = JSON.parse(localStorage.getItem(SESS_KEY)); 
 const saveSess = () => { try { if (sess) localStorage.setItem(SESS_KEY, JSON.stringify(sess)); else localStorage.removeItem(SESS_KEY); } catch {} };
 function connect(msg) {
   const sock = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host); ws = sock;
-  sock.onopen = () => { sock.send(JSON.stringify(msg)); sock.send(JSON.stringify({ type: 'cosmetics', cos: save.eq })); };
+  sock.onopen = () => { sock.send(JSON.stringify(msg)); sock.send(JSON.stringify({ type: 'cosmetics', cos: wearing() })); };
   sock.onmessage = (e) => {
     const m = JSON.parse(e.data);
     if (m.type === 'state') { S = m; skew = m.now - Date.now(); stateAt = Date.now(); err = ''; if (sess && Date.now() - sess.at > 60000) { sess.at = Date.now(); saveSess(); } render(); }
@@ -131,13 +133,14 @@ function render() {
   if (S && S.phase !== lastPhase) {
     if (S.phase !== 'play') ui.open = false;
     if (S.phase === 'play') ui.tab = 'book';
+    if (S.phase === 'play' && save.toeTag === 'pending') { save.toeTag = 'wearing'; persist(); send({ type: 'cosmetics', cos: wearing() }); setTimeout(() => toast('You died last night. Everyone can see the toe tag.', 'mob'), 9000); }
     lastPhase = S.phase;
   }
   if (S && S.cur && ui.sel && ui.selIdx !== S.cur.idx) ui.sel = null;
   if (S && ui.pendingPool) { if (S.me.pool) { ui.pendingPool = null; window.BK.startGame && window.BK.startGame('pool', S.me.pool); } else if (Date.now() - ui.pendingPool.at > 4000) ui.pendingPool = null; }
   if (S && ui.pending) { if (S.me.challenge && S.me.challenge.game === ui.pending.game) { const g = ui.pending.game; ui.pending = null; window.BK.startGame && window.BK.startGame(g, S.me.challenge); } else if (Date.now() - ui.pending.at > 4000) ui.pending = null; }
   document.body.classList.toggle('ingame', !!S && ['play', 'hunt'].includes(S.phase));
-  if (S && S.phase === 'ended' && S.summary) { const mine = S.summary.players.find((p) => p.id === S.you), key = S.code + ':' + S.summary.year; if (mine && ui.paid !== key) { ui.paid = key; save.tix += mine.tickets; persist(); toast(`+${mine.tickets} 🎟 tickets earned!`, 'win'); } }
+  if (S && S.phase === 'ended' && S.summary) { const mine = S.summary.players.find((p) => p.id === S.you), key = S.code + ':' + S.summary.year; if (mine && ui.paid !== key) { ui.paid = key; save.tix += mine.tickets; save.toeTag = mine.fate === 'dead' ? 'pending' : save.toeTag === 'wearing' ? null : save.toeTag; persist(); toast(`+${mine.tickets} 🎟 tickets earned!`, 'win'); } }
   if (window.BKC) window.BKC.preview.setHost(ui.shop && !ui.reveal ? '#shopPrev' : null);
   const a = document.activeElement, keep = a && a.id ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
   const app = $('#app');
@@ -441,15 +444,16 @@ function spinNow() {
 function endView() {
   const s = S.summary, host = S.host;
   return `<div class="center"><div class="card col" style="width:min(560px,100%)">
-    <div class="logo" style="font-size:34px">${s.crewWon ? (s.vacated ? '<span>TITLE VACATED*</span>' : '<span>YOU WIN</span>') : 'GAME OVER'}</div>
+    <div class="logo" style="font-size:34px">${{ legendary: '<span>LEGENDARY NIGHT</span>', survived: 'YOU SURVIVED', busted: 'BUSTED' }[s.tier] || (s.crewWon ? '<span>YOU WIN</span>' : 'GAME OVER')}${s.vacated ? '<span>*</span>' : ''}</div>
+    <div class="tiers"><span class="${s.crewWon ? 'ok' : 'bad'}">${s.crewWon ? '✅' : '❌'} Called the champion (${s.correct}/${s.total})</span><span class="${s.quotaMet ? 'ok' : 'bad'}">${s.quotaMet ? '✅' : '❌'} Hit Sal's final number</span></div>
+    ${s.mvp ? `<div class="mvp">🏅 MVP of the night: <b>${esc(s.mvp.name)}</b> · ${s.mvp.bk} Ball Knowledge</div>` : ''}
     ${s.vacated ? '<div class="bad">* The championship was fixed. The league struck your title from the books (half the crew bonus).</div>' : ''}${s.voidedFinal ? '<div class="bad">🚨 The league caught a fix on the championship and voided it. Nobody gets the title.</div>' : ''}
-    <div class="tag">${s.correct}/${s.total} called the title</div>
     <div class="title">The season was</div>
     <div class="big">${s.year} ${esc(s.league)}</div>
     <div class="muted">${esc(s.blurb || '')}</div>
     <div>Real champion: <b>${esc(s.champion)}</b></div>
     <div>${s.altered ? `History was rewritten - your champion was <b>${esc(s.finalWinner)}</b>.` : 'History played out as it happened.'}</div>
-    ${s.players.map((p) => `<div class="pl"><span>${esc(p.name)} ${p.finalCorrect ? '✅' : '❌'}</span><span>${p.fate === 'dead' ? '💀 dead' : esc(p.fate)} · ${$$(p.money)} · +${p.tickets}🎟</span></div>`).join('')}
+    ${s.players.map((p) => `<div class="pl"><span>${esc(p.name)} ${p.finalCorrect ? '✅' : '❌'}</span><span>${p.fate === 'dead' ? '💀 dead (half tickets, wears a toe tag next season)' : esc(p.fate)} · ${$$(p.money)} · 🧠 ${p.bk || 0} · +${p.tickets}🎟</span></div>`).join('')}
     <button class="ghost" onclick="openShop()">🛍️ Spend tickets · 🎟 ${save.tix}</button>
     ${host ? `<button onclick="send({type:'rematch'})">Back to lobby</button>` : '<div class="muted">Waiting for host...</div>'}</div></div>`;
 }
@@ -477,8 +481,9 @@ function eventBanner() {
   const be = S.barEvent; if (!be) return '';
   const base = `<div class="hud-event ${be.kind}"><div class="et">${esc(be.title)} <span class="pill time">${mmss(be.until - now())}</span></div><div>${esc(be.text)}</div>`;
   if (be.kind === 'fight') {
-    if (be.mine) return base + `<div class="muted">You bet ${$$(be.mine.stake)} on ${esc(be.mine.side === 'red' ? be.red : be.blue)}.</div></div>`;
-    if (now() < be.betUntil) { const st = ui.fightStake; return base + `<div class="row"><button class="red" onclick="fightBet('red')">🔴 ${esc(be.red)} · ${$$(st)}</button><button class="blue" onclick="fightBet('blue')">🔵 ${esc(be.blue)} · ${$$(st)}</button><button class="ghost fit" onclick="fightStakeNext()">Stake ${$$(st)} ▸</button></div></div>`; }
+    const hits = be.hits ? `<div class="muted">🍾 Bottles thrown: ${esc(be.red)} ${be.hits.red} · ${esc(be.blue)} ${be.hits.blue} - every hit tips the fight against him</div>` : '<div class="muted">Throw bottles at a fighter (F) to tip the fight against him.</div>';
+    if (be.mine) return base + `<div class="muted">You bet ${$$(be.mine.stake)} on ${esc(be.mine.side === 'red' ? be.red : be.blue)}.</div>${hits}</div>`;
+    if (now() < be.betUntil) { const st = ui.fightStake; return base + `<div class="row"><button class="red" onclick="fightBet('red')">🔴 ${esc(be.red)} · ${$$(st)}</button><button class="blue" onclick="fightBet('blue')">🔵 ${esc(be.blue)} · ${$$(st)}</button><button class="ghost fit" onclick="fightStakeNext()">Stake ${$$(st)} ▸</button></div>${hits}</div>`; }
   }
   return base + '</div>';
 }
@@ -536,9 +541,9 @@ window.BK.openShop = openShop;
 function equipItem(id) {
   const it = BKC.BY_ID[id]; if (!it || !save.inv.includes(id)) return;
   if (save.eq[it.slot] === id) delete save.eq[it.slot]; else save.eq[it.slot] = id;
-  persist(); send({ type: 'cosmetics', cos: save.eq }); BKC.preview.set(save.eq); render();
+  persist(); send({ type: 'cosmetics', cos: wearing() }); BKC.preview.set(save.eq); render();
 }
-function unequipSlot(slot) { delete save.eq[slot]; persist(); send({ type: 'cosmetics', cos: save.eq }); BKC.preview.set(save.eq); render(); }
+function unequipSlot(slot) { delete save.eq[slot]; persist(); send({ type: 'cosmetics', cos: wearing() }); BKC.preview.set(save.eq); render(); }
 function buyCrates(n) {
   const cost = n === 1 ? CRATE : CRATE * 5 - 15; if (save.tix < cost) return toast('Not enough tickets. Play a season to earn more.', 'err');
   save.tix -= cost; const got = [];

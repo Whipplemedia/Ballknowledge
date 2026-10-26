@@ -101,3 +101,11 @@ The scene has ~1,400 meshes and ~12 lights. If the first couple of seconds avera
 - `fixRisk`: 10% + 10% per fix you've already bought + up to +35% for forcing a big upset, ×1.5 on the final, capped 5–85%; shown per side in Sal's tab. Each fix raises your heat.
 - Caught (rolled when betting closes): the game is void and every bet on it refunded, Sal still charges the fee, the fixers are barred from betting for the next 2 games. A caught championship = nobody gets the title.
 - A fixed championship that isn't caught still counts, but the end screen says TITLE VACATED* and the crew-win ticket bonus is halved.
+
+## The night's result, MVP, consequences, chaos stakes, opening
+- Crew result tiers (end screen): LEGENDARY NIGHT = at least half the crew called the champion AND the crew hit Sal's final number; YOU SURVIVED = one of the two; BUSTED = neither. Crew ticket bonus 15 / 6 / 0 (halved if the title was fixed and VACATED).
+- Ball Knowledge score (`p.bk`): every winning moneyline is worth 100 × its decimal odds (long shots count more), the final double; winning spreads/totals 50. Highest score = MVP of the night.
+- Dying: half the season's tickets, and a D.O.A. toe tag (cosmetic slot `tag`) worn the whole next season.
+- Knocked-out players drop $25–50 in chips at their feet (`state.drops`); walk over a stack to grab it (server checks distance). Unclaimed chips vanish after 30 s.
+- Bar fights: bottles thrown at a brawler register as hits (`bottleHit` kind `brawler`); each hit shifts the fight 12% against him (15–85%), shown in the banner.
+- Opening scene (`cine.kind = 'opening'`, 9.5 s): Uncle Sal in his booth — you owe him, tonight's number, "I always collect".

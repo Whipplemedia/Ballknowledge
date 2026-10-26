@@ -95,6 +95,14 @@ const SLOT_MOUNT = { head: (P) => ({ parent: P.head }), face: (P) => ({ parent: 
 export function applyCosmetics(P, cos = {}) {
   if (P._cos) for (const { obj, parent } of P._cos) parent.remove(obj);
   P._cos = []; P._anim = [];
+  if (cos.tag === 'toe_tag') { // worn for a season after dying: a morgue tag dangling at the right foot
+    const g = new THREE.Group(), card = new THREE.Mesh(new THREE.PlaneGeometry(0.17, 0.1), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, map: (() => { const c = document.createElement('canvas'); c.width = 128; c.height = 76; const g = c.getContext('2d'); g.fillStyle = '#f2ecd8'; g.fillRect(0, 0, 128, 76); g.strokeStyle = '#8a6a3a'; g.lineWidth = 4; g.strokeRect(3, 3, 122, 70); g.fillStyle = '#b01818'; g.font = '900 34px system-ui'; g.textAlign = 'center'; g.fillText('D.O.A.', 64, 50); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })() }));
+    const str = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.09, 4), new THREE.MeshBasicMaterial({ color: 0x9a7a4a })); str.position.y = 0.045; card.position.set(0.03, -0.05, 0); card.rotation.z = 0.35; g.add(str, card);
+    const foot = P.bones && P.bones.RightFoot, parent = foot ? P.group : P.legs[1];
+    if (foot) { const v = new THREE.Vector3(); P._anim.push(() => { foot.getWorldPosition(v); P.group.worldToLocal(v); g.position.set(v.x + 0.06, v.y + 0.05, v.z); g.rotation.z = Math.sin(performance.now() / 300) * 0.25; }); }
+    else g.position.set(0.05, -0.85, 0.05);
+    parent.add(g); P._cos.push({ obj: g, parent });
+  }
   for (const slot of ['body', 'head', 'face', 'hand', 'back']) {
     const it = BY_ID[cos[slot]]; if (!it || it.slot !== slot) continue;
     if (slot === 'body') { for (const a of it.make(P)) { a.parent.add(a.obj); P._cos.push(a); } continue; }

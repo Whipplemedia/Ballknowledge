@@ -40,6 +40,15 @@ export function createCine({ camera, BK, doors, goons, audio }) {
         }
         return 'camera';
       }
+      if (c.kind === 'opening') { // the night opens on Sal in his booth: who he is, what the crew owes, what tonight's number is
+        if (t < 6.4) { const k = Math.min(1, t / 6.4); shot(9.5 + Math.sin(t * 0.3) * 0.15, 1.42, -4.9 - k * 0.55, 9.5, 1.36, -7.0); }
+        else { const k = (t - 6.4) / 3.1; shot(8.6 - k * 0.8, 2.5 + k * 0.3, -4.6 + k * 0.6, 0, 1.2, 3); }
+        if (t < 3.2) caption('UNCLE SAL', 'You still owe me from last time.');
+        else if (t < 6.4) caption('TONIGHT YOU WORK IT OFF', `${money(c.quota)} by game ${c.at}. Then more. Then more.`);
+        else caption('AND REMEMBER', 'I always collect.');
+        if (t > 0.2) cue('sting', () => audio.sfx('knock', { pos: { x: 9.5, y: 1.2, z: -6.6 } }));
+        return 'camera';
+      }
       if (c.kind === 'huntBeaten' || c.kind === 'shakeBeaten') {
         door(doors.front, t > 2.2, dt); if (t > 2.2) cue('door', () => audio.sfx('knock'));
         shot(5, 2.2, 1.6, 5, 1.0, 6.2); caption(t > 0.6 ? 'AND STAY OUT!' : '', t > 0.6 ? "Sal's men limp back out the front door." : '');
