@@ -27,12 +27,12 @@ let sess = (() => { try { const o = JSON.parse(localStorage.getItem(SESS_KEY)); 
 const saveSess = () => { try { if (sess) localStorage.setItem(SESS_KEY, JSON.stringify(sess)); else localStorage.removeItem(SESS_KEY); } catch {} };
 function connect(msg) {
   const sock = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host); ws = sock;
-  sock.onopen = () => { sock.send(JSON.stringify(msg)); sock.send(JSON.stringify({ type: 'cosmetics', cos: wearing() })); sock.send(JSON.stringify({ type: 'seen', ids: save.seen || [] })); };
+  sock.onopen = () => { sock.send(JSON.stringify(msg)); sock.send(JSON.stringify({ type: 'cosmetics', cos: wearing() })); sock.send(JSON.stringify({ type: 'seen', ids: save.seen || [], tut: !!save.tutDone })); };
   sock.onmessage = (e) => {
     const m = JSON.parse(e.data);
     if (m.type === 'state') { S = m; skew = m.now - Date.now(); stateAt = Date.now(); err = ''; if (sess && Date.now() - sess.at > 60000) { sess.at = Date.now(); saveSess(); } render(); }
     else if (m.type === 'session') { const back = ui.reconnecting; sess = { code: m.code, token: m.token, at: Date.now() }; saveSess(); ui.reconnecting = false; ui.retryN = 0; if (back) toast('Reconnected.', 'win'); window.BK.onSession && window.BK.onSession(); }
-    else if (m.type === 'toast') toast(m.text, m.kind);
+    else if (m.type === 'toast') { toast(m.text, m.kind); if (/^🍸 .*(from the bartender|off your tab)/.test(m.text)) window.BK.vo && window.BK.vo.play('bt_thanks'); }
     else if (m.type === 'pos') window.BK.onPos && window.BK.onPos(m);
     else if (m.type === 'rtc') window.BK.onRtc && window.BK.onRtc(m);
     else if (m.type === 'bottle') window.BK.onBottle && window.BK.onBottle(m);
@@ -85,10 +85,11 @@ function menuView() {
     <div class="msec"><div class="title">Screen</div>${tog('compact', 'Compact HUD (H)')}${tog('bubbles', 'NPC speech bubbles')}</div>
     <div class="row"><button onclick="closeMenu(false);window.BK.audioUI&&window.BK.audioUI.open()">🔊 Sound &amp; voice</button><button onclick="ui.menuKeys=!ui.menuKeys;render()">⌨ ${ui.menuKeys ? 'Hide' : 'Show'} all controls</button></div>
     ${ui.menuKeys ? `<div class="keys">${[['WASD', 'Move'], ['Shift', 'Run'], ['Space', 'Jump'], ['Mouse', 'Look'], ['E', 'Interact / sit / stand'], ['F or right-click', 'Throw a bottle'], ['1-9', 'Pop-up buttons'], ['Tab', 'Free the mouse'], ['C', 'Crew & wire money'], ['H', 'Compact / full HUD'], ['V', 'Push-to-talk'], ['M', 'Mute mic'], ['O', 'Sound & voice'], ['Esc', 'This menu']].map(([k, d]) => `<div><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</div>` : ''}
-    <div class="row"><span class="muted">Room <b>${S.code}</b></span><button class="ghost red-t" style="margin-left:auto" onclick="leaveGame()">Leave game</button></div>
+    <div class="row"><span class="muted">Room <b>${S.code}</b></span>${save.tutDone ? `<button class="ghost" onclick="napkinReset()">↺ Guide me again next first night</button>` : ''}<button class="ghost red-t" style="margin-left:auto" onclick="leaveGame()">Leave game</button></div>
   </div></div>`;
 }
-function openPanel(tab) { window.BK.leaveGames && window.BK.leaveGames(); ui.open = true; if (tab) ui.tab = tab; document.exitPointerLock && document.exitPointerLock(); render(); }
+function openPanel(tab) { window.BK.leaveGames && window.BK.leaveGames(); ui.open = true; if (tab) ui.tab = tab; if (tab === 'paper' || tab === 'mob') napkinMark(tab === 'paper' ? 'paper' : 'sal');
+  const vo = { bar: 'bt_hello', mob: 'sal_greet', vinnie: 'vin_hello' }[tab]; if (vo && Date.now() - (ui.voAt || 0) > 20000) { ui.voAt = Date.now(); window.BK.vo && window.BK.vo.play(vo); } document.exitPointerLock && document.exitPointerLock(); render(); }
 function closePanel() { ui.open = false; render(); try { document.getElementById('world').requestPointerLock(); } catch {} }
 window.BK = { get S() { return S; }, ui, send, openPanel, closePanel, now, toast, settings, openMenu, get drunk() { return drunkLevel(); } };
 addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (ui.menu) closeMenu(); else if (ui.shop) closeShop(); else if (ui.open) closePanel(); } });
@@ -113,7 +114,7 @@ function hudHotkeys() {
   let k = 0;
   for (const b of document.querySelectorAll('#app .hud button')) {
     const old = b.querySelector('kbd.hk'); if (old) old.remove();
-    if (b.disabled || !b.offsetParent || k >= 9) { b.removeAttribute('data-hk'); continue; }
+    if (b.disabled || !b.offsetParent || k >= 9 || b.classList.contains('nk-x')) { b.removeAttribute('data-hk'); continue; }
     k++; b.dataset.hk = k; b.insertAdjacentHTML('afterbegin', `<kbd class="hk">${k}</kbd>`);
   }
   // first time a pop-up with buttons shows up, say how to use it
@@ -152,7 +153,8 @@ function render() {
   if (ui.shop) app.insertAdjacentHTML('beforeend', shopView());
   if (ui.menu && S && ['play', 'hunt'].includes(S.phase) && !ui.open && !ui.shop) app.insertAdjacentHTML('beforeend', menuView()); else ui.menu = false;
   if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { el.setSelectionRange(keep.s, keep.e); } catch {} } }
-  tick(); hudHotkeys(); hudCompact();
+  tick(); hudHotkeys(); hudCompact(); napkinCheck();
+  { const v = S && S.cur && S.cur.vinnie ? S.cur.idx : -1; if (v >= 0 && ui.vinSaid !== v) { ui.vinSaid = v; window.BK.vo && window.BK.vo.play('vin_tip'); } }
   window.BK.onRender && window.BK.onRender();
 }
 
@@ -198,6 +200,9 @@ function lobbyView() {
     ${loadBar()}
     ${campLobby()}
     <div class="title">Crew</div>${playerList()}
+    ${!(S.camp && S.camp.night > 1) ? `<div class="title">Guided first night</div>
+    <div class="row">${[['auto', 'Auto'], ['on', 'Always'], ['off', 'Off']].map(([id, l]) => `<button class="sport ${S.guide === id ? 'sel' : ''}" ${S.host ? '' : 'disabled'} onclick="send({type:'setGuide',guide:'${id}'})">${l}</button>`).join('')}</div>
+    <div class="muted">${S.guide === 'off' ? 'No guide - straight into the deep end.' : S.guide === 'on' ? 'Night 1 walks everyone through the bar.' : S.newbies ? `${S.newbies} new player${S.newbies > 1 ? 's' : ''} - night 1 will walk the crew through the bar.` : 'Everyone here has played before - no guide.'}</div>` : ''}
     <div class="title">Story</div>
     <div class="row">${S.formats.map((x) => `<button class="sport ${S.format === x.id ? 'sel' : ''}" ${S.host && !(S.camp && S.camp.night > 1) ? '' : 'disabled'} onclick="send({type:'setFormat',format:'${x.id}'})">${esc(x.label)}</button>`).join('')}</div>
     <div class="muted">${esc((S.formats.find((x) => x.id === S.format) || {}).blurb || '')}</div>
@@ -232,7 +237,7 @@ function tick() {
   const st = $('#shaket'); if (st && S.shake) st.textContent = mmss(S.shake.until - now());
   const dm = $('#drunkfill'); if (dm) { const d = drunkLevel(); dm.style.width = Math.round(d) + '%'; dm.parentElement.style.filter = `blur(${Math.max(0, (d - 20) / 22).toFixed(1)}px)`; }
 }
-setInterval(() => { if (S) { tick(); hudCompact(); } }, 250);
+setInterval(() => { if (S) { tick(); hudCompact(); napkinCheck(); } }, 250);
 
 // ---------- game HUD ----------
 function resultOf(e) { const r = S.me.results[e.idx]; return r ? r.delta : null; }
@@ -271,7 +276,7 @@ function gameView() {
     ${ui.reconnecting ? '<div class="reconn">📶 Connection lost - reconnecting...</div>' : ''}
     <div class="hud-clock"><span class="pill time" id="timer"></span></div>
     <div class="hud-goal" id="goal">${goalText()}</div>
-    ${quotaHud()}${eventBanner()}${bountyHud()}${jobHud()}${shakeBanner()}
+    ${quotaHud()}${eventBanner()}${napkinOn() ? napkinHud() : bountyHud()}${jobHud()}${shakeBanner()}
     ${hunt ? huntBanner() : ''}
     <div class="hud-crew">${playerList()}</div>
     <div class="hud-feed">${[...S.feed].slice(-4).reverse().map((f) => `<div data-t="${f.t}">${esc(f.text)}</div>`).join('')}</div>
@@ -425,6 +430,44 @@ function barView() {
     <div class="dmeter" style="margin-top:14px;filter:blur(${blur.toFixed(1)}px)"><div style="width:${d}%"></div></div>
     <div class="chalk-sub">You feel <b>${b}</b>${d < 20 ? ` (${d}%)` : ''}. ${S.me.hangover ? '<b>Your head is pounding</b> - no gut feelings until it passes. ' : ''}Somewhere in the buzz your gut gets good: right more often than not. Go past it and it lies to you just as confidently - then the hangover hits. Everyone's sweet spot is different, and it wears off over time.</div>
     ${jobBox()}</div>`;
+}
+// ---------- the guided first night: Sal's napkin ----------
+// A checklist of the bar's systems in a sensible order. The current step gets a "where" hint and the right regular calls
+// out to you (speech bubble, plus a voice line when one exists). Progress is saved in this browser; finishing pays tickets.
+const NAPKIN = [
+  { id: 'bet', text: 'Bet a winner on the open game', where: 'Sportsbook terminal, under the TVs', who: 'Bartender', line: 'First time? Bets go in at the terminal under the TVs. Pick a winner.', vo: 'bt_bet' },
+  { id: 'paper', text: 'Read the paper', where: 'On the counter, by the stools', who: 'Bartender', line: 'Paper\'s on the counter. Sharp guys read it. It can tell you what year it is.', vo: 'bt_paper' },
+  { id: 'vinnie', text: 'Buy Old Vinnie a drink for a tip', where: 'Old man on the stool by the taps', who: 'Old Vinnie', line: 'Psst. Kid. Buy an old man a drink and I\'ll tell you who wins.', vo: 'vin_hello' },
+  { id: 'drink', text: 'Have a drink - find your buzz', where: 'Bartender, behind the counter', who: 'Bartender', line: 'A little buzz helps the gut. Too much and it lies to you.', vo: 'bt_drink' },
+  { id: 'job', text: 'Ask the bartender for a side job', where: 'Bartender: "Ask for a job"', who: 'Bartender', line: 'Short on cash? I always have work. Come ask me.', vo: 'bt_job' },
+  { id: 'bottle', text: 'Throw Sal\'s collector out with bottles', where: 'E grabs bottles off any table, F throws', who: 'Uncle Sal', line: 'Just a friendly reminder, kid. Let\'s see what you do.', vo: 'sal_reminder' },
+  { id: 'sal', text: 'Check your tab with Uncle Sal', where: 'Red corner booth, back right', who: 'Uncle Sal', line: 'Come here. Let\'s talk about what you owe me.', vo: 'sal_tab' },
+];
+const tut = () => (save.tutProg = save.tutProg || {});
+function napkinMark(id) { if (!save.tutDone && !tut()[id]) { tut()[id] = 1; persist(); } }
+function napkinReset() { save.tutDone = false; save.tutProg = {}; persist(); send({ type: 'seen', ids: save.seen || [], tut: false }); toast('Your next first night will be guided again.', 'info'); render(); }
+const napkinOn = () => !!(S && S.guided && !save.tutDone && S.phase === 'play' && S.events);
+function napkinCheck() { // tick off steps from the game state
+  if (!napkinOn()) return;
+  const me = S.me, P = tut(), before = JSON.stringify(P);
+  if (Object.values(me.bets || {}).some((b) => b.ml)) P.bet = 1;
+  if (S.cur && S.cur.vinnie) P.vinnie = 1;
+  if ((me.drunk || 0) >= 15) P.drink = 1;
+  if (me.job || me.jobsDone > 0) P.job = 1;
+  if (S.shake && S.shake.training) P.sawCollector = 1; else if (P.sawCollector) P.bottle = 1;
+  const left = NAPKIN.filter((x) => !P[x.id]);
+  if (!left.length) { save.tutDone = true; save.tix += 10; persist(); send({ type: 'seen', ids: save.seen || [], tut: true }); toast('🧻 Napkin done - you know your way around. +10 🎟 tickets', 'win'); window.BK.vo && window.BK.vo.play('sal_napkin_done'); return; }
+  const cur = napkinCurrent(); const cineOn = !!(S.cine && now() < S.cine.until + 300);
+  if (cur && ui.napkinSaid !== cur.id && !cineOn) { ui.napkinSaid = cur.id; setTimeout(() => { window.BK.guideSay && window.BK.guideSay(cur.who, cur.line, cur.vo); }, 1200); }
+  if (JSON.stringify(P) !== before) persist();
+}
+function napkinCurrent() { const P = tut(); if (S.shake && S.shake.training && !P.bottle) return NAPKIN.find((x) => x.id === 'bottle'); return NAPKIN.find((x) => !P[x.id] && x.id !== 'bottle'); }
+function napkinSkip() { if (!confirm('Skip the guide? You can turn it back on from the Esc menu.')) return; save.tutDone = true; persist(); send({ type: 'seen', ids: save.seen || [], tut: true }); render(); }
+function napkinHud() {
+  const P = tut(), cur = napkinCurrent(), n = NAPKIN.filter((x) => P[x.id]).length;
+  return `<div class="hud-napkin"><div class="nk-h">Sal's napkin <span>${n}/${NAPKIN.length}</span><button class="nk-x" onclick="napkinSkip()" title="Skip the guide">✕</button></div>
+    ${NAPKIN.filter((x) => x.id !== 'bottle' || P.bottle || P.sawCollector || (S.shake && S.shake.training)).map((x) => `<div class="nk-i ${P[x.id] ? 'done' : x === cur ? 'cur' : ''}">${P[x.id] ? '✔' : x === cur ? '➜' : '○'} ${esc(x.text)}${x === cur ? `<small>${esc(x.where)}</small>` : ''}</div>`).join('')}
+    ${!P.sawCollector && !P.bottle ? '<div class="nk-i dim">○ ...Sal will send someone. Be ready.</div>' : ''}</div>`;
 }
 // ---------- side jobs from the bartender ----------
 function jobBox() {

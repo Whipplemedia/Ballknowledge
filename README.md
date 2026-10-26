@@ -64,6 +64,16 @@ Second batch (Oct 2026), all game scores and home teams checked against web sear
 - **The Daily Ledger** (on the counter, E to read): a sports page with the date torn off. Real seasons carry a regular-season headline plus three news-of-the-year briefs (`paper.js`); standings and hot players come from the season data. It never prints a playoff result.
 - New regulars from Meshy (`gina`, `vinnie`, `ray`, `steve` in `public/models`): Gina at the pool table, Old Vinnie and Celtics Ray on the stools, Sloppy Steve on the couch.
 
+## Guided first night
+- Lobby setting **Guided first night**: Auto (default: on when anyone in the crew hasn't finished the guide in this browser), Always, Off. Each browser reports `tut` with its `seen` message.
+- **Sal's napkin** (HUD, replaces bounties while guided) walks through: bet a winner, read the paper, buy Old Vinnie a drink, have a drink, ask for a side job, throw Sal's collector out, check your tab with Sal. The current step names where to go, and the right regular calls out to you (`bar.say`, plus a voice line when one exists). Finishing pays +10 tickets; ✕ skips; the Esc menu can turn it back on.
+- When game 1 goes on the air, Sal sends a single **training collector** ($100, two bottles throw him out) so bottles are learned before the hitmen.
+
+## Voice lines (ElevenLabs)
+- `tools/voice-script.json`: 24 lines (Sal, the bartender, Old Vinnie, the hitmen, the TV announcer) with a voice direction per speaker.
+- `node tools/voices.js` generates `public/audio/vo/<id>.mp3` and `manifest.json`. Needs `ELEVENLABS_API_KEY` in the environment and network access to `api.elevenlabs.io`. Voices are picked by name from your ElevenLabs library (`VOICE_SAL=<voice id>` etc. to override). Existing clips are skipped unless `--force` or listed by id.
+- `public/vo.js` plays clips that exist and silently skips the rest: Sal's opening per night, collectors/hitmen arriving, the kill scene, guide call-outs, the bartender/Sal/Vinnie greetings, job thanks, and the announcer when a game goes on air or final.
+
 ## Hitmen: bottles only
 - Fists bounce off hitmen. Each takes 4 bottle hits (5 on the last night of a campaign); 3 of them for crews up to 3, 4 for 4-5 players, 5 for 6.
 - A hitman who is free sidesteps 45% of bottles (`goonDodge`, shown as a hop and "DODGED!"); one busy holding a player can't dodge.

@@ -231,6 +231,8 @@ function startGame(room) {
   const now = Date.now(); room.t0 = now;
   const camp = room.format === 'campaign' ? (room.camp = room.camp || { night: 1, nights: NIGHTS, log: [] }) : null, night = camp ? camp.night : 1;
   room.night = night; room.finale = !!camp && night === camp.nights;
+  // the guided first night: on night 1 when someone is new here (or the host forced it). Sal sends one collector early to teach bottles.
+  room.guided = night === 1 && (room.guide === 'on' || ((room.guide || 'auto') === 'auto' && plist(room).some((p) => !p.tutDone))); room.trained = false;
   room.events = season.events.map((e, i) => {
     const rng = seeded(room.code + ':' + i + ':' + now);
     const openAt = i === 0 ? now : now + lead + i * win, closeAt = now + lead + (i + 1) * win;
@@ -283,6 +285,7 @@ function tick(room) {
     if (ev.status === 'airing' && now >= ev.resolveAt) { finalizeEvent(room, ev); changed = true; }
   }
   if (room.shake && now >= room.shake.until && (!room.goons || room.goons.phase === 'fight')) { endShake(room, false); changed = true; }
+  if (room.guided && !room.trained && !room.shake && !room.goons && !room.barEvent && room.events.some((e) => e.status === 'airing')) { startTrainingShake(room); changed = true; }
   if (room.drops && room.drops.some((d) => now >= d.until)) { room.drops = room.drops.filter((d) => now < d.until); changed = true; }
   if (room.barEvent && now >= room.barEvent.until) { endBarEvent(room); changed = true; }
   else if (!room.barEvent && !room.shake && !room.goons && now >= room.nextBarEvent) { startBarEvent(room); changed = true; }
@@ -358,6 +361,13 @@ function checkQuota(room, q) {
     if (q.kind === 'mid') startShake(room, q.target - crew);
   }
 }
+// guided first night: one collector, a $100 "reminder", soft enough for two bottles to throw him out
+function startTrainingShake(room) {
+  room.trained = true;
+  const fightAt = goons.spawn(room, 'shake', 1, 16, { amount: 100, training: true });
+  room.shake = { tax: 100, paid: 0, until: fightAt + dur(40000), training: true };
+  feed(room, `🧾 Sal sent a collector over with a friendly reminder. Two bottles will throw him out - or pay him $100.`);
+}
 function startShake(room, shortfall) {
   const tax = clamp(Math.round(shortfall * 0.5 / 50) * 50, 400, 3000);
   const fightAt = goons.spawn(room, 'shake', 2, 60 + tax / 30, { amount: tax });
@@ -367,7 +377,7 @@ function startShake(room, shortfall) {
 function endShake(room, beaten) {
   const sh = room.shake; if (!sh) return; room.shake = null;
   if (room.goons && room.goons.kind === 'shake' && room.goons.phase !== 'outro') goons.outro(room, beaten ? 'beaten' : 'leave');
-  if (beaten) { feed(room, `👊 The crew threw Sal's collectors out. Free of charge.`); awardAll(room, 'shakeBeat'); return; }
+  if (beaten) { feed(room, sh.training ? '👊 The collector limps out. Sal got the message - and so did you: bottles work.' : `👊 The crew threw Sal's collectors out. Free of charge.`); awardAll(room, 'shakeBeat'); return; }
   const left = sh.tax - sh.paid;
   if (left <= 0) { feed(room, `💸 The crew paid the collectors. Sal is satisfied.`); return; }
   const each = Math.ceil(left / room.players.size);
@@ -588,6 +598,7 @@ function view(room, p) {
   const d = Math.round(drunkNow(p));
   const v = { type: 'state', now: Date.now(), code: room.code, you: p.id, host: room.hostId === p.id, phase: room.phase, sport: room.sport, pace: room.pace, mode: room.mode, seasonCount: SEASONS[room.sport].length, league: room.season && room.season.fake ? room.season.league : null,
     sports: Object.entries(SPORTS).map(([id, s]) => ({ id, label: s.label, emoji: s.emoji })), paces: Object.entries(PACES).map(([id, x]) => ({ id, label: x.label })), format: room.format, formats: Object.entries(FORMATS).map(([id, x]) => ({ id, label: x.label, blurb: x.blurb })),
+    guided: !!room.guided, guide: room.guide || 'auto', newbies: plist(room).filter((q) => !q.tutDone).length,
     camp: room.camp ? { night: room.night && room.phase !== 'lobby' ? room.night : room.camp.night, nights: room.camp.nights, log: room.camp.log } : null, nextTab: TAB[(room.camp ? room.camp.night : 1) - 1], modes: Object.entries(MODES).map(([id, x]) => ({ id, label: x.label, blurb: x.blurb })),
     feed: room.feed.slice(-25), drinks: DRINKS, btaken: room.btaken, drops: (room.drops || []).map((d) => ({ id: d.id, x: d.x, z: d.z, amt: d.amt })), // bottle spots on tables: index -> respawn time
 
@@ -603,7 +614,7 @@ function view(room, p) {
     v.quota = room.quota.map((q) => ({ kind: q.kind, idx: q.idx, target: q.target, status: q.status, crew: q.crew }));
     v.crewNow = Math.round(plist(room).reduce((a, q) => a + networth(room, q), 0));
     v.barEvent = room.barEvent ? { kind: room.barEvent.kind, until: room.barEvent.until, betUntil: room.barEvent.betUntil, red: room.barEvent.red, blue: room.barEvent.blue, hits: room.barEvent.hits || null, title: room.barEvent.title, text: room.barEvent.text, mine: room.barEvent.bets ? room.barEvent.bets[p.id] || null : null } : null;
-    v.shake = room.shake ? { tax: room.shake.tax, paid: room.shake.paid, hp: goons.hpLeft(room), maxHp: goons.hpMax(room), until: room.shake.until } : null;
+    v.shake = room.shake ? { training: !!room.shake.training, tax: room.shake.tax, paid: room.shake.paid, hp: goons.hpLeft(room), maxHp: goons.hpMax(room), until: room.shake.until } : null;
     v.spinning = room.spin ? { by: room.spin.name, until: room.spin.until } : null;
     const cur = room.events.find((e) => e.status === 'open');
     if (cur && room.phase === 'play') {
@@ -631,7 +642,8 @@ function handle(room, p, m) {
   switch (m.type) {
     case 'setSport': if (room.hostId === p.id && room.phase === 'lobby' && SPORTS[m.sport]) { room.sport = m.sport; broadcast(room); } break;
     case 'setMode': if (room.hostId === p.id && room.phase === 'lobby' && MODES[m.mode]) { room.mode = m.mode; broadcast(room); } break;
-    case 'seen': p.seen = new Set((Array.isArray(m.ids) ? m.ids : []).slice(-200).map(String)); break;
+    case 'seen': p.seen = new Set((Array.isArray(m.ids) ? m.ids : []).slice(-200).map(String)); if (typeof m.tut === 'boolean') { p.tutDone = m.tut; if (room.phase === 'lobby') broadcast(room); } break;
+    case 'setGuide': if (room.hostId === p.id && room.phase === 'lobby' && ['auto', 'on', 'off'].includes(m.guide)) { room.guide = m.guide; broadcast(room); } break;
     case 'setFormat': if (room.hostId === p.id && room.phase === 'lobby' && FORMATS[m.format] && !(room.camp && room.camp.night > 1)) { room.format = m.format; room.camp = null; broadcast(room); } break;
     case 'endCampaign': if (room.hostId === p.id && room.phase === 'lobby' && room.camp) { room.camp = null; for (const q of room.players.values()) { q.campCash = null; q.rollover = 0; } feed(room, '📖 The crew walked away from the campaign.'); broadcast(room); } break;
     case 'jobTake': {

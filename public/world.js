@@ -13,6 +13,7 @@ import { label } from './textures.js';
 import { makeDizzy, headPos } from './dizzy.js';
 import { createGoonsView } from './goonsview.js';
 import { createCine } from './cine.js';
+import { createVO } from './vo.js';
 import { CATALOG, BY_ID, RARITY, SLOTS, rollCrate, createPreview, applyCosmetics, tickCosmetics } from './cosmetics.js';
 
 const BK = window.BK;
@@ -53,7 +54,7 @@ const fx = createFX(renderer, scene, camera);
 // ---------- sound + voice ----------
 const voice = createVoice(BK), audioUI = createAudioUI(voice, BK);
 BK.onSession = () => { if (voice.enabled) BK.send({ type: 'rtc', to: '*', data: { k: 'hello' } }); }; // (re)joined: let voice peers find us again
-BK.audio = audio; BK.voice = voice; BK.audioUI = audioUI; BK.sfx = (n, o) => audio.sfx(n, o); BK.onRtc = (m) => voice.onSignal(m);
+BK.audio = audio; BK.voice = voice; BK.vo = createVO(audio); BK.audioUI = audioUI; BK.sfx = (n, o) => audio.sfx(n, o); BK.onRtc = (m) => voice.onSignal(m);
 document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('button,[onclick]') && !e.target.closest('#audiopanel')) audio.sfx('click'); }, true);
 const sfxAt = (n, x, z, y = 1.2, o = {}) => audio.sfx(n, { pos: { x, y, z }, ...o });
 BK.sfxAt = sfxAt;
@@ -149,6 +150,8 @@ function grabDrops() { for (const [id, o] of drops) if (Math.hypot(o.x - me.x, o
 const goons = createGoonsView({ scene, BK, audio }); BK.goons = goons;
 const cine = createCine({ camera, BK, doors: bar.doors, goons, audio });
 let wasHeld = null;
+// guided first night: a regular calls out to you (bubble + voice line when the clip exists)
+BK.guideSay = (who, text, vo) => { const n = bar.say(who, text, 7); if (n) { const g = n.P.group.position; BK.vo.play(vo, { x: g.x, y: 1.6, z: g.z }); } };
 BK.onGoonDodge = (m) => { goons.dodge(m.id); const o = goons.get(m.id); if (o) audio.sfx('whoosh', { pos: { x: o.P.group.position.x, y: 1.3, z: o.P.group.position.z } }); };
 BK.onGoons = (m) => { goons.onMsg(m); const h = goons.held[BK.S && BK.S.you] || null; if (h !== wasHeld) { wasHeld = h; if (h) { if (me.sit) BK.stand(); games.leave(); audio.sfx('groan'); } window.render && window.render(); } };
 const heldBy = () => (BK.S && goons.held[BK.S.you]) || null, draggedBy = () => (BK.S && goons.drag[BK.S.you]) || null;
@@ -278,7 +281,9 @@ function frame(now) {
       if (prev === 'blackout') audio.sfx('powerOn'); }
     if (kind === 'fight' && Math.random() < dt * 2.2) audio.sfx(Math.random() < 0.8 ? 'punch' : 'groan', { pos: { x: 1, y: 1.3, z: -2.2 } });
     const sh = !!(BK.S && BK.S.shake); if (sh !== audio._shake) { audio._shake = sh; if (sh) { audio.sfx('sting'); audio.sfx('knock', { delay: 0.5 }); } }
-    const evs = BK.S && BK.S.events; if (evs) { const open = evs.find((e) => e.status === 'open'), oi = open ? open.idx : -1; if (oi !== audio._open) { if (audio._open !== undefined && oi >= 0) audio.sfx('bell'); audio._open = oi; } } }
+    const evs = BK.S && BK.S.events; if (evs) { const open = evs.find((e) => e.status === 'open'), oi = open ? open.idx : -1; if (oi !== audio._open) { if (audio._open !== undefined && oi >= 0) audio.sfx('bell'); audio._open = oi; }
+      const sig = evs.map((e) => e.status[0]).join(''); if (sig !== audio._evSig) { const was = audio._evSig || ''; audio._evSig = sig; /* the TV announcer: on air / final */
+        if (was) { const tv = { x: 0, y: 2.6, z: -7.2 }; if ([...sig].some((c, i) => c === 'a' && was[i] !== 'a')) BK.vo.play('an_underway', tv, { v: 0.8 }); else if ([...sig].some((c, i) => c === 'f' && was[i] !== 'f')) BK.vo.play('an_final', tv, { v: 0.8 }); } } } }
   const ev = BK.S && BK.S.barEvent, blackout = !!(ev && ev.kind === 'blackout'), happy = !!(ev && ev.kind === 'happy');
   tv.blackout = blackout;
   { const cn = BK.S && BK.S.cine, ce = cn ? BK.now() - cn.start : 1e9, flick = cn && /Intro$/.test(cn.kind) && ce > 400 && ce < 1500;

@@ -374,6 +374,12 @@ export function buildBar({ scene, BK, tv }) {
       else { animate(n.P, mode, t); if (n.seated) n.P.legs.forEach((l) => (l.rotation.x = 1.45)); }
       if (n.bubble) { // speech bubbles: only nearby NPCs in front of you, at most two at once, sized by distance so they never fill the screen
         const bs = n.bubble.sprite, gp = n.P.group.position, d = Math.hypot(gp.x - me.x, gp.z - me.z), want = !(BK.settings && BK.settings.bubbles === false);
+        if (n.forced) { /* scripted line (guided first night): shows regardless of the chatter limits */
+          if (!n.forced.shown) { n.forced.shown = true; n.bubble.set(n.forced.text); n.until = t + n.forced.secs; talking++; }
+          if (t > n.until) { n.forced = null; n.bubble.set(''); talking--; n.next = t + 6; }
+          if (bs.visible) { const k = Math.min(1, Math.max(0.55, 0.38 + d * 0.11)); bs.scale.set(1.2 * k, 0.375 * k, 1); }
+          continue;
+        }
         if (bs.visible && (t > n.until || !want || d > 8)) { n.bubble.set(''); talking--; }
         const ahead = me.yaw === undefined || ((gp.x - me.x) * -Math.sin(me.yaw) + (gp.z - me.z) * -Math.cos(me.yaw)) / (d || 1) > 0.25;
         if (t > n.next && want && d < 6 && ahead && talking < 2 && !bs.visible) { n.bubble.set(n.lines[Math.floor(Math.random() * n.lines.length)]); n.until = t + 3.8; talking++; }
@@ -384,5 +390,7 @@ export function buildBar({ scene, BK, tv }) {
     const p = dg.attributes.position; for (let i = 0; i < dustN; i++) { p.array[i * 3 + 1] += dt * 0.03 * (1 + (i % 3)); if (p.array[i * 3 + 1] > 4.6) p.array[i * 3 + 1] = 0.1; p.array[i * 3] += Math.sin(t * 0.2 + i) * dt * 0.02; }
     p.needsUpdate = true;
   }
-  return { stations, obstacles, npcs, seats, update, wanderPos, life, bottleSpots, doors };
+  // scripted speech: say('Bartender' | 'Old Vinnie' | 'Uncle Sal', text) - by display name (n.who) or role name
+  const say = (who, text, secs = 6) => { const n = npcs.find((x) => x.who === who) || npcs.find((x) => x.name === who); if (!n || !n.bubble) return null; if (n.bubble.sprite.visible && !n.forced) n.bubble.set(''); n.forced = { text, secs, shown: false }; return n; };
+  return { stations, obstacles, npcs, seats, update, wanderPos, life, bottleSpots, doors, say };
 }

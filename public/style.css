@@ -335,3 +335,15 @@ body.cine #app .hud,body.cine #prompt,body.cine #cross,body.cine #toasts,body.ci
 @media (max-width:640px){.pp-cols{grid-template-columns:1fr}.pp-main{border-right:0;padding-right:0}.pp-mast{font-size:38px}.pp-head{font-size:26px}}
 .hud-top .pill{white-space:nowrap}
 .pl{gap:12px}.pl>span:last-child{text-align:right}
+
+/* ---------- guided first night: Sal's napkin ---------- */
+.hud-napkin{position:absolute;right:14px;bottom:44px;width:min(290px,44vw);background:#f4efe2;color:#2a2418;border-radius:3px;padding:10px 12px 12px;transform:rotate(-1.2deg);
+  box-shadow:0 8px 24px #0009;font-family:Caveat,"Segoe Print","Comic Sans MS",cursive;font-size:19px;line-height:1.15;
+  background-image:radial-gradient(#0000000d 1px,transparent 1px),repeating-linear-gradient(0deg,transparent 0 21px,#7a90b033 21px 22px);background-size:4px 4px,100% 22px}
+.nk-h{display:flex;align-items:center;gap:8px;font-weight:700;font-size:23px;border-bottom:2px solid #b0302a;margin-bottom:4px;color:#8a1f1a}
+.nk-h span{font-size:17px;color:#6a5a40}
+.nk-x{margin-left:auto;background:none;border:0;color:#8a7a60;font-size:16px;padding:0 4px;cursor:pointer}
+.nk-i{padding:2px 0}.nk-i small{display:block;font-size:15px;color:#7a5a30;margin-left:18px}
+.nk-i.done{color:#7a8a6a;text-decoration:line-through;text-decoration-color:#b0302a99}
+.nk-i.cur{color:#1a1408;font-weight:700}
+.nk-i.dim{color:#9a8a70;font-style:italic}

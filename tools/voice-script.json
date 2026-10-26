@@ -1,0 +1,37 @@
+{
+  "_about": "Voice lines for Ball Knowledge. tools/voices.js turns each line into public/audio/vo/<id>.mp3 with ElevenLabs. Voices are matched by name in your ElevenLabs library (first match wins); set VOICE_<SPEAKER> env vars to force a voice id.",
+  "model": "eleven_multilingual_v2",
+  "speakers": {
+    "sal":       { "voices": ["Arnold", "Clyde", "Bill"], "settings": { "stability": 0.45, "similarity_boost": 0.8, "style": 0.35 }, "direction": "older, gravelly East-coast mob boss; calm, amused, menacing" },
+    "bartender": { "voices": ["Domi", "Rachel", "Bella"], "settings": { "stability": 0.5, "similarity_boost": 0.75, "style": 0.3 }, "direction": "dry, quick, seen-it-all woman behind a dive bar" },
+    "vinnie":    { "voices": ["Bill", "Fin", "Clyde"], "settings": { "stability": 0.4, "similarity_boost": 0.75, "style": 0.45 }, "direction": "very old regular, raspy, conspiratorial, a little wistful" },
+    "hitman":    { "voices": ["Arnold", "Adam", "Josh"], "settings": { "stability": 0.7, "similarity_boost": 0.8, "style": 0.1 }, "direction": "flat, quiet, no emotion" },
+    "announcer": { "voices": ["Adam", "Josh", "Sam"], "settings": { "stability": 0.35, "similarity_boost": 0.75, "style": 0.6 }, "direction": "excited TV play-by-play announcer" }
+  },
+  "lines": [
+    { "id": "sal_open1a", "speaker": "sal", "text": "You each owe me five hundred dollars. From last time. ...You remember last time." },
+    { "id": "sal_open_b", "speaker": "sal", "text": "Tonight, you work it off. Hit my number by game three. Then more. Then more." },
+    { "id": "sal_open1c", "speaker": "sal", "text": "And remember... I always collect." },
+    { "id": "sal_open2a", "speaker": "sal", "text": "Back again. The marker's seven-fifty now. Plus whatever you still owe me." },
+    { "id": "sal_open3a", "speaker": "sal", "text": "Last night. Clear my books tonight... and you walk out of here free." },
+    { "id": "sal_open3c", "speaker": "sal", "text": "Come up short... and you don't walk out." },
+    { "id": "sal_reminder", "speaker": "sal", "text": "Just a friendly reminder, kid. Let's see what you do." },
+    { "id": "sal_tab", "speaker": "sal", "text": "Come here. Let's talk about what you owe me." },
+    { "id": "sal_greet", "speaker": "sal", "text": "I can make things happen, kid. For a price." },
+    { "id": "sal_napkin_done", "speaker": "sal", "text": "Not bad, kid. Now go make me some money." },
+    { "id": "bt_bet", "speaker": "bartender", "text": "First time? Bets go in at the terminal under the TVs. Pick a winner." },
+    { "id": "bt_paper", "speaker": "bartender", "text": "Paper's on the counter. Sharp guys read it. It can tell you what year it is." },
+    { "id": "bt_drink", "speaker": "bartender", "text": "A little buzz helps the gut. Too much, and it lies to you." },
+    { "id": "bt_job", "speaker": "bartender", "text": "Short on cash? I always have work. Come ask me." },
+    { "id": "bt_hello", "speaker": "bartender", "text": "What'll it be?" },
+    { "id": "bt_thanks", "speaker": "bartender", "text": "Nice work. Here's your cut." },
+    { "id": "vin_hello", "speaker": "vinnie", "text": "Psst. Kid. Buy an old man a drink and I'll tell you who wins." },
+    { "id": "vin_tip", "speaker": "vinnie", "text": "Listen. I seen a hundred of these. Mark it down." },
+    { "id": "col_shake", "speaker": "hitman", "text": "You came up short. Sal wants his money." },
+    { "id": "col_reminder", "speaker": "hitman", "text": "Friendly reminder from Sal." },
+    { "id": "hm_hunt", "speaker": "hitman", "text": "Sal sends his regards." },
+    { "id": "hm_kill", "speaker": "hitman", "text": "Sal wants a word. In the back." },
+    { "id": "an_underway", "speaker": "announcer", "text": "And we are underway!" },
+    { "id": "an_final", "speaker": "announcer", "text": "And that is the ball game!" }
+  ]
+}

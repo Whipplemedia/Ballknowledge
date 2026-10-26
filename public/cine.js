@@ -30,12 +30,14 @@ export function createCine({ camera, BK, doors, goons, audio }) {
         const hunt = c.kind === 'huntIntro', tB = hunt ? 2.6 : 99, tC = hunt ? 4.8 : 2.3;
         door(doors.front, t > 0.45 && t < tC + 0.6, dt);
         if (t > 0.45) cue('bang', () => { audio.sfx('bonk', { v: 1 }); audio.sfx('sting'); });
+        if (t > tC + 0.3) cue('vo', () => BK.vo && BK.vo.play(hunt ? 'hm_hunt' : c.training ? 'col_reminder' : 'col_shake'));
         if (t < tB && t < tC) { shot(5, 1.65, 3.4 - t * 0.12, 5, 1.35, 7.9); caption(''); }
         else if (t < tC) { const p = goonPos(L, 1.35); shot(7.0 - (t - tB) * 0.2, 0.7, 3.4, p.x, p.y, p.z); caption(''); } /* low angle from the pool-table side */
         else {
           const g = L && L.P.group, ry = g ? g.rotation.y : 0, fx = -Math.sin(ry), fz = -Math.cos(ry), p = goonPos(L, 1.7), d = 1.55 - (t - tC) * 0.08;
           shot(p.x + fx * d + 0.25, 1.62, p.z + fz * d, p.x, 1.62, p.z);
           if (hunt) caption('SAL SENDS HIS REGARDS', `${(c.names || []).join(', ')} - ${money(c.amount)}. Tonight.`);
+          else if (c.training) caption('A FRIENDLY REMINDER', `Sal wants ${money(c.amount)} - or show him what a bottle can do. Grab one, throw with F.`);
           else caption("SAL'S COLLECTORS", `The crew came up ${money(c.amount)} short. Pay up - or throw them out.`);
         }
         return 'camera';
@@ -48,6 +50,9 @@ export function createCine({ camera, BK, doors, goons, audio }) {
         else if (t < 6.4) caption('TONIGHT YOU WORK IT OFF', `${money(c.quota)} by game ${c.at}. Then more. Then more.`);
         else caption('AND REMEMBER', last ? 'Come up short... and you don\'t walk out.' : 'I always collect.');
         if (t > 0.2) cue('sting', () => audio.sfx('knock', { pos: { x: 9.5, y: 1.2, z: -6.6 } }));
+        if (t > 0.4) cue('vo1', () => BK.vo && BK.vo.play(n === 1 ? 'sal_open1a' : last ? 'sal_open3a' : 'sal_open2a'));
+        if (t > 3.3) cue('vo2', () => BK.vo && BK.vo.play('sal_open_b'));
+        if (t > 6.5) cue('vo3', () => BK.vo && BK.vo.play(last ? 'sal_open3c' : 'sal_open1c'));
         return 'camera';
       }
       if (c.kind === 'huntBeaten' || c.kind === 'shakeBeaten') {
@@ -59,6 +64,7 @@ export function createCine({ camera, BK, doors, goons, audio }) {
         const mine = (c.victims || []).includes(myId), gid = goons.drag[myId], o = gid && goons.get(gid);
         door(doors.back, t > 1.6 && t < (c.until - c.start) / 1000 - 0.9, dt, -1.35);
         if (t > 1.6) cue('open', () => audio.sfx('knock', { pos: { x: 11.6, y: 1.2, z: -6.6 } }));
+        if (t > 1.0) cue('vo', () => BK.vo && BK.vo.play('hm_kill'));
         if (t > (c.until - c.start) / 1000 - 0.9) cue('slam', () => { audio.sfx('bonk', { v: 1 }); audio.sfx('groan', { delay: 0.5 }); });
         if (mine && o) { // first person: dragged backwards out of the bar by the collar
           const g = o.P.group, ry = g.rotation.y, fx = -Math.sin(ry), fz = -Math.cos(ry);
