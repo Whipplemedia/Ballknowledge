@@ -216,6 +216,7 @@ function startGame(room) {
   room.events[0].openAt = now;
   for (const p of room.players.values()) {
     Object.assign(p, { money: START_MONEY, debt: 0, loans: 0, mobTied: false, bets: {}, fix: {}, results: {}, drunk: 0, drunkT: now, finalCorrect: null, fate: null, remaining: 0, tickets: 0, challenge: null, pool: null, streak: { darts: 0, bowling: 0, cornhole: 0 }, lastChallenge: 0 });
+    p.tol = Math.round((Math.random() * 2 - 1) * 10); p.tips = {}; p.over = false; p.hangUntil = 0; // hidden drink sweet spot for this season
     p.bounties = [...BOUNTIES].sort(() => Math.random() - 0.5).slice(0, 3).map((b) => ({ ...b, done: false }));
   }
   const nE = room.events.length, start = START_MONEY * room.players.size;
@@ -398,37 +399,52 @@ function finish(room) {
 }
 
 // ---------- hints (drunk confidence) ----------
+// Everyone has a hidden sweet spot (meter 55-70, shifted +/-10 per player per season). Below it the gut feeling is vague
+// and barely better than a coin; inside it, right 60% of the time; past it, just as confident but usually wrong; wasted is
+// nonsense. Coming back down from past the spot = a hangover with no gut feelings for a minute. A confident tip locks
+// for that game (no re-rolling by drinking more).
+const HINT_ACC = { warm: 0.52, sweet: 0.6, over: 0.35, wasted: 0.3 };
+function drinkZone(p) {
+  const d = drunkNow(p), tol = p.tol || 0, lo = 55 + tol, hi = 70 + tol, now = Date.now();
+  if (d > hi) p.over = true;
+  if (p.over && d <= hi) { p.over = false; p.hangUntil = now + dur(60000); }
+  if (p.hangUntil > now && d > 15) return 'hangover';
+  if (d < 20) return 'sober';
+  if (d < lo) return 'warm';
+  if (d <= hi) return 'sweet';
+  return d >= 92 ? 'wasted' : 'over';
+}
 function hintFor(room, p, ev) {
-  const d = drunkNow(p), b = band(d); if (b === 0) return null;
-  const season = room.season, rng = seeded(p.id + ':' + ev.idx + ':' + b);
-  const acc = [0, 0.64, 0.78, 0.9, 0.5][b];
+  p.tips = p.tips || {}; if (p.tips[ev.idx]) return p.tips[ev.idx];
+  const zone = drinkZone(p); if (zone === 'sober' || zone === 'hangover') return null;
+  const season = room.season, rng = seeded(p.id + ':' + ev.idx + ':' + zone), acc = HINT_ACC[zone];
   const nat = ev.sa > ev.sb ? 'a' : 'b', other = (s) => (s === 'a' ? 'b' : 'a');
   const mlSide = rng() < acc ? nat : other(nat);
   const tot = ev.sa + ev.sb, truthTot = tot > ev.mk.total.line ? 'over' : 'under';
-  const totPick = rng() < acc - 0.06 ? truthTot : truthTot === 'over' ? 'under' : 'over';
+  const totPick = rng() < acc ? truthTot : truthTot === 'over' ? 'under' : 'over';
   const margin = Math.abs(ev.sa - ev.sb);
   const cover = (() => { const sa = ev.mk.spread.a.line; return ev.sa + sa > ev.sb ? 'a' : 'b'; })();
-  const spSide = rng() < acc - 0.1 ? cover : other(cover);
+  const spSide = rng() < acc ? cover : other(cover);
   const nm = (s) => ev[s], sh = (s) => season.teams[ev[s]].short;
   const starOf = (s) => { const st = season.teams[ev[s]].stars; return st.length ? st[Math.floor(rng() * st.length)][0] : null; };
   const T = (arr) => arr[Math.floor(rng() * arr.length)];
-  const hint = { band: b, level: ['sober', 'tipsy', 'buzzed', 'drunk', 'wasted'][b], acc };
-  if (b === 1) {
+  // the label never says which zone you're in: warm = "gut feeling", sweet and over look identical ("drunk confidence")
+  const hint = { level: zone === 'warm' ? 'gut' : zone === 'wasted' ? 'wasted' : 'confident' };
+  if (zone === 'warm') {
     hint.ml = { side: mlSide, conf: 1, text: T([`Mmm... something about ${sh(mlSide)} just feels right tonight.`, `I've got a weird good feeling about ${sh(mlSide)}.`, `Don't ask me why, but ${sh(mlSide)}.`]) };
     hint.total = { pick: totPick, conf: 1, text: totPick === 'over' ? 'This one feels like it gets loud.' : 'Feels like a grind. Low scoring, maybe.' };
-  } else if (b === 2) {
-    const s = starOf(mlSide);
-    hint.ml = { side: mlSide, conf: 2, text: s ? `${s} is gonna EAT tonight. I can feel it.` : `${nm(mlSide)} are locked in. Trust the buzz.` };
-    hint.total = { pick: totPick, conf: 2, text: totPick === 'over' ? `Both offenses are cooking - over ${ev.mk.total.line}, easy.` : `Defenses win this one. Under ${ev.mk.total.line}.` };
-    hint.spread = { side: spSide, conf: 2, text: margin >= Math.abs(ev.mk.spread[spSide].line) ? `${sh(spSide)} cover without sweating.` : `Tight game - take the points.` };
-  } else if (b === 3) {
-    hint.ml = { side: mlSide, conf: 3, text: `I would bet the HOUSE on ${nm(mlSide)}. Put that on a napkin.` };
-    hint.total = { pick: totPick, conf: 3, text: `${totPick === 'over' ? 'OVER' : 'UNDER'} ${ev.mk.total.line}. I will fight anyone.` };
-    hint.spread = { side: spSide, conf: 3, text: `${sh(spSide)} ${ev.mk.spread[spSide].line > 0 ? '+' : ''}${ev.mk.spread[spSide].line}. Lock it.` };
+  } else if (zone === 'sweet' || zone === 'over') {
+    const s = starOf(mlSide), slur = zone === 'over' && rng() < 0.5; // past the spot you only sometimes notice the words getting loose
+    const w = (t) => (slur ? t.replace(/s\b/, 'sh').replace('!', '!!') : t);
+    hint.ml = { side: mlSide, conf: rng() < 0.5 ? 2 : 3, text: w(T([s ? `${s} is gonna EAT tonight. I can feel it.` : `${nm(mlSide)} are locked in. Trust the buzz.`, `I would bet the HOUSE on ${nm(mlSide)}. Put that on a napkin.`])) };
+    hint.total = { pick: totPick, conf: 2, text: w(totPick === 'over' ? `Both offenses are cooking - over ${ev.mk.total.line}, easy.` : `Defenses win this one. Under ${ev.mk.total.line}.`) };
+    hint.spread = { side: spSide, conf: 2, text: w(margin >= Math.abs(ev.mk.spread[spSide].line) ? `${sh(spSide)} cover without sweating.` : `Tight game - take the points.`) };
+    p.tips[ev.idx] = hint; // confident tips lock for this game
   } else {
     const rs = rng() < 0.5 ? 'a' : 'b';
     hint.ml = { side: rs, conf: 3, text: T([`hic... ${sh(rs)}... or the other guy... definitely the first one`, `bro... bro... ${nm(rs)}. i'm SO sure. what were we talking about`, `*burp* trust me... ${sh(rs)}!`]) };
     hint.total = { pick: rng() < 0.5 ? 'over' : 'under', conf: 3, text: 'the number is... a number. go big.' };
+    p.tips[ev.idx] = hint;
   }
   return hint;
 }
@@ -486,7 +502,7 @@ function view(room, p) {
     }
   }
   if (room.phase === 'hunt') v.hunt = { hp: goons.hpLeft(room), maxHp: goons.hpMax(room), until: room.huntEnd };
-  v.cine = room.cine || null; v.me.held = p.heldBy || null; v.me.dead = !!p.dead;
+  v.cine = room.cine || null; v.me.held = p.heldBy || null; v.me.dead = !!p.dead; v.me.hangover = (room.phase === 'play' || room.phase === 'hunt') && drinkZone(p) === 'hangover';
   if (room.phase === 'ended') v.summary = room.summary;
   return v;
 }
@@ -765,4 +781,4 @@ if (STATE_FILE) { restore(); setInterval(snapshot, 4000); }
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { snapshot(); process.exit(0); });
 
 if (require.main === module) server.listen(PORT, () => console.log(`Ball Knowledge running on http://localhost:${PORT}`));
-module.exports = { genHighlights, buildMarkets, splitFootball, splitBasket };
+module.exports = { genHighlights, buildMarkets, splitFootball, splitBasket, hintFor, drinkZone };

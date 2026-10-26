@@ -210,7 +210,7 @@ function tick() {
   const t2 = $('#tl2'); if (t2 && S.cur) { const e = S.events[S.cur.idx]; t2.textContent = mmss(e.closeAt - now()); t2.classList.toggle('urgent', e.closeAt - now() < 20000); const bar = $('#tlbar'); if (bar) bar.style.width = Math.max(0, Math.min(100, (e.closeAt - now()) / (e.closeAt - e.openAt) * 100)) + '%'; }
   const h = $('#huntt'); if (h && S.hunt) h.textContent = mmss(S.hunt.until - now());
   const st = $('#shaket'); if (st && S.shake) st.textContent = mmss(S.shake.until - now());
-  const dm = $('#drunkfill'); if (dm) dm.style.width = Math.round(drunkLevel()) + '%';
+  const dm = $('#drunkfill'); if (dm) { const d = drunkLevel(); dm.style.width = Math.round(d) + '%'; dm.parentElement.style.filter = `blur(${Math.max(0, (d - 20) / 22).toFixed(1)}px)`; }
 }
 setInterval(() => { if (S) { tick(); hudCompact(); } }, 250);
 
@@ -353,7 +353,8 @@ function betList(idx) {
 }
 function hintView(h) {
   const lines = ['ml', 'spread', 'total'].filter((m) => h[m]).map((m) => `<div class="hl"><b>${{ ml: 'Winner', spread: 'Spread', total: 'Total' }[m]}:</b> ${esc(h[m].text)} <span class="fire">${'🔥'.repeat(h[m].conf)}</span></div>`).join('');
-  return `<div class="hint ${h.level}"><div class="hbulb">💡</div><div class="hbody"><div class="htitle">${esc(h.level.toUpperCase())} HINT</div>${lines}<div class="hfoot">${h.level === 'wasted' ? '(You are way too drunk. Do not trust any of this.)' : '(Not a lock, but worth noting)'}</div></div></div>`;
+  const head = { gut: 'GUT FEELING', confident: 'DRUNK CONFIDENCE', wasted: 'WASTED WISDOM' }[h.level] || 'HINT', foot = { gut: '(Faint. Barely better than a coin flip.)', confident: '(Feels like a lock. Is it? Only if you got the buzz just right.)', wasted: '(You are way too drunk. Do not trust any of this.)' }[h.level] || '';
+  return `<div class="hint ${h.level}"><div class="hbulb">💡</div><div class="hbody"><div class="htitle">${head}</div>${lines}<div class="hfoot">${foot}</div></div></div>`;
 }
 
 function betsView() {
@@ -392,12 +393,12 @@ function crewView() {
 }
 
 function barView() {
-  const d = Math.round(drunkLevel()), b = d < 15 ? 'sober' : d < 40 ? 'tipsy' : d < 65 ? 'buzzed' : d < 85 ? 'drunk' : 'wasted';
+  const d = Math.round(drunkLevel()), b = d < 20 ? 'sober' : d < 45 ? 'warm' : d < 65 ? 'loose' : d < 82 ? 'hammered' : 'wrecked', blur = Math.max(0, (d - 20) / 14);
   return `<div class="chalk"><div class="chalk-h">DRINKS</div>
     <div class="chalk-say">Bartender: "What'll it be? First one's always full price."</div>
     ${S.drinks.map((x) => `<div class="chalk-row"><span class="cn">${x.emoji} ${esc(x.name)}</span><span class="cd"></span><span class="cp">${$$(x.price)}</span><button class="chalkbtn" ${S.me.money < x.price || d >= 100 ? 'disabled' : ''} onclick="BK.sfx&&(BK.sfx('pour'),BK.sfx('gulp',{delay:1.1}),BK.sfx('glass',{delay:0.95}));send({type:'drink',id:'${x.id}'})">Order</button></div><div class="chalk-sub">${esc(x.blurb)} (+${x.add} buzz)</div>`).join('')}
-    <div class="dmeter" style="margin-top:14px"><div style="width:${d}%"></div></div>
-    <div class="chalk-sub">You are <b>${b}</b> (${d}%). Drunk confidence gives you gut feelings on the games. Too far gone and they turn into nonsense. It wears off over time.</div></div>`;
+    <div class="dmeter" style="margin-top:14px;filter:blur(${blur.toFixed(1)}px)"><div style="width:${d}%"></div></div>
+    <div class="chalk-sub">You feel <b>${b}</b>${d < 20 ? ` (${d}%)` : ''}. ${S.me.hangover ? '<b>Your head is pounding</b> - no gut feelings until it passes. ' : ''}Somewhere in the buzz your gut gets good: right more often than not. Go past it and it lies to you just as confidently - then the hangover hits. Everyone's sweet spot is different, and it wears off over time.</div></div>`;
 }
 
 // roulette: a clickable felt layout. Click a spot to drop the selected chip on it (again to stack), right-click to take one off.

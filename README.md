@@ -92,3 +92,7 @@ The scene has ~1,400 meshes and ~12 lights. If the first couple of seconds avera
 - Collectors (missed quota): walk in, pat each player down for their share of the tax, can be paid off, punched or bottled out.
 - Client: `goonsview.js` (positions, clip animations, health bars, dizzy stars), `cine.js` (letterboxed shots, captions, door swings, fade), grabbed players are locked facing their attacker. Animations come from Meshy (`models/clips.json`: stance, punch, hitReact, knockdown, taunt, help, push, scheme; each clip keeps its own rig rest pose). `animate(P, 'clip:<name>')` loops a clip, `'once:<name>'` plays it once and holds.
 - Arcade challenges and pool can be played during the hunt to win money back.
+
+## Drunk confidence (hints)
+- Each player gets a hidden sweet spot every season: meter 55–70, shifted ±10 (`p.tol`). Gut feelings by zone (`drinkZone`): under 20 none; warm 52% right (winner + total, vague); sweet spot 60% (all three markets, confident); past it just as confident but 35%; wasted (92+) obvious nonsense, a coin flip. Coming back down from past the spot = a 60 s hangover with no tips. A confident tip locks for that game.
+- The client never shows the zone: hint labels are "gut feeling" / "drunk confidence" (sweet and over look the same) / "wasted wisdom", the exact meter number only shows while sober, and the meters blur as you drink.
