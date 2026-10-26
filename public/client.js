@@ -35,6 +35,7 @@ function connect(msg) {
     else if (m.type === 'rtc') window.BK.onRtc && window.BK.onRtc(m);
     else if (m.type === 'bottle') window.BK.onBottle && window.BK.onBottle(m);
     else if (m.type === 'bottleGot') window.BK.onBottleGot && window.BK.onBottleGot(m);
+    else if (m.type === 'goons') window.BK.onGoons && window.BK.onGoons(m);
     else if (m.type === 'ko') window.BK.onKo && window.BK.onKo(m);
     else if (m.type === 'spin') window.BK.onSpin && window.BK.onSpin(m);
     else if (m.type === 'error') {
@@ -224,7 +225,7 @@ function strip() {
 }
 function goalText() {
   const me = S.me;
-  if (S.shake) return '💼 Sal\'s collectors are in the bar! Chip in together - or click them to throw them out.';
+  if (S.shake) return '💼 Sal\'s collectors are in the bar! Chip in together - or punch and bottle them out.';
   if (S.phase === 'hunt') return me.remaining > 0 ? `🎯 The mob wants ${$$(me.remaining)} from YOU - pay, win cash, or ambush them!` : '🎯 Help your crew - click the hitmen!';
   const cur = S.cur;
   if (cur) {
@@ -260,14 +261,14 @@ function gameView() {
     <div class="tabs">${tabs.map(([id, l]) => `<button class="${id === 'mob' ? 'mob ' : ''}${ui.tab === id ? 'on' : ''}" onclick="ui.tab='${id}';render()">${l}</button>`).join('')}
     <button class="ghost" style="flex:0 0 auto" onclick="closePanel()">✕</button></div>${body}</div></div>` : ''}`;
 }
+const grabbed = () => !!(window.BK.goons && window.BK.goons.held[S.you]);
 function huntBanner() {
-  const me = S.me, pct = Math.max(0, (S.hunt.hp / S.hunt.maxHp) * 100);
-  return `<div class="card hunt col" style="margin-bottom:12px">
-    <div class="big">🔫 The hitmen have arrived <span class="pill time" id="huntt"></span></div>
-    <div class="muted">${me.remaining > 0 ? `<b class="bad">They want ${$$(me.remaining)} from YOU.</b>` : 'You are clear - help your crew.'} Pay the debt, win cash in the arcade, have a friend wire you money, or <b>beat them down together</b>.</div>
+  const me = S.me, pct = Math.max(0, (S.hunt.hp / Math.max(1, S.hunt.maxHp)) * 100), held = grabbed();
+  return `<div class="card hunt col ${held ? 'held' : ''}" style="margin-bottom:12px">
+    <div class="big">${held ? '🫱 A hitman has you!' : '🔫 The hitmen are here'} <span class="pill time" id="huntt"></span></div>
+    <div class="muted">${held ? `<b class="bad">He's shaking the money out of you.</b> Your crew can punch him or bottle him to break you free - or pay what you owe.` : me.remaining > 0 ? `<b class="bad">They want ${$$(me.remaining)} from YOU.</b> Pay, win it back (arcade, pool, roulette), get a crewmate to wire you cash, or beat them down together. Bottles stun them.` : 'You are clear - help your crew: punch the hitmen (click when close) or throw bottles.'}</div>
     <div class="hp"><div style="width:${pct}%"></div></div><div class="muted">Hitmen health: ${S.hunt.hp} / ${S.hunt.maxHp}</div>
-    <div class="row"><button class="red" onmousedown="send({type:'attack'})">👊 AMBUSH!</button>
-    ${me.remaining > 0 ? `<button class="gold" onclick="send({type:'pay'})" ${me.money <= 0 ? 'disabled' : ''}>Pay what I can (${$$(Math.min(me.money, me.remaining))})</button>` : ''}</div></div>`;
+    ${me.remaining > 0 ? `<div class="row"><button class="gold" onclick="send({type:'pay'})" ${me.money <= 0 ? 'disabled' : ''}>Pay what I can (${$$(Math.min(me.money, me.remaining))})</button></div>` : ''}</div>`;
 }
 
 // ---------- sportsbook ----------
@@ -479,11 +480,11 @@ function eventBanner() {
 }
 function shakeBanner() {
   const sh = S.shake; if (!sh) return '';
-  const pct = Math.max(0, (sh.hp / sh.maxHp) * 100);
-  return `<div class="card hunt col"><div class="big">💼 Sal's collectors <span class="pill time" id="shaket"></span></div>
-    <div class="muted">The crew missed the quota. They want <b class="bad">${$$(sh.tax - sh.paid)}</b> more. Chip in - or throw them out.</div>
+  const pct = Math.max(0, (sh.hp / Math.max(1, sh.maxHp)) * 100), held = grabbed();
+  return `<div class="card hunt col ${held ? 'held' : ''}"><div class="big">${held ? '🫳 A collector is going through your pockets' : "💼 Sal's collectors"} <span class="pill time" id="shaket"></span></div>
+    <div class="muted">The crew missed the quota. They want <b class="bad">${$$(sh.tax - sh.paid)}</b> more and they'll pat everyone down to get it. Chip in, or throw them out: punch them up close, or bottle them.</div>
     <div class="hp"><div style="width:${pct}%"></div></div>
-    <div class="row"><button class="red" onmousedown="send({type:'attack'})">👊 FIGHT</button><button class="gold" onclick="send({type:'shakePay',amount:100})">Pay $100</button><button class="gold" onclick="send({type:'shakePay',amount:500})">Pay $500</button></div></div>`;
+    <div class="row"><button class="gold" onclick="send({type:'shakePay',amount:100})">Pay $100</button><button class="gold" onclick="send({type:'shakePay',amount:500})">Pay $500</button></div></div>`;
 }
 
 // ---------- arcade challenge board ----------

@@ -290,3 +290,12 @@ body.compact .hud-bounty.mini{width:auto;padding:6px 10px;opacity:.85}
 .keys{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:13px}.keys div{display:flex;gap:8px;align-items:center}
 .keys kbd{min-width:28px;text-align:center;padding:2px 6px;border-radius:6px;background:#0008;border:1px solid #fff5;font:800 12px system-ui}
 button.red-t{color:var(--red);border-color:#5a2230}
+
+/* cutscenes: letterbox, caption, fade; the HUD steps aside */
+.lbox{position:fixed;left:0;right:0;height:0;background:#000;z-index:40;transition:height .5s ease;pointer-events:none}.lbox.top{top:0}.lbox.bot{bottom:0}
+body.cine .lbox{height:11vh}
+body.cine #app .hud,body.cine #prompt,body.cine #cross,body.cine #toasts,body.cine #bottlehud,body.cine #voicehud{opacity:0;pointer-events:none}
+#cinecap{position:fixed;left:50%;bottom:13vh;transform:translateX(-50%) translateY(10px);z-index:41;text-align:center;color:#fff;opacity:0;transition:opacity .4s,transform .4s;pointer-events:none;text-shadow:0 2px 12px #000;width:min(820px,92vw)}
+#cinecap.on{opacity:1;transform:translateX(-50%)}#cinecap b{display:block;font:900 clamp(26px,4.4vw,48px)/1.05 system-ui;letter-spacing:3px;color:#ffd04a}#cinecap span{display:block;margin-top:8px;font:700 clamp(15px,2vw,20px) system-ui}
+#cinefade{position:fixed;inset:0;background:#000;opacity:0;z-index:39;pointer-events:none;transition:opacity .2s}
+.hunt.held{border-color:var(--red);box-shadow:0 0 0 2px var(--red),0 0 30px #ff4d5e66;animation:pulse 0.9s ease-in-out infinite}

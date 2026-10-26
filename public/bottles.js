@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { audio } from './audio.js';
 
-export function createBottles({ scene, camera, BK, me, obstacles, getAvatars, getNpcs, ROOM, busy }) {
+export function createBottles({ scene, camera, BK, me, obstacles, getAvatars, getNpcs, getGoons = () => [], ROOM, busy }) {
   const G = 9.8, SPEED = 12.5;
   const glass = new THREE.MeshStandardMaterial({ color: 0x2f8a46, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.82 });
   const label = new THREE.MeshStandardMaterial({ color: 0xf1e6c8, roughness: 0.8 }), cap = new THREE.MeshStandardMaterial({ color: 0xc8a24a, metalness: 0.8, roughness: 0.3 });
@@ -46,11 +46,12 @@ export function createBottles({ scene, camera, BK, me, obstacles, getAvatars, ge
         let hit = null;
         for (const [id, a] of getAvatars()) { if (id === b.id) continue; const g = a.P.group.position, lying = a.ko && a.ko > BK.now(); const lo = g.y + (lying ? -0.1 : 0.1), hi = g.y + (lying ? 0.5 : 1.95);
           if (b.p.y > lo && b.p.y < hi && Math.hypot(b.p.x - g.x, b.p.z - g.z) < (lying ? 0.7 : 0.42)) { hit = { kind: 'player', id }; break; } }
+        if (!hit) for (const o of getGoons()) { const g = o.P.group.position; if (o.state !== 'down' && b.p.y > 0.1 && b.p.y < 2.0 && Math.hypot(b.p.x - g.x, b.p.z - g.z) < 0.5) { hit = { kind: 'goon', id: o.id }; break; } } // Sal's muscle: stun + damage
         if (!hit) getNpcs().forEach((n, k) => { if (hit) return; const g = n.P.group.position, lying = n.ko && n.ko > BK.now(); if (b.p.y > g.y + 0.1 && b.p.y < g.y + 1.95 && Math.hypot(b.p.x - g.x, b.p.z - g.z) < (lying ? 0.5 : 0.42)) hit = { kind: 'npc', k }; });
         if (!hit && !b.owner && !(me.sit) && Math.hypot(b.p.x - me.x, b.p.z - me.z) < 0.34 && b.p.y < 1.9) hit = { kind: 'me' };
         const wall = b.p.y < 0.04 || b.p.y > ROOM.h - 0.1 || Math.abs(b.p.x) > ROOM.x - 0.12 || Math.abs(b.p.z) > ROOM.z - 0.12 || obstacles.some((o) => b.p.y < 1.25 && Math.hypot(b.p.x - o.x, b.p.z - o.z) < o.r * 0.75);
         if (hit || wall) {
-          if (hit && b.owner) { if (hit.kind === 'player') BK.send({ type: 'bottleHit', kind: 'player', target: hit.id }); else if (hit.kind === 'npc') BK.send({ type: 'bottleHit', kind: 'npc', npc: hit.k }); }
+          if (hit && b.owner) { if (hit.kind === 'player') BK.send({ type: 'bottleHit', kind: 'player', target: hit.id }); else if (hit.kind === 'npc') BK.send({ type: 'bottleHit', kind: 'npc', npc: hit.k }); else if (hit.kind === 'goon') BK.send({ type: 'bottleHit', kind: 'goon', target: hit.id }); }
           shatter(b.p); scene.remove(b.m); st.flying.splice(i, 1);
         }
       }

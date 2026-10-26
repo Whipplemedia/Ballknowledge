@@ -97,10 +97,11 @@ if (typeof location !== 'undefined' && !/[?&]clips=0/.test(location.search)) {
   try {
     const j = await (await fetch('models/clips.json')).json(), q = (a) => new THREE.Quaternion(a[0], a[1], a[2], a[3]);
     const srcInv = {}; for (const k in j.rest) srcInv[k] = q(j.rest[k]).invert();
-    for (const name of ['walk', 'run']) {
-      const c = j[name], tr = {}; for (const b in c.tracks) { const t = c.tracks[b]; if (!t.q) continue; tr[b] = { t: t.t, q: t.q, srcInv: srcInv[b] || new THREE.Quaternion() }; }
+    for (const name in j) { // walk/run (Bub's rig) + fight/gesture clips (the hitman's rig): each clip may carry its own rest pose
+      if (name === 'rest') continue; const c = j[name], inv = {}; if (c.rest) for (const k in c.rest) inv[k] = q(c.rest[k]).invert();
+      const tr = {}; for (const b in c.tracks) { const t = c.tracks[b]; if (!t.q) continue; tr[b] = { t: t.t, q: t.q, srcInv: (c.rest ? inv[b] : srcInv[b]) || new THREE.Quaternion() }; }
       const hp = c.tracks.Hips && c.tracks.Hips.p ? c.tracks.Hips.p : null, hy = []; if (hp) for (let i = 1; i < hp.length; i += 3) hy.push(hp[i]);
-      CLIPS[name] = { dur: c.dur, tr, hy, hmean: hy.length ? hy.reduce((a, b) => a + b, 0) / hy.length : 0 };
+      CLIPS[name] = { dur: c.dur, tr, hy, hmean: hy.length ? hy.reduce((a, b) => a + b, 0) / hy.length : 0, hip0: c.hip0 || 0 };
     }
   } catch { /* clips are optional */ }
 }
@@ -112,7 +113,7 @@ function sampleBone(clip, bone, time, out) { // out <- local rotation delta rela
   _qa.set(tr.q[i * 4], tr.q[i * 4 + 1], tr.q[i * 4 + 2], tr.q[i * 4 + 3]); _qb.set(tr.q[(i + 1) * 4], tr.q[(i + 1) * 4 + 1], tr.q[(i + 1) * 4 + 2], tr.q[(i + 1) * 4 + 3]);
   out.copy(_qa).slerp(_qb, f); out.premultiply(tr.srcInv); return true;
 }
-function sampleHipY(clip, time) { if (!clip.hy.length) return 0; const n = clip.hy.length, u = (((time % clip.dur) + clip.dur) % clip.dur) / clip.dur * (n - 1), i = Math.floor(u), f = u - i; return (clip.hy[i] * (1 - f) + clip.hy[Math.min(n - 1, i + 1)] * f - clip.hmean) * 0.01; }
+function sampleHipY(clip, time) { if (!clip.hy.length) return 0; if (clip.hip0) { const n = clip.hy.length, u = Math.min(1, Math.max(0, time / clip.dur)) * (n - 1), i = Math.floor(u), f = u - i; return (clip.hy[i] * (1 - f) + clip.hy[Math.min(n - 1, i + 1)] * f - clip.hip0) / clip.hip0; } /* fraction of hip height (gestures/knockdown) */ const n = clip.hy.length, u = (((time % clip.dur) + clip.dur) % clip.dur) / clip.dur * (n - 1), i = Math.floor(u), f = u - i; return (clip.hy[i] * (1 - f) + clip.hy[Math.min(n - 1, i + 1)] * f - clip.hmean) * 0.01; }
 
 // ---- Meshy (AI-generated) skinned characters: public/models/<name>_ai.glb, Mixamo-style skeleton ----
 const Q0 = new THREE.Quaternion(), V_DOWN = new THREE.Vector3(0, -1, 0);
@@ -399,12 +400,18 @@ export function animate(P, mode, t, speed = 1) {
   aL.rotation.x *= -1; aR.rotation.x *= -1; P.head.rotation.x *= -1; P.torso.rotation.x *= -1;
   if (P.skinned) { // crossfade the authored walk/run clips in and out of the procedural pose
     const dt = Math.min(0.1, Math.max(0, t - (P._lt ?? t))); P._lt = t; const sp = P.moveSpeed ?? speed * 3.5;
-    const want = mode === 'walk' && CLIPS.walk ? (sp > 2.4 && CLIPS.run ? 'run' : 'walk') : null;
-    if (want) {
+    // 'clip:<name>' loops an authored clip, 'once:<name>' plays it from the start once and holds the last frame (knockdown etc.)
+    const cm = /^(clip|once):(\w+)$/.exec(mode), auth = cm && CLIPS[cm[2]] ? cm[2] : null;
+    const want = auth || (mode === 'walk' && CLIPS.walk ? (sp > 2.4 && CLIPS.run ? 'run' : 'walk') : null);
+    if (auth) {
+      if (P.clipMode !== mode) { P.clipMode = mode; P.clipName = auth; P.clipT = 0; P.clipW = Math.max(P.clipW, 0.35); }
+      P.clipT += dt * (speed || 1); if (cm[1] === 'once') P.clipT = Math.min(P.clipT, CLIPS[auth].dur - 0.001);
+    } else if (want) {
+      P.clipMode = null;
       if (P.clipName !== want) { P.clipT = P.clipW < 0.05 ? 0 : P.clipT / CLIPS[P.clipName].dur * CLIPS[want].dur; P.clipName = want; }
       P.clipT += dt * (want === 'run' ? Math.min(1.5, Math.max(0.7, sp / 4.2)) : Math.min(1.6, Math.max(0.6, sp / 1.4)));
     }
-    P.clipW += ((want ? 1 : 0) - P.clipW) * Math.min(1, dt * 9); if (!want && P.clipW < 0.02) P.clipW = 0;
+    if (!want) P.clipMode = null; P.clipW += ((want ? 1 : 0) - P.clipW) * Math.min(1, dt * (auth ? 12 : 9)); if (!want && P.clipW < 0.02) P.clipW = 0;
   }
   if (P.skinUpdate) P.skinUpdate();
 }

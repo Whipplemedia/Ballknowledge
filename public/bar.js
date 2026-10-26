@@ -231,7 +231,13 @@ export function buildBar({ scene, BK, tv }) {
   const city = TX.canvasTex(256, 160, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#1a1050'); gr.addColorStop(0.6, '#5a2a6a'); gr.addColorStop(1, '#c0602a'); g.fillStyle = gr; g.fillRect(0, 0, w, h); for (let x = 0; x < w; x += 22) { const bh = 30 + Math.random() * 70; g.fillStyle = '#0c0a1c'; g.fillRect(x, h - bh, 20, bh); for (let y = h - bh + 6; y < h - 4; y += 9) for (let xx = x + 3; xx < x + 18; xx += 6) if (Math.random() < 0.5) { g.fillStyle = Math.random() < 0.7 ? '#ffd27a' : '#7ad2ff'; g.fillRect(xx, y, 3, 4); } } g.fillStyle = '#fff8d0'; g.beginPath(); g.arc(210, 28, 12, 0, 7); g.fill(); }).t;
   [-4.5, -1.5].forEach((x) => { plane(2.1, 1.4, new THREE.MeshBasicMaterial({ map: city, toneMapped: false }), x, 2.35, ROOM.z - 0.05, Math.PI); box(2.3, 0.1, 0.12, darkWood, x, 3.07, ROOM.z - 0.07, scene, false); box(2.3, 0.1, 0.12, darkWood, x, 1.63, ROOM.z - 0.07, scene, false); box(0.1, 1.5, 0.12, darkWood, x - 1.1, 2.35, ROOM.z - 0.07, scene, false); box(0.1, 1.5, 0.12, darkWood, x + 1.1, 2.35, ROOM.z - 0.07, scene, false); box(0.06, 1.4, 0.1, darkWood, x, 2.35, ROOM.z - 0.07, scene, false); box(2.1, 0.06, 0.1, darkWood, x, 2.35, ROOM.z - 0.07, scene, false); });
   // door + EXIT
-  box(1.2, 2.3, 0.1, M(0x3a2010), 5.0, 1.15, ROOM.z - 0.08); box(0.7, 1.0, 0.04, new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6a8ab0).multiplyScalar(0.8) }), 5.0, 1.55, ROOM.z - 0.14, scene, false);
+  // doors swing on a hinge group so cutscenes can open them (doors.front / doors.back .rotation.y)
+  const doorM = M(0x3a2010), glassM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6a8ab0).multiplyScalar(0.8) });
+  const hinge = (x, z, ry) => { const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g); return g; };
+  const doors = { front: hinge(5.0 - 0.6, ROOM.z - 0.08, 0), back: hinge(ROOM.x - 0.08, -6.6 - 0.6, -Math.PI / 2) };
+  box(1.2, 2.3, 0.1, doorM, 0.6, 1.15, 0, doors.front); box(0.7, 1.0, 0.04, glassM, 0.6, 1.55, -0.06, doors.front, false);
+  box(1.2, 2.3, 0.1, M(0x2a1a10), 0.6, 1.15, 0, doors.back); box(0.18, 0.18, 0.04, M(0xc8a24a, { metalness: 0.8, roughness: 0.3 }), 1.05, 1.1, 0.07, doors.back, false);
+  neonPlane('BACK ROOM', '#ff3030', 1.2, 0.34, ROOM.x - 0.1, 2.6, -6.6, -Math.PI / 2, 60);
   neonPlane('EXIT', '#ff3030', 0.9, 0.38, 5.0, 2.6, ROOM.z - 0.1, Math.PI, 70);
   // neon wall
   neonPlane('GOOD SPORTS', '#27e08a', 3.0, 0.7, -ROOM.x + 0.12, 3.5, -4.6, Math.PI / 2, 54); neonPlane('BAD DECISIONS', '#ff60b0', 3.2, 0.7, -ROOM.x + 0.12, 2.8, -4.6, Math.PI / 2, 50);
@@ -348,5 +354,5 @@ export function buildBar({ scene, BK, tv }) {
     const p = dg.attributes.position; for (let i = 0; i < dustN; i++) { p.array[i * 3 + 1] += dt * 0.03 * (1 + (i % 3)); if (p.array[i * 3 + 1] > 4.6) p.array[i * 3 + 1] = 0.1; p.array[i * 3] += Math.sin(t * 0.2 + i) * dt * 0.02; }
     p.needsUpdate = true;
   }
-  return { stations, obstacles, npcs, seats, update, wanderPos, life, bottleSpots };
+  return { stations, obstacles, npcs, seats, update, wanderPos, life, bottleSpots, doors };
 }
