@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { gltfLoader } from './loading.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { jerseyTex, floralTex, buttonShirtTex } from './textures.js';
 
@@ -10,7 +10,7 @@ const AI_HEIGHT = { bub: 1.88, bartender: 1.72, sal: 1.8, hitman: 1.95, jock: 1.
 const MODEL_NAMES = AI_NAMES.map((n) => n + '_ai');
 const MODELS = {};
 if (typeof location !== 'undefined' && !/[?&]models=0/.test(location.search)) {
-  const loader = new GLTFLoader();
+  const loader = gltfLoader();
   await Promise.all(MODEL_NAMES.map((n) => loader.loadAsync('models/' + n + '.glb').then((g) => { MODELS[n] = g.scene; }).catch(() => {})));
 }
 const TINTED_SHIRT = { jock: 0, knowItAll: 0, dieHard: 0, gambler: 0, sal: 0, hitman: 0, bartender: 0 }; // shirts with baked prints/suits keep their colors

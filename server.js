@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const { WebSocketServer } = require('ws');
 const { SPORTS, SEASONS } = require('./seasons');
 
@@ -652,17 +653,34 @@ function handle(room, p, m) {
 }
 
 // ---------- transport ----------
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json', '.glb': 'model/gltf-binary', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json', '.glb': 'model/gltf-binary', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.wav': 'audio/wav' };
 const ICE = () => { const ice = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }]; if (process.env.TURN_URL) ice.push({ urls: process.env.TURN_URL.split(','), username: process.env.TURN_USER || '', credential: process.env.TURN_PASS || '' }); return ice; };
+// static files: ETag revalidation (repeat visits get a 304 instead of ~8 MB of models) + gzip, both cached in memory per file version
+const FILES = new Map(), GZIP = new Set(['.html', '.js', '.css', '.json', '.glb', '.svg', '.wav']);
+function serveFile(req, res, file) {
+  fs.stat(file, (err, st) => {
+    if (err || !st.isFile()) { res.writeHead(404); return res.end('Not found'); }
+    const send = (c) => {
+      const h = { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache', ETag: c.etag, Vary: 'Accept-Encoding' };
+      if (req.headers['if-none-match'] === c.etag) { res.writeHead(304, h); return res.end(); }
+      const gz = c.gz && /\bgzip\b/.test(req.headers['accept-encoding'] || '');
+      res.writeHead(200, { ...h, 'Content-Length': (gz ? c.gz : c.raw).length, ...(gz ? { 'Content-Encoding': 'gzip' } : {}) }); res.end(gz ? c.gz : c.raw);
+    };
+    const c = FILES.get(file); if (c && c.mtime === st.mtimeMs && c.size === st.size) return send(c);
+    fs.readFile(file, (err2, raw) => {
+      if (err2) { res.writeHead(404); return res.end('Not found'); }
+      const etag = '"' + crypto.createHash('sha1').update(raw).digest('base64').slice(0, 20) + '"';
+      let gz = null; if (GZIP.has(path.extname(file)) && raw.length > 1024) { const z = zlib.gzipSync(raw, { level: 9 }); if (z.length < raw.length * 0.92) gz = z; }
+      const entry = { mtime: st.mtimeMs, size: st.size, etag, raw, gz }; FILES.set(file, entry); send(entry);
+    });
+  });
+}
 const server = http.createServer((req, res) => {
   if (req.url.split('?')[0] === '/ice.json') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); return res.end(JSON.stringify(ICE())); }
   const path0 = req.url.split('?')[0], f = path0 === '/' ? '/index.html' : path0;
   const file = path.join(__dirname, 'public', path.normalize(f).replace(/^(\.\.[/\\])+/, ''));
   if (!file.startsWith(path.join(__dirname, 'public'))) { res.writeHead(403); return res.end(); }
-  fs.readFile(file, (err, data) => {
-    if (err) { res.writeHead(404); return res.end('Not found'); }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' }); res.end(data);
-  });
+  serveFile(req, res, file);
 });
 
 const wss = new WebSocketServer({ server });

@@ -111,12 +111,19 @@ function render() {
   window.BK.onRender && window.BK.onRender();
 }
 
+// loading bar for the 3D bar (models stream in while you type your name; world.js flips __worldReady when done)
+function loadBar(cls = '') {
+  if (window.__worldReady) return '';
+  const L = window.__load || { done: 0, total: 0 }, pct = L.total ? Math.round((L.done / L.total) * 100) : 0;
+  return `<div id="loadbar" class="${cls}"><span>Loading the bar... ${pct}%</span><b><i style="width:${pct}%"></i></b></div>`;
+}
 function joinView() {
   return `<div class="center"><div class="card col" style="width:min(420px,100%)">
     <div class="logo">BALL<br><span>KNOWLEDGE</span><i class="ball"></i></div>
     <div class="tag">Pick a sport. We pick the season. Know your ball - or find another way to win.</div>
     ${ui.rejoining ? `<div class="muted">Rejoining room <b>${esc(sess.code)}</b>...</div>` : ''}${err ? `<div class="bad">${esc(err)}</div>` : ''}
     <input id="name" placeholder="Your name" maxlength="16">
+    ${loadBar()}
     <button onclick="doJoin()">Create a crew</button>
     <div class="row"><input id="code" placeholder="Room code" maxlength="4" style="text-transform:uppercase"><button class="ghost fit" onclick="doJoin(true)">Join</button></div>
   </div></div>`;
@@ -134,6 +141,7 @@ function lobbyView() {
   return `<div class="wrap"><div class="card col">
     <div class="top"><div class="logo sm">BALL <span>KNOWLEDGE</span><i class="ball"></i></div><div class="pill">Room <b>${S.code}</b></div></div>
     <div class="muted">Share the room code. Up to 6 players, co-op. Everyone starts with $2,000. A full season of <b>10 real games</b> is waiting - one new game opens for betting every couple of minutes.</div>
+    ${loadBar()}
     <div class="title">Crew</div>${playerList()}
     <div class="title">${S.host ? 'Choose your sport' : 'The host is choosing a sport...'}</div>
     <div class="sports">${S.sports.map((s) => `<button class="sport ${S.sport === s.id ? 'sel' : ''}" ${S.host ? '' : 'disabled'} onclick="send({type:'setSport',sport:'${s.id}'})"><span class="e">${s.emoji}</span>${esc(s.label)}</button>`).join('')}</div>
@@ -191,6 +199,7 @@ function gameView() {
   const extra = ui.tab === 'bar' ? [['bar', '🍺 Bar']] : ui.tab === 'wheel' ? [['wheel', '🎰 Roulette']] : ui.tab === 'challenge' ? [['challenge', '🎯 Challenge']] : ui.tab === 'pool' ? [['pool', '🎱 Pool']] : [];
   const tabs = [['book', '📱 Sportsbook'], ['bets', '🧾 My Bets'], ['mob', '🕴️ The Mob'], ['crew', '👥 Crew'], ...extra];
   const body = { book: bookView, bets: betsView, mob: mobView, crew: crewView, bar: barView, wheel: wheelView, challenge: challengeView, pool: typeof poolView === 'function' ? poolView : () => '' }[ui.tab]();
+  if (!window.__worldReady) return `<div class="center"><div class="card col" style="width:min(420px,100%)"><div class="big">Getting the bar ready...</div>${loadBar()}<div class="muted">Your crew can already see you. The game has started - you'll be dropped in as soon as the bar finishes loading.</div></div></div>`;
   return `<div class="hud">
     <div class="hud-top">
       <div class="row" style="gap:8px;justify-content:flex-start"><span class="pill">Room ${S.code}</span></div>

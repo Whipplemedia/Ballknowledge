@@ -302,3 +302,4 @@ function frame(now) {
 }
 window.__dbg = { renderer, scene, camera, me, games, roulette, bar, fx, tv, avatars, bottles, voice, keys };
 requestAnimationFrame(frame);
+window.__worldReady = true; if (typeof window.render === 'function') window.render(); // drop the loading bar / loading screen

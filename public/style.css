@@ -269,3 +269,4 @@ body:not(.ingame) .center .card,body:not(.ingame) .wrap .card{background:#101830
 body.ingame #app .hud button{pointer-events:auto}
 .reconn{position:fixed;left:50%;top:38%;transform:translateX(-50%);z-index:30;background:#2a1018f0;border:2px solid var(--red);color:#fff;font-weight:800;padding:12px 22px;border-radius:14px;box-shadow:0 8px 30px #000a;animation:pulse 1.2s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.6}}
+#loadbar{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted);font-weight:700}#loadbar b{display:block;height:8px;border-radius:99px;background:#0b1020;border:1px solid var(--line);overflow:hidden}#loadbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--green),var(--gold));transition:width .2s}
