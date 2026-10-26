@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const { SPORTS, SEASONS } = require('./seasons');
 
@@ -173,12 +174,12 @@ function newCode() {
   return c;
 }
 function newPlayer(id, name, ws) {
-  return { id, name, ws, connected: true, money: START_MONEY, debt: 0, loans: 0, mobTied: false, bets: {}, fix: {}, results: {}, drunk: 0, drunkT: 0,
+  return { id, name, ws, token: crypto.randomBytes(16).toString('hex'), connected: true, money: START_MONEY, debt: 0, loans: 0, mobTied: false, bets: {}, fix: {}, results: {}, drunk: 0, drunkT: 0,
     finalCorrect: null, fate: null, lastMg: 0, lastHit: 0, lastBottle: 0, lastTake: 0, credits: [], koUntil: 0, koImmune: 0, lastDrink: 0, remaining: 0, color: 0, x: 0, z: 2, ry: 0, tickets: 0, bounties: [], challenge: null, pool: null, streak: { darts: 0, bowling: 0, cornhole: 0 }, cos: {} };
 }
 function createRoom() {
   const room = { code: newCode(), hostId: null, btaken: {}, players: new Map(), phase: 'lobby', sport: 'nba', pace: 'normal', season: null, sportDef: null, events: [], feed: [],
-    tick: null, quota: [], shake: null, barEvent: null, nextBarEvent: 0, lastBarKind: null, hp: 0, maxHp: 0, huntEnd: 0, huntTimer: null, finalWinner: null, altered: false, summary: null, spin: null, t0: 0 };
+    tick: null, quota: [], shake: null, barEvent: null, nextBarEvent: 0, lastBarKind: null, hp: 0, maxHp: 0, huntEnd: 0, finalWinner: null, altered: false, summary: null, spin: null, t0: 0 };
   rooms.set(room.code, room); return room;
 }
 const feed = (room, text) => { room.feed.push({ t: Date.now(), text }); if (room.feed.length > 50) room.feed.shift(); };
@@ -225,7 +226,19 @@ function startGame(room) {
 }
 
 // ---------- tick: open -> airing (locked) -> final ----------
+function resolveSpin(room) {
+  const sp = room.spin; room.spin = null; const p = room.players.get(sp.pid); if (!p) return;
+  const { n, color, bets, total } = sp;
+  let win = 0, numWin = false; for (const b of bets) if (rouletteWins(b.pick, n)) { win += b.stake * rouletteMult(b.pick); if (/^\d+$/.test(b.pick)) numWin = true; }
+  p.money += win; award(room, p, 'roulette', { win: win > 0, color, isNum: numWin });
+  const net = win - total;
+  toast(p, win ? `${n} ${color}! You get back ${money(win)} (${net >= 0 ? '+' : ''}${money(net)})` : `${n} ${color}. You lose ${money(total)}.`, net > 0 ? 'win' : 'err');
+  feed(room, `🎰 ${p.name} ${net > 0 ? 'won ' + money(net) : 'lost ' + money(-net)} on roulette (${n} ${color}).`);
+  broadcast(room);
+}
 function tick(room) {
+  if (room.spin && Date.now() >= room.spin.until + 400) resolveSpin(room);
+  if (room.phase === 'hunt') { if (Date.now() >= room.huntEnd) endHunt(room); return; } // hitmen deadline (tick-driven so it survives a restart)
   if (room.phase !== 'play') return;
   const now = Date.now(); let changed = false;
   for (const ev of room.events) {
@@ -355,7 +368,6 @@ function settle(room) {
   room.maxHp = room.hp = clamp(60 + total / 40, 60, 600);
   room.phase = 'hunt'; room.huntEnd = Date.now() + dur(HUNT_MS);
   feed(room, `🔫 The hitmen are here for ${hunted.map((p) => p.name).join(', ')}. Pay up, win it back, or beat them down first!`);
-  clearTimeout(room.huntTimer); room.huntTimer = setTimeout(() => endHunt(room), dur(HUNT_MS));
   broadcast(room);
 }
 function endHunt(room) {
@@ -368,7 +380,7 @@ function endHunt(room) {
   finish(room);
 }
 function finish(room) {
-  clearTimeout(room.huntTimer); clearInterval(room.tick);
+  clearInterval(room.tick); room.barEvent = null; room.shake = null;
   const s = room.season, ps = plist(room);
   for (const p of ps) if (!p.fate) p.fate = p.mobTied ? 'paid up' : 'safe';
   const correct = ps.filter((p) => p.finalCorrect).length;
@@ -579,17 +591,9 @@ function handle(room, p, m) {
       if (!bets.length || bets.length !== raw.length) { toast(p, 'Invalid wager.', 'err'); break; }
       if (total > p.money) { toast(p, `You only have ${money(p.money)}.`, 'err'); break; }
       const n = rnd(37), color = colorOf(n); p.money -= total;
-      const ms = dur(SPIN_MS); room.spin = { name: p.name, until: Date.now() + ms };
+      const ms = dur(SPIN_MS); room.spin = { pid: p.id, name: p.name, until: Date.now() + ms, n, color, bets, total };
       for (const q of room.players.values()) send(q, { type: 'spin', n, color, by: p.name, mine: q === p, ms, bets });
-      broadcast(room);
-      setTimeout(() => {
-        let win = 0, numWin = false; for (const b of bets) if (rouletteWins(b.pick, n)) { win += b.stake * rouletteMult(b.pick); if (/^\d+$/.test(b.pick)) numWin = true; }
-        p.money += win; room.spin = null; award(room, p, 'roulette', { win: win > 0, color, isNum: numWin });
-        const net = win - total;
-        toast(p, win ? `${n} ${color}! You get back ${money(win)} (${net >= 0 ? '+' : ''}${money(net)})` : `${n} ${color}. You lose ${money(total)}.`, net > 0 ? 'win' : 'err');
-        feed(room, `🎰 ${p.name} ${net > 0 ? 'won ' + money(net) : 'lost ' + money(-net)} on roulette (${n} ${color}).`);
-        broadcast(room);
-      }, ms + 400);
+      broadcast(room); // resolved by tick() -> resolveSpin once the ball has landed
       break;
     }
     case 'pay': {
@@ -662,36 +666,74 @@ const server = http.createServer((req, res) => {
 });
 
 const wss = new WebSocketServer({ server });
+const ROOM_GRACE_MS = 10 * 60 * 1000; // an empty room waits this long for its players to come back before it is deleted
+function reapLater(room) { clearTimeout(room.reap); room.reap = setTimeout(() => { if (![...room.players.values()].some((q) => q.connected)) { clearInterval(room.tick); rooms.delete(room.code); } }, ROOM_GRACE_MS); }
 wss.on('connection', (ws) => {
   let room = null, player = null;
   ws.on('message', (raw) => {
     let m; try { m = JSON.parse(raw); } catch { return; }
     if (!room) {
       if (m.type !== 'join') return;
+      const fail = (text, extra = {}) => ws.send(JSON.stringify({ type: 'error', text, ...extra }));
+      const r = m.code ? rooms.get(String(m.code).toUpperCase()) : null;
+      // rejoin: a returning player (refresh, dropped wifi, server restart) reclaims their seat with the token they were given
+      if (m.token) {
+        const q = r && [...r.players.values()].find((x) => x.token === m.token);
+        if (!q) return fail('That game is no longer running.', { stale: true });
+        if (q.ws && q.ws !== ws && q.ws.readyState === 1) { try { q.ws.send(JSON.stringify({ type: 'error', text: 'You opened the game in another tab.', kicked: true })); q.ws.close(); } catch {} }
+        room = r; player = q; q.ws = ws; const was = q.connected; q.connected = true; clearTimeout(r.reap);
+        ws.send(JSON.stringify({ type: 'session', code: r.code, token: q.token }));
+        if (!was) feed(r, `${q.name} is back.`);
+        return broadcast(r);
+      }
       const name = String(m.name || '').trim().slice(0, 16) || 'Player';
-      const r = m.code ? rooms.get(String(m.code).toUpperCase()) : createRoom();
-      const fail = (text) => ws.send(JSON.stringify({ type: 'error', text }));
-      if (!r) return fail('Room not found.');
-      if (r.phase !== 'lobby') return fail('Game already in progress.');
-      if (r.players.size >= 6) return fail('Room is full.');
-      room = r; player = newPlayer(Math.random().toString(36).slice(2, 9), name, ws);
+      const rr = m.code ? r : createRoom();
+      if (!rr) return fail('Room not found.');
+      if (rr.phase !== 'lobby') return fail('Game already in progress.');
+      if (rr.players.size >= 6) return fail('Room is full.');
+      room = rr; player = newPlayer(Math.random().toString(36).slice(2, 9), name, ws);
       player.color = room.players.size % 6; player.x = -3 + player.color * 1.2;
       room.players.set(player.id, player);
       if (!room.hostId) room.hostId = player.id;
+      ws.send(JSON.stringify({ type: 'session', code: room.code, token: player.token }));
       feed(room, `${name} joined the crew.`);
       return broadcast(room);
     }
+    if (player.ws !== ws) return; // replaced by a newer connection
     handle(room, player, m);
   });
   ws.on('close', () => {
-    if (!room || !player) return;
+    if (!room || !player || player.ws !== ws) return;
     player.connected = false;
     if (room.phase === 'lobby') room.players.delete(player.id);
-    if (![...room.players.values()].some((q) => q.connected)) { clearTimeout(room.huntTimer); clearInterval(room.tick); rooms.delete(room.code); return; }
-    if (room.hostId === player.id) room.hostId = [...room.players.values()].find((q) => q.connected).id;
+    else feed(room, `📴 ${player.name} lost connection.`);
+    if (![...room.players.values()].some((q) => q.connected)) { if (!room.players.size) { clearInterval(room.tick); rooms.delete(room.code); } else reapLater(room); return; }
+    if (room.hostId === player.id || !room.players.has(room.hostId)) room.hostId = [...room.players.values()].find((q) => q.connected).id;
     broadcast(room);
   });
 });
+
+// ---------- snapshots: rooms survive a server restart/redeploy when BK_STATE_DIR points at persistent storage (e.g. a Railway volume) ----------
+const STATE_DIR = process.env.BK_STATE_DIR || '', STATE_FILE = STATE_DIR && path.join(STATE_DIR, 'rooms.json');
+const SKIP = new Set(['ws', 'tick', 'reap', 'sportDef']);
+function snapshot() {
+  if (!STATE_FILE) return;
+  const out = [...rooms.values()].filter((r) => r.phase !== 'lobby').map((r) => JSON.parse(JSON.stringify({ ...r, players: [...r.players.values()] }, (k, v) => (SKIP.has(k) ? undefined : v))));
+  try { fs.writeFileSync(STATE_FILE + '.tmp', JSON.stringify({ at: Date.now(), rooms: out })); fs.renameSync(STATE_FILE + '.tmp', STATE_FILE); } catch (e) { console.error('snapshot failed', e.message); }
+}
+function restore() {
+  if (!STATE_FILE || !fs.existsSync(STATE_FILE)) return;
+  try {
+    const { at, rooms: list } = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); if (Date.now() - at > ROOM_GRACE_MS) return;
+    for (const r of list) {
+      r.players = new Map(r.players.map((p) => [p.id, { ...p, ws: null, connected: false }])); r.sportDef = SPORTS[r.sport];
+      rooms.set(r.code, r); if (r.phase === 'play' || r.phase === 'hunt') r.tick = setInterval(() => tick(r), 400); reapLater(r);
+    }
+    console.log(`restored ${list.length} room(s) from snapshot`);
+  } catch (e) { console.error('restore failed', e.message); }
+}
+if (STATE_FILE) { restore(); setInterval(snapshot, 4000); }
+for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { snapshot(); process.exit(0); });
 
 if (require.main === module) server.listen(PORT, () => console.log(`Ball Knowledge running on http://localhost:${PORT}`));
 module.exports = { genHighlights, buildMarkets, splitFootball, splitBasket };

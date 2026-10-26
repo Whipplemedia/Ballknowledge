@@ -14,12 +14,17 @@ function loadSave() { try { const o = JSON.parse(localStorage.getItem(SAVE_KEY))
 let save = loadSave();
 function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch {} }
 
+// ---------- session: the server hands out a rejoin token; we keep it so a refresh, dropped wifi or server restart puts you back in your seat ----------
+const SESS_KEY = 'bk_session_v1', SESS_MAX_AGE = 3 * 3600 * 1000;
+let sess = (() => { try { const o = JSON.parse(localStorage.getItem(SESS_KEY)); return o && o.token && Date.now() - o.at < SESS_MAX_AGE ? o : null; } catch { return null; } })();
+const saveSess = () => { try { if (sess) localStorage.setItem(SESS_KEY, JSON.stringify(sess)); else localStorage.removeItem(SESS_KEY); } catch {} };
 function connect(msg) {
-  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-  ws.onopen = () => { ws.send(JSON.stringify(msg)); ws.send(JSON.stringify({ type: 'cosmetics', cos: save.eq })); };
-  ws.onmessage = (e) => {
+  const sock = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host); ws = sock;
+  sock.onopen = () => { sock.send(JSON.stringify(msg)); sock.send(JSON.stringify({ type: 'cosmetics', cos: save.eq })); };
+  sock.onmessage = (e) => {
     const m = JSON.parse(e.data);
-    if (m.type === 'state') { S = m; skew = m.now - Date.now(); stateAt = Date.now(); err = ''; render(); }
+    if (m.type === 'state') { S = m; skew = m.now - Date.now(); stateAt = Date.now(); err = ''; if (sess && Date.now() - sess.at > 60000) { sess.at = Date.now(); saveSess(); } render(); }
+    else if (m.type === 'session') { const back = ui.reconnecting; sess = { code: m.code, token: m.token, at: Date.now() }; saveSess(); ui.reconnecting = false; ui.retryN = 0; if (back) toast('Reconnected.', 'win'); window.BK.onSession && window.BK.onSession(); }
     else if (m.type === 'toast') toast(m.text, m.kind);
     else if (m.type === 'pos') window.BK.onPos && window.BK.onPos(m);
     else if (m.type === 'rtc') window.BK.onRtc && window.BK.onRtc(m);
@@ -27,9 +32,22 @@ function connect(msg) {
     else if (m.type === 'bottleGot') window.BK.onBottleGot && window.BK.onBottleGot(m);
     else if (m.type === 'ko') window.BK.onKo && window.BK.onKo(m);
     else if (m.type === 'spin') window.BK.onSpin && window.BK.onSpin(m);
-    else if (m.type === 'error') { err = m.text; ws.close(); S = null; render(); }
+    else if (m.type === 'error') {
+      if (m.stale) { sess = null; saveSess(); }
+      err = m.stale && (S || ui.rejoining) ? 'That game ended while you were away.' : m.text; ui.reconnecting = ui.rejoining = false;
+      sock.dead = true; sock.close(); S = null; render();
+    }
   };
-  ws.onclose = () => { if (S) { S = null; err = 'Disconnected.'; render(); } };
+  sock.onclose = () => {
+    if (ws !== sock || sock.dead) return;
+    if ((S || ui.rejoining) && sess) { ui.reconnecting = true; render(); retryLater(); } // keep the world on screen and keep trying
+    else if (S) { S = null; err = 'Disconnected.'; render(); }
+  };
+}
+function retryLater() {
+  const n = (ui.retryN = (ui.retryN || 0) + 1);
+  if (n > 45) { ui.reconnecting = ui.rejoining = false; S = null; err = 'Could not reconnect. Check your connection and rejoin with the room code.'; render(); return; }
+  setTimeout(() => { if (sess && (ui.reconnecting || ui.rejoining)) connect({ type: 'join', code: sess.code, token: sess.token }); }, Math.min(8000, 400 * 2 ** Math.min(n, 5)));
 }
 const send = (m) => ws && ws.readyState === 1 && ws.send(JSON.stringify(m));
 function toast(text, kind = 'info') {
@@ -97,7 +115,7 @@ function joinView() {
   return `<div class="center"><div class="card col" style="width:min(420px,100%)">
     <div class="logo">BALL<br><span>KNOWLEDGE</span><i class="ball"></i></div>
     <div class="tag">Pick a sport. We pick the season. Know your ball - or find another way to win.</div>
-    ${err ? `<div class="bad">${esc(err)}</div>` : ''}
+    ${ui.rejoining ? `<div class="muted">Rejoining room <b>${esc(sess.code)}</b>...</div>` : ''}${err ? `<div class="bad">${esc(err)}</div>` : ''}
     <input id="name" placeholder="Your name" maxlength="16">
     <button onclick="doJoin()">Create a crew</button>
     <div class="row"><input id="code" placeholder="Room code" maxlength="4" style="text-transform:uppercase"><button class="ghost fit" onclick="doJoin(true)">Join</button></div>
@@ -106,7 +124,7 @@ function joinView() {
 function doJoin(withCode) {
   const name = $('#name').value, code = withCode ? $('#code').value : undefined;
   if (withCode && !code) return;
-  connect({ type: 'join', name, code });
+  ui.rejoining = ui.reconnecting = false; connect({ type: 'join', name, code });
 }
 
 const playerList = () => S.players.map((p) => `<div class="pl"><span>${esc(p.name)}${p.id === S.you ? ' (you)' : ''}${!p.connected ? ' 📴' : ''}${p.drunk >= 15 ? ' 🍺' : ''}</span>
@@ -180,6 +198,7 @@ function gameView() {
       <div class="row" style="gap:8px;justify-content:flex-end"><span class="pill money">${$$(me.money)}</span>${me.mobTied ? `<span class="pill debt">Owe ${$$(me.debt)}</span>` : ''}
       <span class="pill drunkp" title="Drunk confidence">🍺<span class="dm"><span id="drunkfill" style="width:${me.drunk}%"></span></span></span></div>
     </div>
+    ${ui.reconnecting ? '<div class="reconn">📶 Connection lost - reconnecting...</div>' : ''}
     <div class="hud-clock"><span class="pill time" id="timer"></span></div>
     <div class="hud-goal">${goalText()}</div>
     ${quotaHud()}${eventBanner()}${bountyHud()}${shakeBanner()}
@@ -488,3 +507,4 @@ function shopView() {
     ${ui.reveal ? revealView() : ''}</div></div>`;
 }
 render();
+if (sess) { ui.rejoining = true; render(); connect({ type: 'join', code: sess.code, token: sess.token }); }

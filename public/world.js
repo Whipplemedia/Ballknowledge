@@ -50,6 +50,7 @@ BK.startGame = (name, ch) => games.start(name, ch);
 const fx = createFX(renderer, scene, camera);
 // ---------- sound + voice ----------
 const voice = createVoice(BK), audioUI = createAudioUI(voice, BK);
+BK.onSession = () => { if (voice.enabled) BK.send({ type: 'rtc', to: '*', data: { k: 'hello' } }); }; // (re)joined: let voice peers find us again
 BK.audio = audio; BK.voice = voice; BK.sfx = (n, o) => audio.sfx(n, o); BK.onRtc = (m) => voice.onSignal(m);
 document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('button,[onclick]') && !e.target.closest('#audiopanel')) audio.sfx('click'); }, true);
 const sfxAt = (n, x, z, y = 1.2, o = {}) => audio.sfx(n, { pos: { x, y, z }, ...o });
