@@ -56,3 +56,8 @@ Game results were verified against web sources where possible (2016 NBA Finals +
 
 ## Performance
 The scene has ~1,400 meshes and ~12 lights. If the first couple of seconds average under ~30 fps the game switches itself to performance mode (no shadows/bloom, 1x resolution). Force it with `?quality=low` or disable the check with `?quality=high`.
+
+## Character motion & NPC wandering
+- `public/models/clips.json` holds Meshy's free walk/run clips (extracted from the rigged Bub GLB) retargeted onto every AI character at runtime via rest-relative deltas. `people.js` blends them over the procedural pose (`P.clipW`); `?clips=0` disables them. Remote players blend walk/run from their measured speed (`P.moveSpeed`).
+- `bar.js` makes the Spectator/Patron/Watcher NPCs wander a deterministic 24-stop route (16 s per leg, ~6.4 min loop) driven by the synced clock, so every player sees them in the same place. Routes are planned lazily around obstacles; a knocked-out wanderer rejoins its route afterward.
+- Known limits: seated NPCs keep a frozen sit pose; held items/cosmetics don't follow clip arms while walking.

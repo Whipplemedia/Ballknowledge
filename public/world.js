@@ -246,6 +246,7 @@ function frame(now) {
         if (down) { animate(a.P, 'idle', t); g.rotation.x += (Math.PI / 2 - g.rotation.x) * Math.min(1, dt * 12); g.position.y = (a.P.baseY || 0) + 0.2; continue; }
         a._koOn = false; g.rotation.x = 0; g.position.y = a.P.baseY || 0; if (a.star) a.star.visible = false; audio.sfx('boing', { pos: { x: g.position.x, y: 1.4, z: g.position.z } });
       } }
+    a.P.moveSpeed = sp;
     animate(a.P, a.sit ? 'sit' : a.drunk >= 40 && sp < 0.4 ? 'stagger' : sp > 0.5 ? 'walk' : 'idle', t, Math.min(1.4, sp / 3.5)); tickCosmetics(a.P, t);
   }
   hitmen.forEach((h, i) => {

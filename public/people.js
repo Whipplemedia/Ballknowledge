@@ -90,6 +90,30 @@ function recolorNpc(srcTex, key, { hue, skin }, clothMask) {
   RECOLOR_CACHE.set(key, tex); return tex;
 }
 
+
+// ---- Meshy walk/run clips (public/models/clips.json): rotation tracks per bone, retargeted onto each character's own rest pose ----
+const CLIPS = {};
+if (typeof location !== 'undefined' && !/[?&]clips=0/.test(location.search)) {
+  try {
+    const j = await (await fetch('models/clips.json')).json(), q = (a) => new THREE.Quaternion(a[0], a[1], a[2], a[3]);
+    const srcInv = {}; for (const k in j.rest) srcInv[k] = q(j.rest[k]).invert();
+    for (const name of ['walk', 'run']) {
+      const c = j[name], tr = {}; for (const b in c.tracks) { const t = c.tracks[b]; if (!t.q) continue; tr[b] = { t: t.t, q: t.q, srcInv: srcInv[b] || new THREE.Quaternion() }; }
+      const hp = c.tracks.Hips && c.tracks.Hips.p ? c.tracks.Hips.p : null, hy = []; if (hp) for (let i = 1; i < hp.length; i += 3) hy.push(hp[i]);
+      CLIPS[name] = { dur: c.dur, tr, hy, hmean: hy.length ? hy.reduce((a, b) => a + b, 0) / hy.length : 0 };
+    }
+  } catch { /* clips are optional */ }
+}
+const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qd = new THREE.Quaternion();
+function sampleBone(clip, bone, time, out) { // out <- local rotation delta relative to the clip's own rest pose
+  const tr = clip.tr[bone]; if (!tr) return false; const T = tr.t, n = T.length, u = ((time % clip.dur) + clip.dur) % clip.dur;
+  let i = Math.min(n - 2, Math.max(0, Math.floor(u / (T[n - 1] / (n - 1))))); while (i < n - 2 && T[i + 1] < u) i++; while (i > 0 && T[i] > u) i--;
+  const f = Math.min(1, Math.max(0, (u - T[i]) / Math.max(1e-6, T[i + 1] - T[i])));
+  _qa.set(tr.q[i * 4], tr.q[i * 4 + 1], tr.q[i * 4 + 2], tr.q[i * 4 + 3]); _qb.set(tr.q[(i + 1) * 4], tr.q[(i + 1) * 4 + 1], tr.q[(i + 1) * 4 + 2], tr.q[(i + 1) * 4 + 3]);
+  out.copy(_qa).slerp(_qb, f); out.premultiply(tr.srcInv); return true;
+}
+function sampleHipY(clip, time) { if (!clip.hy.length) return 0; const n = clip.hy.length, u = (((time % clip.dur) + clip.dur) % clip.dur) / clip.dur * (n - 1), i = Math.floor(u), f = u - i; return (clip.hy[i] * (1 - f) + clip.hy[Math.min(n - 1, i + 1)] * f - clip.hmean) * 0.01; }
+
 // ---- Meshy (AI-generated) skinned characters: public/models/<name>_ai.glb, Mixamo-style skeleton ----
 const Q0 = new THREE.Quaternion(), V_DOWN = new THREE.Vector3(0, -1, 0);
 const qAlign = (from, to) => new THREE.Quaternion().setFromUnitVectors(from.clone().normalize(), to.clone().normalize());
@@ -155,6 +179,11 @@ function fromSkinned(src, name, over) {
       else if (/ForeArm$|Hand$|Leg$|Foot$|ToeBase$/.test(n) && cur.has(b)) continue;
       else if (!cur.has(b)) keep(b);
     }
+    if (P.clipW > 0.001 && CLIPS[P.clipName]) { // blend in the authored walk/run clip on top of the procedural pose
+      const clip = CLIPS[P.clipName];
+      for (const b of order) { if (!sampleBone(clip, b.name, P.clipT, _qd)) continue; b.quaternion.slerp(_qd.premultiply(b.userData.restQ), P.clipW); }
+      inner.position.y = P.bobBase + sampleHipY(clip, P.clipT) * (P.hipY || 1) * P.clipW;
+    } else inner.position.y = P.bobBase;
   };
   // Bub's texture is split into flat color regions, so skin / hair / shirt can be recolored per player. Other characters keep their art (only a faint crowd tint).
   if (name === 'bub' && (over.shirt != null || over.skin != null || over.hair != null)) {
@@ -166,6 +195,7 @@ function fromSkinned(src, name, over) {
     if (vary != null) { const tc = new THREE.Color(0xffffff).lerp(new THREE.Color(vary), 0.16); const cl = new Map(); rig.traverse((o) => { if (!o.isMesh) return; if (!cl.has(o.material)) { const m = o.material.clone(); m.color.multiply(tc); cl.set(o.material, m); } o.material = cl.get(o.material); }); }
   }
   if (over.scale) outer.scale.setScalar(over.scale);
+  P.bobBase = inner.position.y; P.clipW = 0; P.clipT = 0; P.clipName = 'walk';
   P.skinUpdate();
   return P;
 }
@@ -366,5 +396,14 @@ export function animate(P, mode, t, speed = 1) {
   else { P.head.rotation.y = Math.sin(ph * 0.35) * 0.35; aR.rotation.x = Math.sin(ph * 0.5) * 0.05; }
   // the gestures above were written with the x-axis sign flipped (arms/torso/head swung backward); flip once here so forward is forward
   aL.rotation.x *= -1; aR.rotation.x *= -1; P.head.rotation.x *= -1; P.torso.rotation.x *= -1;
+  if (P.skinned) { // crossfade the authored walk/run clips in and out of the procedural pose
+    const dt = Math.min(0.1, Math.max(0, t - (P._lt ?? t))); P._lt = t; const sp = P.moveSpeed ?? speed * 3.5;
+    const want = mode === 'walk' && CLIPS.walk ? (sp > 2.4 && CLIPS.run ? 'run' : 'walk') : null;
+    if (want) {
+      if (P.clipName !== want) { P.clipT = P.clipW < 0.05 ? 0 : P.clipT / CLIPS[P.clipName].dur * CLIPS[want].dur; P.clipName = want; }
+      P.clipT += dt * (want === 'run' ? Math.min(1.5, Math.max(0.7, sp / 4.2)) : Math.min(1.6, Math.max(0.6, sp / 1.4)));
+    }
+    P.clipW += ((want ? 1 : 0) - P.clipW) * Math.min(1, dt * 9); if (!want && P.clipW < 0.02) P.clipW = 0;
+  }
   if (P.skinUpdate) P.skinUpdate();
 }

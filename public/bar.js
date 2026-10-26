@@ -271,15 +271,43 @@ export function buildBar({ scene, BK, tv }) {
   const takenSeat = (s) => npcs.some((n) => n.seated && Math.hypot(n.P.group.position.x - s.x, n.P.group.position.z - s.z) < 0.55);
   seats.forEach((s) => { s.free = !takenSeat(s); if (s.free) stations.push({ x: s.x, z: s.z, r: s.text === 'booth' ? 2.0 : s.text === 'couch' ? 1.5 : 0.8, text: 'E - Sit (' + s.text + ')', seat: s, act: () => BK.sit && BK.sit(s) }); });
 
+
+  // ---------- NPC wandering: a deterministic schedule from the synced game clock, so every client sees the same people in the same places ----------
+  const SEG = 16, WALK = 1.15, POI = [[0, -7], [10, 2], [3.4, 3.4], [-9, -5], [-6, 2], [4, -1]];
+  const blockedAt = (x, z, pad) => obstacles.some((o) => Math.hypot(x - o.x, z - o.z) < o.r + pad) || (x < -9.0 && z > -2 && z < 7.5) || (x > 6.7 && z < -3.0) || x > 7.6 || z < -5.2 || z > 4.9 || Math.abs(x) > ROOM.x - 1.2;
+  const pathClear = (a, c) => { const n = Math.ceil(Math.hypot(c[0] - a[0], c[1] - a[1]) / 0.35); for (let i = 0; i <= n; i++) if (blockedAt(a[0] + (c[0] - a[0]) * i / n, a[1] + (c[1] - a[1]) * i / n, 0.38)) return false; return true; };
+  let WPS = null; const wps = () => WPS || (WPS = (() => { const a = []; for (let x = -8.5; x <= 7.5; x += 1.25) for (let z = -5; z <= 4.8; z += 1.25) if (!blockedAt(x, z, 0.6)) a.push([x, z]); return a; })()); // lazy: games/roulette add their obstacles after the bar is built
+  const rng = (seed) => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+  const CYC = 24; // each wanderer loops through a fixed 24-stop route (~6 min), so any clock value maps to a stop in O(1)
+  const buildRoute = (n) => { const r = [[n.base.x, n.base.z]]; for (let j = 0; j < CYC - 1; j++) { const prev = r[j], rg = rng(n.seed * 977 + j * 131), last = j === CYC - 2; let pick = null;
+      for (let tries = 0; tries < 20 && !pick; tries++) { const W = wps(), cand = W[Math.floor(rg() * W.length)]; if (Math.hypot(cand[0] - prev[0], cand[1] - prev[1]) > 2 && pathClear(prev, cand) && (!last || pathClear(cand, r[0]))) pick = cand; } r.push(pick || (last ? r[0] : prev)); } return r; };
+  const wpOf = (n, k) => (n.wp || (n.wp = buildRoute(n)))[((k % CYC) + CYC) % CYC];
+  const wanderPos = (n, T) => {
+    const Tn = T % (SEG * CYC) + n.phase, k = Math.floor(Tn / SEG), u = Tn - k * SEG, a = wpOf(n, k - 1), c = wpOf(n, k), d = Math.hypot(c[0] - a[0], c[1] - a[1]), wd = d / WALK;
+    if (d < 0.4 || u >= wd) { const poi = POI[Math.floor(rng(n.seed * 31 + (((k % CYC) + CYC) % CYC))() * POI.length)]; return { x: c[0], z: c[1], walking: false, ry: Math.atan2(-(poi[0] - c[0]), -(poi[1] - c[1])) }; }
+    const f = u / wd, e = f * f * (3 - 2 * f) * 0.35 + f * 0.65; return { x: a[0] + (c[0] - a[0]) * e, z: a[1] + (c[1] - a[1]) * e, walking: true, ry: Math.atan2(-(c[0] - a[0]), -(c[1] - a[1])) };
+  };
+  npcs.forEach((n, i) => { if (!n.seated && ['Spectator', 'Patron', 'Watcher'].includes(n.name)) { n.wander = true; n.seed = 1000 + i * 17; n.phase = (i * 5.3) % SEG; n.wp = null; n.off = { x: 0, z: 0 }; } });
+
   function update(t, dt, me) {
     for (const n of npcs) {
       const koNow = n.ko && n.ko > BK.now();
       if (koNow || n._koOn) { // knocked out by a bottle: stars, slump (seated) or fall flat on the back (standing)
         if (koNow && !n._koOn) { n._koOn = true; n.P.group.rotation.order = 'YXZ'; if (!n.star) { n.star = TX.label('💫 KO 💫', '#ffd04a', 0.7); n.star.position.y = 2.35; n.P.group.add(n.star); } n.star.visible = true; }
         if (koNow) { animate(n.P, n.seated ? 'sleep' : 'idle', t); if (!n.seated) { n.P.group.rotation.x += (Math.PI / 2 - n.P.group.rotation.x) * Math.min(1, dt * 12); n.P.group.position.y = (n.P.baseY || 0) + 0.2; } else n.P.legs.forEach((l) => (l.rotation.x = 1.45)); n.star.material.rotation = Math.sin(t * 6) * 0.15; if (n.bubble) n.bubble.set(''); continue; }
-        n._koOn = false; n.P.group.rotation.x = 0; n.P.group.position.y = n.P.baseY || 0; if (n.star) n.star.visible = false; BK.sfx && BK.sfx('boing', { pos: { x: n.P.group.position.x, y: 1.4, z: n.P.group.position.z } });
+        n._koOn = false; if (n.wander) { const s = wanderPos(n, BK.now() / 1000); n.off.x = n.P.group.position.x - s.x; n.off.z = n.P.group.position.z - s.z; n._sx = n.P.group.position.x; n._sz = n.P.group.position.z; } n.P.group.rotation.x = 0; n.P.group.position.y = n.P.baseY || 0; if (n.star) n.star.visible = false; BK.sfx && BK.sfx('boing', { pos: { x: n.P.group.position.x, y: 1.4, z: n.P.group.position.z } });
       }
-      animate(n.P, n.mode, t);
+      let mode = n.mode;
+      if (n.wander) {
+        const w = wanderPos(n, BK.now() / 1000), g = n.P.group, ol = Math.hypot(n.off.x, n.off.z);
+        if (ol > 0.02) { const s = Math.min(ol, 1.2 * dt); n.off.x -= n.off.x / ol * s; n.off.z -= n.off.z / ol * s; } // after a knockout, walk back to the schedule
+        const tx = w.x + n.off.x, tz = w.z + n.off.z, mv = w.walking || ol > 0.05;
+        n._sx = (n._sx ?? tx); n._sz = (n._sz ?? tz); const k = Math.min(1, dt * 12); n._sx += (tx - n._sx) * k; n._sz += (tz - n._sz) * k; g.position.x = n._sx; g.position.z = n._sz;
+        let face = w.ry; if (!w.walking && ol > 0.05) face = Math.atan2(-(n.off.x * -1), -(n.off.z * -1)); // returning to the schedule after a KO: face the way we're walking
+        let d = face - g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); g.rotation.y += d * Math.min(1, dt * 7);
+        if (mv) { mode = 'walk'; n.P.moveSpeed = 1.2; }
+      }
+      animate(n.P, mode, t);
       if (n.seated) n.P.legs.forEach((l) => (l.rotation.x = 1.45));
       const near = Math.hypot(n.P.group.position.x - me.x, n.P.group.position.z - me.z) < 7;
       if (n.bubble) {
@@ -290,5 +318,5 @@ export function buildBar({ scene, BK, tv }) {
     const p = dg.attributes.position; for (let i = 0; i < dustN; i++) { p.array[i * 3 + 1] += dt * 0.03 * (1 + (i % 3)); if (p.array[i * 3 + 1] > 4.6) p.array[i * 3 + 1] = 0.1; p.array[i * 3] += Math.sin(t * 0.2 + i) * dt * 0.02; }
     p.needsUpdate = true;
   }
-  return { stations, obstacles, npcs, seats, update };
+  return { stations, obstacles, npcs, seats, update, wanderPos };
 }
