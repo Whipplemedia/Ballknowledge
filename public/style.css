@@ -251,3 +251,17 @@ body:not(.ingame) .center .card,body:not(.ingame) .wrap .card{background:#101830
 #kooverlay { position: fixed; inset: 0; z-index: 22; background: radial-gradient(ellipse at center, #000a 20%, #000f 85%); display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; pointer-events: none; }
 #kooverlay b { font-size: 34px; letter-spacing: 2px; text-shadow: 0 0 20px #ffd04a; }
 #kooverlay span { font-size: 64px; font-weight: 900; color: #ffd04a; }
+
+/* roulette betting table */
+.rtable{width:min(860px,100%)}
+.rchips{gap:8px}
+.chipb{flex:0 0 48px;width:48px;height:48px;border-radius:50%;padding:0;font-weight:900;border:4px dashed #fff8;color:#fff;box-shadow:0 2px 0 #0006}
+.chipb.c10{background:#8a8a96}.chipb.c25{background:#1d8a4a}.chipb.c50{background:#c0182a}.chipb.c100{background:#1c1c20}.chipb.c250{background:#7a2ab8}.chipb.c500{background:#e0a020;color:#1a1200}
+.chipb.on{outline:3px solid var(--gold);outline-offset:2px;transform:translateY(-3px)}
+.rgrid{display:grid;grid-template-columns:52px repeat(12,1fr) 52px;grid-template-rows:repeat(3,52px) 40px 40px;gap:3px;background:#0b6b34;padding:8px;border-radius:12px;border:3px solid #e8e0b0;user-select:none}
+.rc{position:relative;display:flex;align-items:center;justify-content:center;border:1px solid #e8e0b088;border-radius:4px;color:#fff;font-weight:800;font-size:15px;cursor:pointer;transition:filter .1s}
+.rc:hover{filter:brightness(1.35)}.rc.r{background:#c0182a}.rc.k{background:#15151a}.rc.g{background:#0f7a3a;font-size:22px}.rc.o{background:#0b6b34;font-size:13px}
+.rchip{position:absolute;right:-4px;top:-6px;min-width:26px;height:26px;padding:0 3px;border-radius:13px;background:#ffc83d;color:#1a1200;border:2px dashed #fff;font-style:normal;font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 4px #0008;pointer-events:none}
+@media (max-width:640px){.rgrid{grid-template-columns:34px repeat(12,1fr) 34px;grid-template-rows:repeat(3,40px) 34px 34px}.rc{font-size:11px}}
+
+.hud-event kbd,.muted kbd{display:inline-block;min-width:18px;padding:0 5px;margin-right:4px;border-radius:5px;background:#0008;border:1px solid #fff6;font:800 12px system-ui;color:#fff}

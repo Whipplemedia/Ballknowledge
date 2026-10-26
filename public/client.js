@@ -5,7 +5,7 @@ const amer = (d) => (d >= 2 ? '+' + Math.round((d - 1) * 100) : String(-Math.rou
 const mmss = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
 let ws, S = null, err = '', skew = 0, stateAt = 0;
-const ui = { shop: false, shopTab: 'all', reveal: null, tab: 'book', open: false, sel: null, stake: 100, giveTo: '', giveAmt: 100, rStake: 100, rPick: 'red', rNum: '', intelTab: 'stats' };
+const ui = { shop: false, shopTab: 'all', reveal: null, tab: 'book', open: false, sel: null, stake: 100, giveTo: '', giveAmt: 100, rChip: 25, rBets: {}, rHist: [], fightStake: 50, intelTab: 'stats' };
 const now = () => Date.now() + skew;
 
 // ---------- local save: tickets + inventory (browser only) ----------
@@ -309,21 +309,39 @@ function barView() {
     <div class="chalk-sub">You are <b>${b}</b> (${d}%). Drunk confidence gives you gut feelings on the games. Too far gone and they turn into nonsense. It wears off over time.</div></div>`;
 }
 
-function wheelView() {
-  const busy = S.spinning;
-  const picks = [['red', 'Red 2x', 'red'], ['black', 'Black 2x', ''], ['green', 'Green 36x', 'gold']];
-  return `<div class="card col"><div class="big">🎰 Roulette</div>
-    <div class="muted">${busy ? `The wheel is spinning for ${esc(busy.by)}...` : 'Place a bet, then watch the wheel. 37 pockets, one ball.'}</div>
-    <input id="rstake" type="number" min="10" value="${ui.rStake}" oninput="ui.rStake=+this.value">
-    <div class="chips">${[50, 100, 250, 500].map((v) => `<button onclick="ui.rStake=${v};render()">${$$(v)}</button>`).join('')}</div>
-    <div class="row">${picks.map(([id, l, c]) => `<button class="${c} ${ui.rPick === id ? 'selp' : ''}" style="${id === 'black' ? 'background:#222;color:#fff' : ''}" onclick="ui.rPick='${id}';render()">${l}</button>`).join('')}</div>
-    <div class="row"><input id="rnum" type="number" min="0" max="36" placeholder="or a single number 0-36 (pays 36x)" value="${ui.rNum}" oninput="ui.rNum=this.value;ui.rPick=this.value===''?ui.rPick:'num'"></div>
-    <button class="red" ${busy ? 'disabled' : ''} onclick="spinNow()">SPIN THE WHEEL</button></div>`;
+// roulette: a clickable felt layout. Click a spot to drop the selected chip on it (again to stack), right-click to take one off.
+const RREDS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+const RPAY = (pk) => (/^\d+$/.test(pk) ? '35:1' : /^[dc]/.test(pk) ? '2:1' : '1:1');
+function rCell(pk, label, cls, style = '') {
+  const amt = ui.rBets[pk] || 0;
+  return `<div class="rc ${cls}" style="${style}" title="${esc(label)} pays ${RPAY(pk)}" onclick="rBet('${pk}')" oncontextmenu="event.preventDefault();rBet('${pk}',-1)"><span>${label}</span>${amt ? `<i class="rchip">${amt >= 1000 ? (amt / 1000).toFixed(amt % 1000 ? 1 : 0) + 'k' : amt}</i>` : ''}</div>`;
 }
+function wheelView() {
+  const busy = S.spinning, total = Object.values(ui.rBets).reduce((a, b) => a + b, 0);
+  let grid = rCell('0', '0', 'g', 'grid-row:1/4;grid-column:1');
+  for (let col = 0; col < 12; col++) for (let row = 0; row < 3; row++) { const n = col * 3 + (3 - row); grid += rCell(String(n), String(n), RREDS.has(n) ? 'r' : 'k', `grid-row:${row + 1};grid-column:${col + 2}`); }
+  ['c3', 'c2', 'c1'].forEach((c, row) => (grid += rCell(c, '2:1', 'o', `grid-row:${row + 1};grid-column:14`)));
+  ['1st 12', '2nd 12', '3rd 12'].forEach((l, i) => (grid += rCell('d' + (i + 1), l, 'o', `grid-row:4;grid-column:${2 + i * 4}/span 4`)));
+  [['low', '1-18', 'o'], ['even', 'EVEN', 'o'], ['red', '◆ RED', 'r'], ['black', '◆ BLACK', 'k'], ['odd', 'ODD', 'o'], ['high', '19-36', 'o']].forEach(([pk, l, c], i) => (grid += rCell(pk, l, c, `grid-row:5;grid-column:${2 + i * 2}/span 2`)));
+  return `<div class="card col rtable"><div class="big">🎰 Roulette</div>
+    <div class="muted">${busy ? `The wheel is spinning for ${esc(busy.by)}...` : 'Pick a chip, click the felt to place bets (right-click removes), then spin. Numbers pay 35:1, dozens/columns 2:1, red/black/odd/even/high/low 1:1. Zero beats every outside bet.'}</div>
+    <div class="row rchips">${[10, 25, 50, 100, 250, 500].map((v) => `<button class="chipb c${v} ${ui.rChip === v ? 'on' : ''}" onclick="ui.rChip=${v};render()">${v}</button>`).join('')}</div>
+    <div class="rgrid">${grid}</div>
+    <div class="row" style="align-items:center"><div class="big" style="font-size:20px">Total bet <b class="${total > S.me.money ? 'bad' : ''}">${$$(total)}</b></div>
+      <button onclick="rUndo()" ${ui.rHist.length ? '' : 'disabled'}>Undo</button><button onclick="ui.rBets={};ui.rHist=[];render()" ${total ? '' : 'disabled'}>Clear</button>
+      <button class="red" style="margin-left:auto" ${busy || !total || total > S.me.money ? 'disabled' : ''} onclick="spinNow()">SPIN THE WHEEL</button></div></div>`;
+}
+function rBet(pk, dir = 1) {
+  const cur = ui.rBets[pk] || 0;
+  if (dir > 0) { ui.rBets[pk] = cur + ui.rChip; ui.rHist.push([pk, ui.rChip]); window.BK.sfx && window.BK.sfx('chip'); }
+  else if (cur) { const d = Math.min(cur, ui.rChip); if (cur - d) ui.rBets[pk] = cur - d; else delete ui.rBets[pk]; ui.rHist.push([pk, -d]); }
+  render();
+}
+function rUndo() { const h = ui.rHist.pop(); if (!h) return; const [pk, d] = h, v = (ui.rBets[pk] || 0) - d; if (v > 0) ui.rBets[pk] = v; else delete ui.rBets[pk]; render(); }
 function spinNow() {
-  const pick = ui.rPick === 'num' ? ui.rNum : ui.rPick;
-  if (pick === '' || pick === undefined) return toast('Pick red, black, green or a number.', 'err');
-  window.BK.sfx && window.BK.sfx('chip'); send({ type: 'roulette', pick, stake: ui.rStake }); closePanel();
+  const bets = Object.entries(ui.rBets).map(([pick, stake]) => ({ pick, stake }));
+  if (!bets.length) return toast('Put some chips on the table first.', 'err');
+  window.BK.sfx && window.BK.sfx('chip'); send({ type: 'roulette', bets }); ui.lastRBets = ui.rBets; ui.rBets = {}; ui.rHist = []; closePanel();
 }
 
 function endView() {
@@ -354,12 +372,22 @@ function bountyHud() {
   const b = S.me.bounties || []; if (!b.length) return '';
   return `<div class="hud-bounty"><div class="qt">🎯 BOUNTIES</div>${b.map((x) => `<div class="bn ${x.done ? 'done' : ''}">${x.done ? '✅' : '☐'} ${esc(x.text)} <b>+${x.reward}🎟</b></div>`).join('')}</div>`;
 }
+// bar fight bets work from the keyboard: the banner pops up while the mouse is captured for looking around, so there is no cursor to click it
+const FIGHT_STAKES = [50, 100, 300];
+function fightOpen() { const be = S && S.barEvent; return !!(be && be.kind === 'fight' && !be.mine && now() < be.betUntil); }
+function fightBet(side) { if (!fightOpen()) return; if (S.me.money < ui.fightStake) return toast(`You need ${$$(ui.fightStake)} to bet that.`, 'err'); window.BK.sfx && window.BK.sfx('chip'); send({ type: 'fightBet', side, stake: ui.fightStake }); }
+addEventListener('keydown', (e) => {
+  if (e.repeat || !fightOpen() || ui.open || ui.shop || /INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '')) return;
+  if (e.code === 'Digit1' || e.code === 'Numpad1') fightBet('red');
+  else if (e.code === 'Digit2' || e.code === 'Numpad2') fightBet('blue');
+  else if (e.code === 'Digit3' || e.code === 'Numpad3') { ui.fightStake = FIGHT_STAKES[(FIGHT_STAKES.indexOf(ui.fightStake) + 1) % FIGHT_STAKES.length]; render(); }
+});
 function eventBanner() {
   const be = S.barEvent; if (!be) return '';
   const base = `<div class="hud-event ${be.kind}"><div class="et">${esc(be.title)} <span class="pill time">${mmss(be.until - now())}</span></div><div>${esc(be.text)}</div>`;
   if (be.kind === 'fight') {
     if (be.mine) return base + `<div class="muted">You bet ${$$(be.mine.stake)} on ${esc(be.mine.side === 'red' ? be.red : be.blue)}.</div></div>`;
-    if (now() < be.betUntil) return base + `<div class="row"><button class="red" onclick="send({type:'fightBet',side:'red',stake:50})">🔴 ${esc(be.red)} · $50</button><button class="blue" onclick="send({type:'fightBet',side:'blue',stake:50})">🔵 ${esc(be.blue)} · $50</button></div></div>`;
+    if (now() < be.betUntil) { const st = ui.fightStake; return base + `<div class="row"><button class="red" onclick="fightBet('red')"><kbd>1</kbd> 🔴 ${esc(be.red)} · ${$$(st)}</button><button class="blue" onclick="fightBet('blue')"><kbd>2</kbd> 🔵 ${esc(be.blue)} · ${$$(st)}</button></div><div class="muted" style="margin-top:4px">Press <kbd>1</kbd> or <kbd>2</kbd> to bet · <kbd>3</kbd> changes the stake</div></div>`; }
   }
   return base + '</div>';
 }

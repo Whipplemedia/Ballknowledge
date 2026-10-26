@@ -14,6 +14,14 @@ const START_MONEY = 2000;
 const LOAN = 1000, LOAN_DEBT = 1250, MAX_LOANS = 3, MOB_CUT = 0.2, HUNT_MS = 100000;
 const SPIN_MS = 8000, DRUNK_DECAY_MS = 6000;
 const BOTTLE_RESPAWN_MS = 45000;
+// roulette: total return multiplier for a winning bet (stake included), and whether a pick covers number n
+const rouletteMult = (pk) => (/^\d{1,2}$/.test(pk) && Number(pk) <= 36 ? 36 : ['red', 'black', 'odd', 'even', 'low', 'high'].includes(pk) ? 2 : /^[dc][123]$/.test(pk) ? 3 : 0);
+const rouletteWins = (pk, n) => {
+  if (/^\d+$/.test(pk)) return Number(pk) === n; if (n === 0) return false;
+  if (pk === 'red' || pk === 'black') return colorOf(n) === pk; if (pk === 'odd') return n % 2 === 1; if (pk === 'even') return n % 2 === 0;
+  if (pk === 'low') return n <= 18; if (pk === 'high') return n >= 19; if (pk[0] === 'd') return Math.ceil(n / 12) === Number(pk[1]); if (pk[0] === 'c') return ((n - 1) % 3) + 1 === Number(pk[1]);
+  return false;
+};
 const DRINKS = [
   { id: 'beer', name: 'Cold Domestic', emoji: '🍺', price: 30, add: 18, blurb: 'Lukewarm, but it works.' },
   { id: 'shot', name: 'Well Shot', emoji: '🥃', price: 60, add: 30, blurb: 'Does not taste like anything good.' },
@@ -312,7 +320,7 @@ const FIGHTERS = ['Big Tony', 'Skinny Pete', 'Two-Beer Terry', 'Crazy Carl', 'Ma
 function startBarEvent(room) {
   const kinds = ['happy', 'fight', 'blackout', 'tip'].filter((k) => k !== room.lastBarKind);
   const open = room.events.find((e) => e.status === 'open');
-  let kind = pick(kinds); if (kind === 'tip' && !open) kind = 'happy';
+  let kind = pick(kinds); if (kind === 'tip' && !open) kind = 'happy'; if (process.env.BK_FORCE_EVENT) kind = process.env.BK_FORCE_EVENT; // dev/testing only
   const now = Date.now(); room.lastBarKind = kind;
   if (kind === 'happy') { room.barEvent = { kind, until: now + dur(45000), title: 'HAPPY HOUR', text: 'Drinks are HALF PRICE!' }; feed(room, '🍻 HAPPY HOUR! Drinks are half price.'); }
   else if (kind === 'blackout') { room.barEvent = { kind, until: now + dur(18000), title: 'BLACKOUT', text: 'The power is out! No hints, no TVs.' }; feed(room, '🔦 The power went out!'); }
@@ -562,21 +570,24 @@ function handle(room, p, m) {
       const cos = {}; for (const k of ['head', 'face', 'body', 'hand', 'back']) { const v = m.cos && m.cos[k]; if (typeof v === 'string' && /^[a-z0-9_]{1,24}$/.test(v)) cos[k] = v; }
       p.cos = cos; broadcast(room); break;
     }
-    case 'roulette': {
+    case 'roulette': { // m.bets = [{ pick, stake }]: a number '0'-'36', red/black, odd/even, low/high, d1-d3 (dozens), c1-c3 (columns)
       if (!inPlay(room)) break;
       if (room.spin) { toast(p, 'The wheel is already spinning - wait your turn.', 'err'); break; }
-      const stake = Math.floor(Number(m.stake)); const pk = m.pick;
-      const isNum = !['red', 'black', 'green'].includes(pk) && /^\d{1,2}$/.test(String(pk)) && Number(pk) <= 36;
-      if (!(stake >= 10 && stake <= p.money) || !(['red', 'black', 'green'].includes(pk) || isNum)) { toast(p, 'Invalid wager.', 'err'); break; }
-      const n = rnd(37), color = colorOf(n); p.money -= stake;
+      const raw = Array.isArray(m.bets) ? m.bets : [{ pick: m.pick === 'green' ? '0' : m.pick, stake: m.stake }];
+      const bets = []; for (const b of raw.slice(0, 40)) { const pick = String(b && b.pick), stake = Math.floor(Number(b && b.stake)); if (rouletteMult(pick) && stake >= 10) bets.push({ pick, stake }); }
+      const total = bets.reduce((a, b) => a + b.stake, 0);
+      if (!bets.length || bets.length !== raw.length) { toast(p, 'Invalid wager.', 'err'); break; }
+      if (total > p.money) { toast(p, `You only have ${money(p.money)}.`, 'err'); break; }
+      const n = rnd(37), color = colorOf(n); p.money -= total;
       const ms = dur(SPIN_MS); room.spin = { name: p.name, until: Date.now() + ms };
-      for (const q of room.players.values()) send(q, { type: 'spin', n, color, by: p.name, mine: q === p, ms });
+      for (const q of room.players.values()) send(q, { type: 'spin', n, color, by: p.name, mine: q === p, ms, bets });
       broadcast(room);
       setTimeout(() => {
-        let win = 0; if (isNum) win = Number(pk) === n ? stake * 36 : 0; else if (pk === color) win = stake * (color === 'green' ? 36 : 2);
-        p.money += win; room.spin = null; award(room, p, 'roulette', { win: win > 0, color, isNum });
-        toast(p, win ? `${n} ${color}! You win ${money(win - stake)}` : `${n} ${color}. You lose ${money(stake)}.`, win ? 'win' : 'err');
-        feed(room, `🎰 ${p.name} ${win ? 'won ' + money(win - stake) : 'lost ' + money(stake)} on roulette (${n} ${color}).`);
+        let win = 0, numWin = false; for (const b of bets) if (rouletteWins(b.pick, n)) { win += b.stake * rouletteMult(b.pick); if (/^\d+$/.test(b.pick)) numWin = true; }
+        p.money += win; room.spin = null; award(room, p, 'roulette', { win: win > 0, color, isNum: numWin });
+        const net = win - total;
+        toast(p, win ? `${n} ${color}! You get back ${money(win)} (${net >= 0 ? '+' : ''}${money(net)})` : `${n} ${color}. You lose ${money(total)}.`, net > 0 ? 'win' : 'err');
+        feed(room, `🎰 ${p.name} ${net > 0 ? 'won ' + money(net) : 'lost ' + money(-net)} on roulette (${n} ${color}).`);
         broadcast(room);
       }, ms + 400);
       break;
