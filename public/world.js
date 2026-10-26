@@ -104,11 +104,11 @@ canvas.addEventListener('mouseup', () => games.up());
 // ---------- avatars ----------
 const SHIRTS = [0xe74c3c, 0x3498db, 0x2ecc71, 0xf1c40f, 0x9b59b6, 0xe67e22], SKINS = [0xf0c8a0, 0xc58c5c, 0xe0b890, 0x8d5a3a, 0xf5d0b0, 0xd8a070], HAIRS = [0x2a1a0a, 0x111111, 0x8a5a2a, 0x3a3a3a, 0xb06a2a, 0x5a3a1a], CAPS = [0x9c9ca2, 0xb02a2a, 0x2a5aa8, 0x2f8f5a, 0xd0a020, 0x7a3fa0];
 const avatars = new Map(), pending = new Map();
-BK.onPos = (m) => { const a = avatars.get(m.id); if (a) { a.tx = m.x; a.tz = m.z; a.try = m.ry; a.sit = m.sit || 0; a.jy = m.jy || 0; } else pending.set(m.id, m); };
+BK.onPos = (m) => { const a = avatars.get(m.id); if (a) { a.tx = m.x; a.tz = m.z; a.try = m.ry; a.sit = m.sit || 0; a.jy = m.jy || 0; a.lp = m.p || 0; } else pending.set(m.id, m); };
 function syncAvatars() {
   const S = BK.S, inGame = active();
   const ids = new Set(inGame ? S.players.filter((p) => p.id !== S.you).map((p) => p.id) : []);
-  for (const [id, a] of avatars) if (!ids.has(id)) { scene.remove(a.P.group); avatars.delete(id); }
+  for (const [id, a] of avatars) if (!ids.has(id)) { scene.remove(a.P.group); if (a.life) bar.life.remove(a.life); avatars.delete(id); }
   if (!inGame) return;
   for (const p of S.players) {
     if (p.id === S.you) continue;
@@ -178,11 +178,27 @@ function move(dt, t, drunkAmt) {
   me.x = Math.max(-ROOM.x + 0.6, Math.min(ROOM.x - 0.6, me.x)); me.z = Math.max(-ROOM.z + 0.6, Math.min(ROOM.z - 0.6, me.z));
   for (const o of obstacles) { const ex = me.x - o.x, ez = me.z - o.z, d = Math.hypot(ex, ez), min = o.r + 0.3; if (d < min && d > 0) { me.x = o.x + (ex / d) * min; me.z = o.z + (ez / d) * min; } }
 }
+// which seat a remote player is on (they only send position + seat height); cached until they move off it
+function seatOf(a) {
+  if (a.seat && Math.hypot(a.seat.x - a.tx, a.seat.z - a.tz) < 0.3) return a.seat;
+  let best = null, bd = 0.6; for (const s of bar.seats) { const dd = Math.hypot(s.x - a.tx, s.z - a.tz); if (dd < bd && Math.abs(s.sit - a.sit) < 0.08) { bd = dd; best = s; } }
+  a.seat = best || { x: a.tx, z: a.tz, yaw: a.try, sit: a.sit, text: 'booth' }; return a.seat;
+}
+// seated remote players get the NPC seated layer: breathing, sway, head following their real look direction,
+// talk gestures while they speak on voice, and a sip (with a pint) whenever they order a drink
+function seatedLife(a, seat) {
+  const opts = { kind: seat.text === 'couch' ? 'lap' : 'table', table: seat.text === 'bar stool' ? 1.14 : 0.78, seat: seat.sit, reach: seat.text === 'bar stool' ? 0.55 : 0.4, baseY: seat.sit + 0.09 - (a.P.hipY || 0.98) };
+  if (!a.life) { a.life = bar.life.add({ P: a.P, mode: 'player', name: 'player' }, { ...opts, style: 'player', glass: 'pint', glassOnSip: true, drive: () => {
+    const dr = a.drunk > (a._dr ?? a.drunk); a._dr = a.drunk; // drink count went up: take a sip
+    return { y: Math.atan2(Math.sin(a.try - (a.seat ? a.seat.yaw : a.try)), Math.cos(a.try - (a.seat ? a.seat.yaw : a.try))), p: -(a.lp || 0), talking: voice.speaking(a.id), sip: dr };
+  } }); a.lifeSeat = seat; }
+  else if (a.lifeSeat !== seat) { bar.life.refit(a.life, opts); a.lifeSeat = seat; }
+}
 let lastSend = 0, lastPos = '', lastBeat = 0;
 function netSend(t) {
   if (t - lastSend < 80) return; lastSend = t;
-  const sitH = me.sit ? me.sit.sit : 0, jy = +(me.jy || 0).toFixed(2), k = `${me.x.toFixed(2)},${me.z.toFixed(2)},${me.yaw.toFixed(2)},${sitH},${jy}`;
-  if (k === lastPos && !(sitH && t - lastBeat > 2500)) return; lastPos = k; lastBeat = t; BK.send({ type: 'pos', x: me.x, z: me.z, ry: me.yaw, sit: sitH, jy });
+  const sitH = me.sit ? me.sit.sit : 0, jy = +(me.jy || 0).toFixed(2), lp = +me.pitch.toFixed(2), k = `${me.x.toFixed(2)},${me.z.toFixed(2)},${me.yaw.toFixed(2)},${sitH},${jy},${me.sit ? lp : 0}`;
+  if (k === lastPos && !(sitH && t - lastBeat > 2500)) return; lastPos = k; lastBeat = t; BK.send({ type: 'pos', x: me.x, z: me.z, ry: me.yaw, sit: sitH, jy, p: me.sit ? lp : 0 });
 }
 
 // ---------- loop ----------
@@ -240,7 +256,8 @@ function frame(now) {
   roulette.update(dt); bar.update(t, dt, me); tv.draw(BK.S, now);
   for (const a of avatars.values()) {
     const g = a.P.group, k = Math.min(1, dt * 10); g.position.x += (a.tx - g.position.x) * k; g.position.z += (a.tz - g.position.z) * k;
-    let d = a.try - g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); g.rotation.y += d * k;
+    const seat = a.sit ? seatOf(a) : null; // seated: the body faces the seat, the head follows where they look
+    let d = (seat ? seat.yaw : a.try) - g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); g.rotation.y += d * k;
     const sp = Math.hypot(g.position.x - a.px, g.position.z - a.pz) / Math.max(dt, 0.001); a.px = g.position.x; a.pz = g.position.z;
     const sitY = (a.sit ? a.sit + 0.09 - (a.P.hipY || 0.98) : 0) + (a.jy || 0); a.P.baseY = (a.P.baseY || 0) + (sitY - (a.P.baseY || 0)) * Math.min(1, dt * 10);
     if (!!a.sit !== !!a._sat) { a._sat = !!a.sit; audio.sfx(a.sit ? 'sit' : 'stand', { pos: { x: g.position.x, y: 0.6, z: g.position.z } }); }
@@ -257,6 +274,8 @@ function frame(now) {
         a._koOn = false; g.rotation.x = 0; g.position.y = a.P.baseY || 0; if (a.star) a.star.visible = false; audio.sfx('boing', { pos: { x: g.position.x, y: 1.4, z: g.position.z } });
       } }
     a.P.moveSpeed = sp;
+    if (seat && a.P.skinned) { seatedLife(a, seat); bar.life.tick(a.life, t, dt, {}); animate(a.P, 'seated', t); bar.life.place(a.life); tickCosmetics(a.P, t); continue; }
+    if (a.life) { a.life.act = null; if (a.life.glass) a.life.glass.visible = false; }
     animate(a.P, a.sit ? 'sit' : a.drunk >= 40 && sp < 0.4 ? 'stagger' : sp > 0.5 ? 'walk' : 'idle', t, Math.min(1.4, sp / 3.5)); tickCosmetics(a.P, t);
   }
   hitmen.forEach((h, i) => {

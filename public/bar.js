@@ -324,5 +324,5 @@ export function buildBar({ scene, BK, tv }) {
     const p = dg.attributes.position; for (let i = 0; i < dustN; i++) { p.array[i * 3 + 1] += dt * 0.03 * (1 + (i % 3)); if (p.array[i * 3 + 1] > 4.6) p.array[i * 3 + 1] = 0.1; p.array[i * 3] += Math.sin(t * 0.2 + i) * dt * 0.02; }
     p.needsUpdate = true;
   }
-  return { stations, obstacles, npcs, seats, update, wanderPos };
+  return { stations, obstacles, npcs, seats, update, wanderPos, life };
 }

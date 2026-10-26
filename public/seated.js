@@ -20,6 +20,7 @@ const STYLE = {
   point: { sip: 1.5, point: 3, talk: 1, phone: 0.5, lean: 0.6 },
   boss: { sip: 2, lean: 2, drum: 2 },
   sleep: { jolt: 1 },
+  player: {}, // real players: only what they actually do (talk on voice, drink, where they look)
   couch: { sip: 3, laugh: 1, phone: 1.5, chill: 2.5, stretch: 0.6 },
 };
 const DUR = { sip: 2.8, talk: 3.6, laugh: 1.8, phone: 6, stretch: 2.6, lean: 7, pump: 1.6, point: 2.4, drum: 4, jolt: 2.6, chill: 8, cheer: 1.8, groan: 2.2 };
@@ -83,12 +84,12 @@ export function createSeatedLife({ scene }) {
   const _v = new THREE.Vector3(), _a = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
 
   // n: bar.js npc record (n.P, n.mode, n.bubble). opts: { kind: 'table'|'lap', style, glass: 'pint'|'bottle'|'tumbler'|null }
-  function add(n, opts = {}) {
-    const P = n.P, style = opts.style || n.mode, kind = opts.kind || 'table';
+  function fit(P, opts) {
+    const kind = opts.kind || 'table', by = opts.baseY ?? (P.baseY || 0);
     // measure this character: shoulder height when seated, arm bone lengths, mouth height (cartoon proportions vary a lot)
     const Bn = P.bones, wp = (b) => Bn[b].getWorldPosition(new THREE.Vector3());
     const lu = Bn ? wp('RightArm').distanceTo(wp('RightForeArm')) : 0.27, lf = Bn ? wp('RightForeArm').distanceTo(wp('RightHand')) : 0.25;
-    const face = Bn ? measureFace(P) : { fwd: 0.12, up: 0.02 }, sh = (P.baseY || 0) + P.arms[1].position.y, mouth = (P.baseY || 0) + P.head.position.y - 0.08 + face.up;
+    const face = Bn ? measureFace(P) : { fwd: 0.12, up: 0.02 }, sh = by + P.arms[1].position.y, mouth = by + P.head.position.y - 0.08 + face.up;
     const G = { lu, lf, sh, face, mdy: mouth - sh, tdy: (opts.table ?? 0.78) + 0.05 - sh, seat: opts.seat ?? 0.5 };
     const sx = Math.abs(P.arms[1].position.x); G.sx = sx;
     const rest = kind === 'lap' ? ik3(G, 0.3, G.seat + 0.14 - sh, sx - 0.14) : ik3(G, opts.reach ?? 0.4, G.tdy, sx - 0.1);
@@ -97,20 +98,27 @@ export function createSeatedLife({ scene }) {
       sip: ik3(G, face.fwd + 0.06, G.mdy - 0.15, sx - 0.05), phone: ik3(G, 0.34, Math.min(-0.02, G.tdy + 0.13), sx - 0.06), talk: ik3(G, 0.34, Math.max(G.tdy + 0.12, -0.12), sx - 0.12),
       lean: ik3(G, 0.3, G.tdy + 0.02, sx - 0.02), sleep: ik3(G, 0.46, G.tdy + 0.03, sx - 0.05), head: ik3(G, face.fwd + 0.02, G.mdy + 0.02, sx - 0.08),
     };
+    return { base, pose, G, lf };
+  }
+  function add(n, opts = {}) {
+    const P = n.P, style = opts.style || n.mode, { base, pose, G, lf } = fit(P, opts);
     const L = {
-      n, P, base, pose, G, style: STYLE[style] ? style : 'idle', act: null, actT: 0, next: 1 + Math.random() * 5,
-      gaze: { y: 0, p: 0, ty: 0, tp: 0, next: 0, target: null }, ph: Math.random() * 20, bounce: Math.random() < 0.35 ? 0.6 + Math.random() * 0.6 : 0,
+      n, P, base, pose, G, drive: opts.drive || null, style: STYLE[style] ? style : 'idle', act: null, actT: 0, next: 1 + Math.random() * 5,
+      gaze: { y: 0, p: 0, ty: 0, tp: 0, next: 0, target: null }, ph: Math.random() * 20, bounce: !opts.drive && Math.random() < 0.35 ? 0.6 + Math.random() * 0.6 : 0,
       glass: null, phone: null, spread: (Math.random() - 0.5) * 0.12, cur: null,
     };
-    if (opts.glass && P.bones) { L.glass = makeGlass(opts.glass); L.glass.scale.setScalar(Math.max(0.8, Math.min(1.6, lf / 0.24))); scene.add(L.glass); }
+    L.glassOnSip = !!opts.glassOnSip; if (opts.glass && P.bones) { L.glass = makeGlass(opts.glass); L.glass.scale.setScalar(Math.max(0.8, Math.min(1.6, lf / 0.24))); scene.add(L.glass); }
     if (P.bones) { L.phone = makePhone(); L.phone.visible = false; scene.add(L.phone); }
     P.sp = {}; list.push(L); n.life = L; return L;
   }
+  // a player avatar sat somewhere else: re-solve the arm poses for that seat
+  function refit(L, opts) { Object.assign(L, fit(L.P, opts)); }
+  function remove(L) { for (const o of [L.glass, L.phone]) if (o) scene.remove(o); const i = list.indexOf(L); if (i >= 0) list.splice(i, 1); }
   const pick = (w) => { let s = 0; for (const k in w) s += w[k]; let r = Math.random() * s; for (const k in w) { r -= w[k]; if (r <= 0) return k; } return Object.keys(w)[0]; };
   const start = (L, act) => { L.act = act; L.actT = 0; L.dur = DUR[act] * (0.85 + Math.random() * 0.3); };
 
   // TV scored: most seated NPCs react (cheer or groan), staggered a little
-  function onScore() { for (const L of list) { if (L.style === 'sleep' || L.style === 'boss' || Math.random() < 0.25) continue; const a = Math.random() < 0.62 ? 'cheer' : 'groan'; L.react = { act: a, at: 0.15 + Math.random() * 0.7 }; } }
+  function onScore() { for (const L of list) { if (L.drive || L.style === 'sleep' || L.style === 'boss' || Math.random() < 0.25) continue; const a = Math.random() < 0.62 ? 'cheer' : 'groan'; L.react = { act: a, at: 0.15 + Math.random() * 0.7 }; } }
 
   // where to look: local yaw/pitch to a world point, in the npc's own frame (forward = -z)
   const aim = (L, x, y, z) => {
@@ -146,21 +154,23 @@ export function createSeatedLife({ scene }) {
   function tick(L, t, dt, env) {
     const { P, n, base: B, pose: Q } = L, sp = P.sp, ph = t + L.ph;
     // ---- schedule actions
-    const talking = n.bubble && n.bubble.sprite.visible;
+    const dv = L.drive ? L.drive() : null;
+    const talking = dv ? dv.talking : n.bubble && n.bubble.sprite.visible;
+    if (dv && dv.sip && L.act !== 'sip') start(L, 'sip');
     if (L.react) { L.react.at -= dt; if (L.react.at <= 0) { start(L, L.react.act); L.react = null; } }
     if (L.act) { L.actT += dt; if (L.actT >= L.dur) { L.act = null; L.next = 2.5 + Math.random() * 6; } }
     else if (talking && L.style !== 'sleep' && L.style !== 'boss') start(L, 'talk');
-    else if ((L.next -= dt) <= 0) start(L, pick(STYLE[L.style]));
+    else if ((L.next -= dt) <= 0) { const w = STYLE[L.style]; if (Object.keys(w).length) start(L, pick(w)); else L.next = 1e9; }
     // ---- gaze
-    const G = L.gaze; if ((G.next -= dt) <= 0) chooseGaze(L, env);
-    let ga = gazeAngles(L, env);
+    const G = L.gaze; if (!dv && (G.next -= dt) <= 0) chooseGaze(L, env);
+    let ga = dv ? { y: dv.y, p: dv.p } : gazeAngles(L, env);
     const a = L.act, k = a ? env_(L) : 0;
     if (a === 'phone') ga = { y: 0.12, p: 0.75 };
     if (a === 'sip') ga = { y: ga.y * (1 - k), p: lerp(ga.p, -0.3, k) };
     if (a === 'groan') ga = { y: 0, p: lerp(ga.p, 0.55, k) };
     if (a === 'cheer' || a === 'pump') ga = { y: ga.y, p: lerp(ga.p, -0.25, k) };
-    const gy = Math.max(-1.25, Math.min(1.25, ang(ga.y))), gp = Math.max(-0.55, Math.min(0.75, ga.p));
-    const gk = Math.min(1, dt * 3.2); G.y += (gy - G.y) * gk; G.p += (gp - G.p) * gk;
+    const gy = Math.max(-1.25, Math.min(1.25, ang(ga.y))), gp = Math.max(-0.6, Math.min(0.8, ga.p));
+    const gk = Math.min(1, dt * (dv ? 9 : 3.2)); G.y += (gy - G.y) * gk; G.p += (gp - G.p) * gk;
 
     // ---- base pose + breathing + sway
     const br = Math.sin(ph * 1.45), sway = Math.sin(ph * 0.31) * 0.025;
@@ -200,12 +210,12 @@ export function createSeatedLife({ scene }) {
     if (L.glass) {
       B.RightHand.getWorldPosition(_v); B.RightForeArm.getWorldPosition(_a); _a.subVectors(_v, _a).normalize();
       const sc = L.glass.scale.x; L.glass.position.copy(_v).addScaledVector(_a, 0.06 * sc); L.glass.position.x -= Math.sin(ry) * 0.045 * sc; L.glass.position.z -= Math.cos(ry) * 0.045 * sc; // in the palm
-      _e.set(L.tip * 1.25, ry, 0, 'YXZ'); L.glass.quaternion.setFromEuler(_e); L.glass.visible = g.visible;
+      _e.set(L.tip * 1.25, ry, 0, 'YXZ'); L.glass.quaternion.setFromEuler(_e); L.glass.visible = g.visible && (!L.glassOnSip || L.act === 'sip');
     }
     if (L.phone) {
       const on = L.act === 'phone' && L.actT > 0.3 && L.actT < L.dur - 0.3; L.phone.visible = on && g.visible;
       if (on) { B.LeftHand.getWorldPosition(_v); B.LeftForeArm.getWorldPosition(_a); _a.subVectors(_v, _a).normalize(); L.phone.position.copy(_v).addScaledVector(_a, 0.05); L.phone.position.x -= Math.sin(ry) * 0.03; L.phone.position.z -= Math.cos(ry) * 0.03; _e.set(0.9, ry, 0, 'YXZ'); L.phone.quaternion.setFromEuler(_e); }
     }
   }
-  return { add, tick, place, onScore, list };
+  return { add, refit, remove, tick, place, onScore, list };
 }
