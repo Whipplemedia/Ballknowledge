@@ -10,6 +10,9 @@ const FRONT = { x: 5.0, z: RZ - 0.4 }, FRONT_OUT = { x: 5.0, z: RZ + 1.2 };   //
 const BACK = { x: RX - 0.5, z: -6.6 }, BACK_OUT = { x: RX + 1.2, z: -6.6 };    // back-room door behind Sal's corner (x = +12 wall)
 const STEP_MS = 100;
 const T = { huntIntro: 7000, shakeIntro: 4500, beaten: 6000, kill: 8500, leave: 4500, grabTake: 2000, patDown: 2600, stun: 2500, regrab: 3000 };
+// hitmen only go down to bottles: fists bounce off, a free-moving hitman sidesteps some throws (one that is busy holding
+// someone can't), and a downed one gets back up after TUNE.getUp unless the crew drops them all at the same time
+const TUNE = { dodge: 0.45, getUp: 10000, regain: 0.75 }; // tuned with a fast-forward sim: ~1 in 4 for a lone thrower, hard but doable for a crew // regain: share of his hits a hitman gets back when he stands up
 const SPEED = { enter: 1.7, hitman: 3.1, collector: 2.5, leave: 2.2, drag: 1.5 };
 
 // ---- navigation: a 0.4 m grid of free cells (furniture circles + walls blocked, door corridors open), BFS distance fields
@@ -67,7 +70,7 @@ module.exports = function createGoons({ feed, toast, broadcast, plist, money, se
 
   function spawn(room, kind, n, hpTotal, info) {
     const now = Date.now(), intro = kind === 'hunt' ? T.huntIntro : T.shakeIntro;
-    const each = Math.max(8, Math.round(hpTotal / n)), spots = [[5.0, 4.6], [3.9, 5.1], [6.1, 5.1]];
+    const each = info.hp || Math.max(8, Math.round(hpTotal / n)), spots = [[5.0, 4.6], [3.9, 5.1], [6.1, 5.1], [5.6, 5.7], [4.4, 5.8], [6.6, 4.4]];
     room.goons = { kind, phase: 'intro', list: Array.from({ length: n }, (_, k) => ({ id: 'g' + k, x: FRONT_OUT.x + (k - (n - 1) / 2) * 0.7, z: FRONT_OUT.z + k * 0.9, ry: 0, state: 'enter', spot: spots[k % spots.length], hp: each, maxHp: each, target: null, until: 0, cool: 0, hit: 0 })) };
     room.cine = { kind: kind === 'hunt' ? 'huntIntro' : 'shakeIntro', start: now, until: now + intro, ...info };
     clearInterval(room.goonTimer); room.goonTimer = setInterval(() => step(room), STEP_MS);
@@ -92,9 +95,18 @@ module.exports = function createGoons({ feed, toast, broadcast, plist, money, se
   function hit(room, p, gid, dmg, stun) {
     const G = room.goons; if (!G || G.phase !== 'fight') return false; const g = G.list.find((o) => o.id === gid); if (!g || !alive(g)) return false;
     if (!stun && dist(p, g) > 2.6) return false;
-    g.hp -= dmg; g.hit = Date.now();
-    if (stun) { release(room, g); g.state = 'stun'; g.until = Date.now() + T.stun; }
-    if (g.hp <= 0) { g.hp = 0; release(room, g); g.state = 'down'; g.until = 0; feed(room, `👊 ${p.name} dropped one of Sal's ${G.kind === 'hunt' ? 'hitmen' : 'collectors'}.`); }
+    const now = Date.now();
+    if (G.kind === 'hunt') {
+      if (!stun) { if (now - (p.fistMsg || 0) > 4000) { p.fistMsg = now; toast(p, 'Your fist bounces off him. Only bottles will drop a hitman (F / right-click).', 'err'); } return false; }
+      if ((g.state === 'chase' || g.state === 'idle') && Math.random() < TUNE.dodge) { /* he saw it coming */
+        g.dodge = now; toast(p, 'He sidestepped it! Hit him while he\'s busy grabbing someone.', 'err');
+        for (const q of room.players.values()) send(q, { type: 'goonDodge', id: g.id, by: p.id }); return true;
+      }
+      dmg = 1;
+    }
+    g.hp -= dmg; g.hit = now;
+    if (stun) { release(room, g); g.state = 'stun'; g.until = now + T.stun; }
+    if (g.hp <= 0) { g.hp = 0; release(room, g); g.state = 'down'; g.until = G.kind === 'hunt' ? now + TUNE.getUp : 0; const up = G.list.filter(alive).length; feed(room, `👊 ${p.name} dropped one of Sal's ${G.kind === 'hunt' ? 'hitmen' : 'collectors'}${G.kind === 'hunt' && up ? ` - ${up} still standing. Drop them all before he gets up!` : '.'}`); }
     if (G.list.every((o) => !alive(o))) outro(room, 'beaten');
     return true;
   }
@@ -121,7 +133,10 @@ module.exports = function createGoons({ feed, toast, broadcast, plist, money, se
       if (now >= room.cine.until) { G.phase = 'fight'; room.cine = null; for (const g of G.list) { g.state = 'chase'; g.target = pickTarget(room, g); } broadcast(room); }
     } else if (G.phase === 'fight') {
       for (const g of G.list) {
-        if (g.state === 'down') continue;
+        if (g.state === 'down') { /* a hitman doesn't stay down for long */
+          if (G.kind === 'hunt' && g.until && now >= g.until) { g.state = 'chase'; g.hp = Math.max(1, Math.ceil(g.maxHp * TUNE.regain)); g.target = pickTarget(room, g); feed(room, '😠 A hitman is back on his feet!'); for (const q of room.players.values()) toast(q, 'A hitman got back up! Drop them all at once.', 'mob'); broadcast(room); }
+          continue;
+        }
         if (g.state === 'stun') { if (now >= g.until) g.state = 'chase'; else continue; }
         let p = g.target && room.players.get(g.target);
         const done = !p || (G.kind === 'hunt' ? p.remaining <= 0 || p.dead : p.money <= 0 || (G.patted || {})[p.id]);
@@ -168,3 +183,4 @@ module.exports = function createGoons({ feed, toast, broadcast, plist, money, se
   return { spawn, resume, stop, hit, outro, hpLeft: (room) => (room.goons ? room.goons.list.reduce((a, g) => a + g.hp, 0) : 0), hpMax: (room) => (room.goons ? room.goons.list.reduce((a, g) => a + g.maxHp, 0) : 0) };
 };
 module.exports.DOORS = { FRONT, BACK };
+module.exports.TUNE = TUNE;

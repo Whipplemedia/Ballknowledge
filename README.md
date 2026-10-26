@@ -51,6 +51,24 @@ Game results were verified against web sources where possible (2016 NBA Finals +
 
 Second batch (Oct 2026), all game scores and home teams checked against web search results: NFL 2014 and 2019, college football 2014 and 2019, NBA 2014 and 2019, NCAA tournament 2016 and 2019, NHL 2010 and 2011, MLB 2011 and 2019. College football later added 2016, 2017, 2022 and 2023 (every score checked the same way). The library is now 26 seasons (college football 7, NFL 5, NBA 4, MLB 4, college basketball 3, hockey 3). Records and stat lines in this batch are also from memory.
 
+## Campaign and Sal's tab
+- Lobby **Story** setting: Campaign (3 nights, default) or Single night (`{type:'setFormat'}`); locked once night 2 starts. `{type:'endCampaign'}` walks away.
+- Every night opens with **Sal's marker** on each player: $500 / $750 / $1,000 on nights 1-3 (`TAB`). It sits in `p.debt` with loans and fixes, so it counts against crew net worth: the first quota (game ~3) needs the crew to earn the marker back.
+- Collected at closing time. Unpaid -> hitmen. Escape them and the unpaid part rolls into the next night at 50% interest (`ROLL_VIG`); die and you lose your cash (next night you limp in with $1,000) plus half your tickets.
+- Cash carries between nights; anyone under $1,000 is fronted the difference by Sal, added to the tab at +25%. Quota targets are built from the crew's starting cash each night.
+- Night 3 ends the campaign: **Free and clear** (everyone alive, nothing rolled over, +25 tickets each), **Still on the hook**, or **Sal owns you**. The opening cutscene changes per night.
+
+## Side jobs, Old Vinnie, the newspaper
+- **Bartender side jobs** (bar panel): one at a time, 3 minutes, 20 s between jobs. Deliver a round to a named regular, collect Sal's envelope (pays $150 off your tab; getting bottled on the way back loses it), bottle a rowdy regular, or beat the Shark/Regular (pool or arcade). Target spots are checked server-side (`SPOTS` in server.js matches bar.js).
+- **Old Vinnie** (stool by the taps): $100 buys a tip on the open game, right ~70% of the time; the whole crew hears the same tip (seeded per game).
+- **The Daily Ledger** (on the counter, E to read): a sports page with the date torn off. Real seasons carry a regular-season headline plus three news-of-the-year briefs (`paper.js`); standings and hot players come from the season data. It never prints a playoff result.
+- New regulars from Meshy (`gina`, `vinnie`, `ray`, `steve` in `public/models`): Gina at the pool table, Old Vinnie and Celtics Ray on the stools, Sloppy Steve on the couch.
+
+## Hitmen: bottles only
+- Fists bounce off hitmen. Each takes 4 bottle hits (5 on the last night of a campaign); 3 of them for crews up to 3, 4 for 4-5 players, 5 for 6.
+- A hitman who is free sidesteps 45% of bottles (`goonDodge`, shown as a hop and "DODGED!"); one busy holding a player can't dodge.
+- A downed hitman gets back up after 10 s with 75% of his hits (`TUNE` in goons.js), so the crew has to drop them all at once. Tuned with a fast-forward simulation of crews throwing every 1.5 s at 55% accuracy.
+
 ## Seasons: real or made-up
 - The host picks **Real season** or **Made-up season** in the lobby (`{type:'setMode', mode}`).
 - Real: the server prefers a season nobody in the crew has played. Each browser keeps the seasons it has finished in `save.seen` (`bk_save_v1`) and reports them on connect (`{type:'seen', ids}`); the room also remembers its last 12 picks. When everyone has seen everything, the least-seen season is picked.

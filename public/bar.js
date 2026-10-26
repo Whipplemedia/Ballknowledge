@@ -117,7 +117,7 @@ export function buildBar({ scene, BK, tv }) {
   box(0.45, 0.28, 0.4, M(0xc8b080), 10.0, 1.32, 5.7); // register
   if (hasProp('stool')) { for (let i = 0; i < 6; i++) { const t = prop('stool', { h: 0.86 }); t.position.set(9.0, 0, -0.2 + i * 1.2); t.rotation.y = i * 1.1; scene.add(t); } }
   else  for (let i = 0; i < 6; i++) { const z = -0.2 + i * 1.2; cyl(0.22, 0.2, 0.08, TX.vinyl ? MT(TX.vinyl('#8b1d24').t) : M(0x8b1d24), 9.0, 0.78, z, 14); cyl(0.04, 0.04, 0.74, M(0x888888, { metalness: 0.8 }), 9.0, 0.38, z, 6); cyl(0.2, 0.2, 0.03, M(0x888888, { metalness: 0.8 }), 9.0, 0.02, z, 12, scene, false); obstacles.push({ x: 9.0, z, r: 0.28 }); }
-  stations.push({ x: 8.1, z: 2.5, r: 2.4, text: 'E - Order a drink (bartender)', act: () => BK.openPanel('bar') });
+  stations.push({ x: 8.1, z: 2.5, r: 2.4, text: 'E - Bartender (drinks, side jobs)', act: () => BK.openPanel('bar') });
   // crates + trash
   box(0.7, 0.4, 0.5, M(0x8a6a3a), 11.3, 0.2, 7.2); box(0.7, 0.4, 0.5, M(0x8a6a3a), 11.3, 0.62, 7.2); cyl(0.3, 0.26, 0.7, M(0x333c3c, { metalness: 0.5 }), 11.2, 0.35, -2.2, 12); obstacles.push({ x: 11.2, z: 7.2, r: 0.6 }, { x: 11.2, z: -2.2, r: 0.5 });
 
@@ -190,11 +190,13 @@ export function buildBar({ scene, BK, tv }) {
   const stool = (z, name, over, mode, lines) => spawn(makePreset(name, over), 9.05, z, -Math.PI / 2, mode, lines, 'Regular', 0.8);
   stool(1.0, 'jock', {}, 'cheer', ['LET\'S GOOO!', 'I called it. I CALLED it.', 'Ball knowledge, baby!']);
   stool(2.2, 'knowItAll', {}, 'point', ['Actually, the odds don\'t work like that.', 'Statistically speaking...', 'I read the box scores.']);
-  stool(3.4, 'chill', {}, 'drink', ['I had Cleveland. Don\'t ask.', 'Rent was due. Bet was bigger.', 'Another round...']);
-  stool(4.6, 'dieHard', {}, 'cheer', ['That ref is BLIND!', 'My cousin says it\'s rigged.', 'Never bet against my team.']);
+  // named regulars (n.who): Old Vinnie sells tips; Ray, Gina and Steve are the bartender's job targets (server SPOTS match these)
+  stool(3.4, 'vinnie', {}, 'drink', ['Forty years on this stool, kid.', 'Buy me a drink, I\'ll tell you something.', 'I seen this before. I seen everything before.']).who = 'Old Vinnie';
+  tag('Old Vinnie', 9.05, 2.45, 3.4, '#9fe0d0');
+  stool(4.6, 'ray', {}, 'cheer', ['That ref is BLIND!', 'Never bet against the green.', 'Banner season, baby!']).who = 'Celtics Ray';
   // pool table
   spawn(makePreset('gambler', { hat: { color: 0x2a5aa8, backwards: false }, outfit: 'tee', shirt: 0xd8d0b0, stache: false }), 3.4, 4.5, face(3.4, 4.5, 3.4, 3.4), 'pool', ['Eight ball, corner pocket.', 'You\'re hustling me.', 'Watch the cue chalk.'], 'Shark');
-  spawn(makePreset('dieHard', { glasses: false, shirt: 0x9a3a8a, outfit: 'tee', hat: { color: 0x222222, backwards: true } }), 5.4, 3.4, face(5.4, 3.4, 4.4, 3.4), 'idle', ['Double or nothing?', 'Nice shot. Lucky.', 'I need a beer.'], 'Shark');
+  spawn(makePreset('gina'), 5.4, 3.4, face(5.4, 3.4, 4.4, 3.4), 'idle', ['Double or nothing?', 'Nice shot. Lucky.', 'You\'re holding the cue wrong.'], 'Shark').who = 'Gina';
   spawn(randomPatron(2), 5.9, 4.9, face(5.9, 4.9, 4.4, 3.6), 'cheer', ['Sink it!', 'Ohhh!', 'Scratch!'], 'Watcher');
   // booths (front wall). benches at z=7.6 (face -z) and z=5.4 (face +z); seat top ~0.45
   const benchA = (x, p, i) => spawn(p, x, hasProp('booth') ? BOOTH.hipA : 7.5, 0, 'drink', ['This booth is cursed.', 'Ssh, the game is on.', 'Order me a beer?'], 'Patron', hasProp('booth') ? BOOTH.seat : 0.45);
@@ -202,7 +204,7 @@ export function buildBar({ scene, BK, tv }) {
   benchA(-3.95, randomPatron(5)); benchA(-3.05, randomPatron(8)); benchB(-3.5, randomPatron(1));
   benchB(-0.95, randomPatron(4)); benchB(-0.05, randomPatron(7));
   const sleeper = spawn(makePreset('rookie', { beard: 'stubble', hat: null, hairStyle: 'messy', hair: 0x5a4a3a, shirt: 0x6a6a2a, outfit: 'tee' }), 2.5, hasProp('booth') ? BOOTH.hipA : 7.3, 0, 'sleep', ['zzz... not the under...', '...five more minutes...'], 'Sleeper', hasProp('booth') ? BOOTH.seat : 0.45);
-  spawn(makePreset('chill', { shirt: 0x3a5a3a }), 7.6, hasProp('couch') ? 6.92 : 6.7, 0, 'drink', ['This couch has seen things.', 'Don\'t sit here. I mean it.'], 'Couch guy', 0.45);
+  spawn(makePreset('steve'), 7.6, hasProp('couch') ? 6.92 : 6.7, 0, 'drink', ['This couch has seen things.', 'I\'m not drunk. YOU\'RE drunk.', 'Who wants to fight? Nobody? Cool.'], 'Couch guy', 0.45).who = 'Sloppy Steve';
   // roulette dealer, bowling & cornhole spectators
   spawn(makePreset('knowItAll', { glasses: false, outfit: 'suit', shirt: 0x1d2a22, tie: 0x2a8a4a, hairStyle: 'slick', hair: 0x1a1210, mouth: 'smile' }), -7.0, -6.75, Math.PI, 'idle', ['Place your bets.', 'No more bets.', 'Red or black?'], 'Dealer');
   tag('Dealer', -7.0, 2.7, -6.75);
@@ -211,6 +213,33 @@ export function buildBar({ scene, BK, tv }) {
   spawn(randomPatron(9), -8.5, -4.6, face(-8.5, -4.6, -10, -7.6), 'point', ['Triple twenty!', 'Don\'t choke.', 'He\'s shaking.'], 'Spectator');
   spawn(randomPatron(10), -1.8, -2.4, face(-1.8, -2.4, 0, -7), 'idle', ['Which season is this?', 'I feel like I know this one.', 'Rewind the highlights.'], 'Patron');
   spawn(randomPatron(11), 5.8, -0.6, face(5.8, -0.6, 4.8, -7.6), 'point', ['Look at that line.', 'Easy money.', 'I\'ve seen this game.'], 'Patron');
+
+  // ---------- Old Vinnie (tipster) and the bartender's job targets ----------
+  stations.push({ x: 8.3, z: 3.4, r: 1.15, text: 'E - Buy Old Vinnie a drink (tips)', act: () => BK.openPanel('vinnie') });
+  const jobOf = () => BK.S && BK.S.me && BK.S.me.job;
+  for (const [who, x, z] of [['Gina', 5.4, 3.4], ['Celtics Ray', 8.3, 4.6], ['Sloppy Steve', 7.6, 6.2], ['Dealer', -7.0, -5.8], ['Clerk', -8.6, 6.4]]) {
+    stations.push({ x, z, r: 1.8, prio: 2, on: () => { const j = jobOf(); return !!(j && j.target === who && (j.kind === 'deliver' || (j.kind === 'collect' && j.stage === 'go'))); },
+      get text() { const j = jobOf(); return j && j.kind === 'deliver' ? `E - Hand ${who} the round` : `E - Collect Sal's envelope from ${who}`; }, act: () => BK.send({ type: 'jobAct' }) });
+  }
+  // ---------- the newspaper on the counter: masthead + tonight's headline (redrawn each night) ----------
+  const paperTex = TX.canvasTex(512, 384, () => {}), paperG = new THREE.Group();
+  const drawPaper = (head) => {
+    const { g, c, t } = paperTex, W = c.width, H = c.height;
+    g.fillStyle = '#ece4cf'; g.fillRect(0, 0, W, H); for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(0,0,0,${Math.random() * 0.05})`; g.fillRect(Math.random() * W, Math.random() * H, 2, 2); }
+    g.fillStyle = '#111'; g.textAlign = 'center'; g.font = 'bold 50px "Old English Text MT", "UnifrakturMaguntia", Georgia, serif'; g.fillText('The Daily Ledger', W / 2, 62);
+    g.fillRect(18, 76, W - 36, 3); g.fillRect(18, 84, W - 36, 1);
+    g.font = '900 44px Georgia, "Times New Roman", serif'; const words = String(head || 'LATE EDITION').split(' '); let line = '', y = 136;
+    for (const w of words) { const tr = line ? line + ' ' + w : w; if (g.measureText(tr).width > W - 40 && line) { g.fillText(line, W / 2, y); y += 46; line = w; } else line = tr; } g.fillText(line, W / 2, y);
+    g.fillStyle = 'rgba(30,30,30,0.55)'; for (let col = 0; col < 3; col++) for (let r = 0; r < 9; r++) g.fillRect(24 + col * 160, y + 26 + r * 16, 140 - ((r * 37 + col * 13) % 40), 6);
+    t.needsUpdate = true;
+  };
+  drawPaper(''); {
+    const sheet = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.012, 0.33), [M(0xd8d0bb), M(0xd8d0bb), new THREE.MeshStandardMaterial({ map: paperTex.t, roughness: 0.95 }), M(0xd8d0bb), M(0xd8d0bb), M(0xd8d0bb)]);
+    const under = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.01, 0.31), M(0xcfc6ae)); under.position.set(0.02, -0.008, 0.015); under.rotation.y = 0.06;
+    paperG.add(sheet, under); paperG.position.set(9.78, 1.2, 0.4); paperG.rotation.y = -Math.PI / 2 + 0.12; /* reads right-side up from the customer's side */ scene.add(paperG);
+  }
+  let paperHead = null;
+  stations.push({ x: 8.6, z: 0.4, r: 1.3, text: 'E - Read the paper', act: () => BK.openPanel('paper') });
 
   // ---------- Pro Shop corner ----------
   box(2.4, 1.0, 0.8, M(0x4a2a14), -8.6, 0.5, 6.7); box(2.55, 0.07, 0.95, M(0x8a5a30, { roughness: 0.3 }), -8.6, 1.03, 6.7);
@@ -321,6 +350,7 @@ export function buildBar({ scene, BK, tv }) {
   npcs.forEach((n, i) => { if (!n.seated && ['Spectator', 'Patron', 'Watcher'].includes(n.name)) { n.wander = true; n.seed = 1000 + i * 17; n.phase = (i * 5.3) % SEG; n.wp = null; n.off = { x: 0, z: 0 }; } });
 
   function update(t, dt, me) {
+    const ph = BK.S && BK.S.paper ? BK.S.paper.head : ''; if (ph !== paperHead) { paperHead = ph; drawPaper(ph); }
     let talking = npcs.filter((n) => n.bubble && n.bubble.sprite.visible).length;
     for (const n of npcs) {
       const koNow = n.ko && n.ko > BK.now();

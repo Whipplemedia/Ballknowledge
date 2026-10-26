@@ -38,6 +38,7 @@ function connect(msg) {
     else if (m.type === 'bottle') window.BK.onBottle && window.BK.onBottle(m);
     else if (m.type === 'bottleGot') window.BK.onBottleGot && window.BK.onBottleGot(m);
     else if (m.type === 'goons') window.BK.onGoons && window.BK.onGoons(m);
+    else if (m.type === 'goonDodge') window.BK.onGoonDodge && window.BK.onGoonDodge(m);
     else if (m.type === 'ko') window.BK.onKo && window.BK.onKo(m);
     else if (m.type === 'spin') window.BK.onSpin && window.BK.onSpin(m);
     else if (m.type === 'error') {
@@ -181,12 +182,25 @@ function doJoin(withCode) {
 const playerList = () => S.players.map((p) => `<div class="pl"><span>${esc(p.name)}${p.id === S.you ? ' (you)' : ''}${!p.connected ? ' 📴' : ''}${p.drunk >= 15 ? ' 🍺' : ''}</span>
   <span>${S.phase === 'lobby' ? '' : `<span class="ok">${$$(p.money)}</span>${p.hunted ? ' 🎯' : ''}`}</span></div>`).join('');
 
+// between nights of a campaign: what carries over
+function campLobby() {
+  const c = S.camp; if (!c || S.format !== 'campaign' || c.night < 2) return '';
+  return `<div class="card camp col"><div class="big">📖 Night ${c.night} of ${c.nights}${c.night === c.nights ? ' - the last night' : ''}</div>
+    <div class="muted">${c.night === c.nights ? 'Clear the books tonight and you walk out free. Come up short and you don\'t walk out.' : 'Sal\'s marker went up. Whatever you didn\'t pay last night is on top of it, with interest.'}</div>
+    ${S.players.map((p) => `<div class="pl"><span>${esc(p.name)}</span><span>${p.campCash != null ? `brings ${$$(p.campCash)}` : 'new in town · $2,000'} · owes ${$$(S.nextTab + (p.rollover || 0) + (p.campCash != null && p.campCash < 1000 ? Math.round((1000 - p.campCash) * 1.25) : 0))}</span></div>`).join('')}
+    ${c.log && c.log.length ? `<div class="muted">So far: ${c.log.map((l) => `night ${l.night} ${esc(l.tier)}`).join(' · ')}</div>` : ''}
+    ${S.host ? `<button class="ghost" onclick="if(confirm('Walk away from this campaign and start over?'))send({type:'endCampaign'})">Walk away (start a new campaign)</button>` : ''}</div>`;
+}
 function lobbyView() {
   return `<div class="wrap"><div class="card col">
     <div class="top"><div class="logo sm">BALL <span>KNOWLEDGE</span><i class="ball"></i></div><div class="pill">Room <b>${S.code}</b></div></div>
-    <div class="muted">Share the room code. Up to 6 players, co-op. Everyone starts with $2,000. A full playoff run of <b>about 10 games</b> is waiting - one new game opens for betting every couple of minutes.</div>
+    <div class="muted">Share the room code. Up to 6 players, co-op. ${S.camp && S.camp.night > 1 ? 'Your cash carries over from last night' : 'You each start with $2,000'} - and you each owe Uncle Sal <b>${$$(S.nextTab)}</b>${S.camp && S.camp.night > 1 ? ' plus whatever is left over' : ''}, due at closing time. A full playoff run of <b>about 10 games</b> is waiting - one new game opens for betting every couple of minutes.</div>
     ${loadBar()}
+    ${campLobby()}
     <div class="title">Crew</div>${playerList()}
+    <div class="title">Story</div>
+    <div class="row">${S.formats.map((x) => `<button class="sport ${S.format === x.id ? 'sel' : ''}" ${S.host && !(S.camp && S.camp.night > 1) ? '' : 'disabled'} onclick="send({type:'setFormat',format:'${x.id}'})">${esc(x.label)}</button>`).join('')}</div>
+    <div class="muted">${esc((S.formats.find((x) => x.id === S.format) || {}).blurb || '')}</div>
     <div class="title">${S.host ? 'Choose your sport' : 'The host is choosing a sport...'}</div>
     <div class="sports">${S.sports.map((s) => `<button class="sport ${S.sport === s.id ? 'sel' : ''}" ${S.host ? '' : 'disabled'} onclick="send({type:'setSport',sport:'${s.id}'})"><span class="e">${s.emoji}</span>${esc(s.label)}</button>`).join('')}</div>
     <div class="title">Season</div>
@@ -195,7 +209,7 @@ function lobbyView() {
     <div class="title">Pace</div>
     <div class="row">${S.paces.map((p) => `<button class="sport ${S.pace === p.id ? 'sel' : ''}" ${S.host ? '' : 'disabled'} onclick="send({type:'setPace',pace:'${p.id}'})">${esc(p.label)}</button>`).join('')}</div>
     <button class="ghost" onclick="openShop()">🛍️ Pro Shop · 🎟 ${save.tix} tickets</button>
-    ${S.host ? `<button onclick="send({type:'start'})">${S.mode === 'fake' ? 'Start - generate a made-up season' : 'Start - assign a mystery season'}</button>` : ''}
+    ${S.host ? `<button onclick="send({type:'start'})">${S.camp && S.camp.night > 1 ? `Start night ${S.camp.night}` : S.mode === 'fake' ? 'Start - generate a made-up season' : 'Start - assign a mystery season'}</button>` : ''}
   </div></div>`;
 }
 
@@ -232,7 +246,7 @@ function strip() {
 function goalText() {
   const me = S.me;
   if (S.shake) return '💼 Sal\'s collectors are in the bar! Chip in together - or punch and bottle them out.';
-  if (S.phase === 'hunt') return me.remaining > 0 ? `🎯 The mob wants ${$$(me.remaining)} from YOU - pay, win cash, or ambush them!` : '🎯 Help your crew - click the hitmen!';
+  if (S.phase === 'hunt') return me.remaining > 0 ? `🎯 The hitmen want ${$$(me.remaining)} from YOU - pay up, or the crew drops them all with bottles!` : '🎯 Help your crew - grab bottles and drop every hitman at once!';
   const cur = S.cur;
   if (cur) {
     const mine = me.bets[cur.idx] || {}, ev = S.events[cur.idx];
@@ -243,21 +257,21 @@ function goalText() {
 }
 function gameView() {
   const me = S.me, hunt = S.phase === 'hunt';
-  const extra = ui.tab === 'bar' ? [['bar', '🍺 Bar']] : ui.tab === 'wheel' ? [['wheel', '🎰 Roulette']] : ui.tab === 'challenge' ? [['challenge', '🎯 Challenge']] : ui.tab === 'pool' ? [['pool', '🎱 Pool']] : [];
+  const extra = ui.tab === 'bar' ? [['bar', '🍺 Bar']] : ui.tab === 'vinnie' ? [['vinnie', '🍷 Old Vinnie']] : ui.tab === 'paper' ? [['paper', '📰 Paper']] : ui.tab === 'wheel' ? [['wheel', '🎰 Roulette']] : ui.tab === 'challenge' ? [['challenge', '🎯 Challenge']] : ui.tab === 'pool' ? [['pool', '🎱 Pool']] : [];
   const tabs = [['book', '📱 Sportsbook'], ['bets', '🧾 My Bets'], ['mob', '🕴️ The Mob'], ['crew', '👥 Crew'], ...extra];
-  const body = { book: bookView, bets: betsView, mob: mobView, crew: crewView, bar: barView, wheel: wheelView, challenge: challengeView, pool: typeof poolView === 'function' ? poolView : () => '' }[ui.tab]();
+  const body = { book: bookView, bets: betsView, mob: mobView, crew: crewView, bar: barView, vinnie: vinnieView, paper: paperView, wheel: wheelView, challenge: challengeView, pool: typeof poolView === 'function' ? poolView : () => '' }[ui.tab]();
   if (!window.__worldReady) return `<div class="center"><div class="card col" style="width:min(420px,100%)"><div class="big">Getting the bar ready...</div>${loadBar()}<div class="muted">Your crew can already see you. The game has started - you'll be dropped in as soon as the bar finishes loading.</div></div></div>`;
   return `<div class="hud">
     <div class="hud-top">
-      <div class="row" style="gap:8px;justify-content:flex-start"><span class="pill">Room ${S.code}</span></div>
+      <div class="row" style="gap:8px;justify-content:flex-start"><span class="pill">Room ${S.code}</span>${S.camp ? `<span class="pill">📖 Night ${S.camp.night}/${S.camp.nights}</span>` : ''}</div>
       <div class="strip">${strip()}</div>
-      <div class="row" style="gap:8px;justify-content:flex-end"><span class="pill money">${$$(me.money)}</span>${me.mobTied ? `<span class="pill debt">Owe ${$$(me.debt)}</span>` : ''}
+      <div class="row" style="gap:8px;justify-content:flex-end"><span class="pill money">${$$(me.money)}</span>${me.debt > 0 ? `<span class="pill debt" title="Sal collects this at closing time">Sal's tab ${$$(me.debt)}</span>` : ''}
       <span class="pill drunkp" title="Drunk confidence">🍺<span class="dm"><span id="drunkfill" style="width:${me.drunk}%"></span></span></span></div>
     </div>
     ${ui.reconnecting ? '<div class="reconn">📶 Connection lost - reconnecting...</div>' : ''}
     <div class="hud-clock"><span class="pill time" id="timer"></span></div>
     <div class="hud-goal" id="goal">${goalText()}</div>
-    ${quotaHud()}${eventBanner()}${bountyHud()}${shakeBanner()}
+    ${quotaHud()}${eventBanner()}${bountyHud()}${jobHud()}${shakeBanner()}
     ${hunt ? huntBanner() : ''}
     <div class="hud-crew">${playerList()}</div>
     <div class="hud-feed">${[...S.feed].slice(-4).reverse().map((f) => `<div data-t="${f.t}">${esc(f.text)}</div>`).join('')}</div>
@@ -269,11 +283,13 @@ function gameView() {
 }
 const grabbed = () => !!(window.BK.goons && window.BK.goons.held[S.you]);
 function huntBanner() {
-  const me = S.me, pct = Math.max(0, (S.hunt.hp / Math.max(1, S.hunt.maxHp)) * 100), held = grabbed();
+  const me = S.me, held = grabbed(), gs = S.hunt.goons || [], up = gs.filter((g) => !g.down).length;
+  const pips = gs.map((g) => `<span class="gpip ${g.down ? 'down' : ''}">${g.down ? '💫' : '🕴️'}${'<i></i>'.repeat(Math.max(0, g.hp))}${'<i class="x"></i>'.repeat(Math.max(0, g.max - g.hp))}</span>`).join('');
   return `<div class="card hunt col ${held ? 'held' : ''}" style="margin-bottom:12px">
     <div class="big">${held ? '🫱 A hitman has you!' : '🔫 The hitmen are here'} <span class="pill time" id="huntt"></span></div>
-    <div class="muted">${held ? `<b class="bad">He's shaking the money out of you.</b> Your crew can punch him or bottle him to break you free - or pay what you owe.` : me.remaining > 0 ? `<b class="bad">They want ${$$(me.remaining)} from YOU.</b> Pay, win it back (arcade, pool, roulette), get a crewmate to wire you cash, or beat them down together. Bottles stun them.` : 'You are clear - help your crew: punch the hitmen (click when close) or throw bottles.'}</div>
-    <div class="hp"><div style="width:${pct}%"></div></div><div class="muted">Hitmen health: ${S.hunt.hp} / ${S.hunt.maxHp}</div>
+    <div class="muted">${held ? `<b class="bad">He's shaking the money out of you.</b> Crew: bottle him now - he can't dodge while he's holding you.` : me.remaining > 0 ? `<b class="bad">They want ${$$(me.remaining)} from YOU.</b> Pay it, get wired cash, or escape: the crew has to drop <b>every</b> hitman with bottles.` : 'You are clear - help your crew. Only bottles hurt them (F / right-click).'}</div>
+    <div class="gpips">${pips}</div>
+    <div class="muted">${up} of ${gs.length} standing. Each needs ${gs[0] ? gs[0].max : 3} bottle hits. They sidestep throws when they're free, and a downed one gets back up after ~10s - drop them all at once.</div>
     ${me.remaining > 0 ? `<div class="row"><button class="gold" onclick="send({type:'pay'})" ${me.money <= 0 ? 'disabled' : ''}>Pay what I can (${$$(Math.min(me.money, me.remaining))})</button></div>` : ''}</div>`;
 }
 
@@ -380,6 +396,7 @@ function mobView() {
   return `<div class="card col" style="border-color:#5a2230">
     <div class="big">🕴️ "Uncle Sal"</div>
     <div class="muted">"I can make things happen, kid. Money, refs, players that suddenly forget how to play defense. Of course, I take a cut. And if you lose the big bet... well. We'll come see you."</div>
+    <div class="side"><b>Your tab: ${$$(me.debt)}</b> - my marker${me.tab > 0 ? ` (${$$(me.tab)})` : ''} plus any loans and fixes. I collect at closing time. Every dollar of it.</div>
     <div class="side"><b>Loan: ${$$(1000)}</b> - you owe back ${$$(1250)}. (${me.loans}/3 taken)<br>
       <button class="gold" style="margin-top:6px" ${me.loans >= 3 || S.phase !== 'play' ? 'disabled' : ''} onclick="send({type:'loan'})">Borrow</button></div>
     <div class="side"><b>Fix the open game</b> - pay off the refs and players. Adds <b>${cur ? $$(cur.fixPrice) : '...'}</b> to your tab when betting closes. The result gets flipped on the TV.<br>
@@ -397,7 +414,7 @@ function crewView() {
     <div class="muted">Wire cash to a crewmate - the best way to save someone from the mob.</div>
     ${others.length ? `<div class="row"><select id="gto" onchange="ui.giveTo=this.value" style="padding:10px;border-radius:10px;background:var(--panel2);color:var(--text)">${others.map((p) => `<option value="${p.id}" ${p.id === ui.giveTo ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
     <input id="gamt" type="number" value="${ui.giveAmt}" oninput="ui.giveAmt=+this.value"><button class="fit" onclick="send({type:'give',to:ui.giveTo,amount:ui.giveAmt})">Send</button></div>` : '<div class="muted">No one else here yet.</div>'}
-    ${S.phase === 'hunt' ? '<button class="red" onmousedown="send({type:\'attack\'})">👊 AMBUSH THE HITMEN</button>' : ''}</div>`;
+    ${S.phase === 'hunt' ? '<div class="muted">🍾 Hitmen only go down to bottles. Grab them from the tables or the crate by the couch.</div>' : ''}</div>`;
 }
 
 function barView() {
@@ -406,7 +423,47 @@ function barView() {
     <div class="chalk-say">Bartender: "What'll it be? First one's always full price."</div>
     ${S.drinks.map((x) => `<div class="chalk-row"><span class="cn">${x.emoji} ${esc(x.name)}</span><span class="cd"></span><span class="cp">${$$(x.price)}</span><button class="chalkbtn" ${S.me.money < x.price || d >= 100 ? 'disabled' : ''} onclick="BK.sfx&&(BK.sfx('pour'),BK.sfx('gulp',{delay:1.1}),BK.sfx('glass',{delay:0.95}));send({type:'drink',id:'${x.id}'})">Order</button></div><div class="chalk-sub">${esc(x.blurb)} (+${x.add} buzz)</div>`).join('')}
     <div class="dmeter" style="margin-top:14px;filter:blur(${blur.toFixed(1)}px)"><div style="width:${d}%"></div></div>
-    <div class="chalk-sub">You feel <b>${b}</b>${d < 20 ? ` (${d}%)` : ''}. ${S.me.hangover ? '<b>Your head is pounding</b> - no gut feelings until it passes. ' : ''}Somewhere in the buzz your gut gets good: right more often than not. Go past it and it lies to you just as confidently - then the hangover hits. Everyone's sweet spot is different, and it wears off over time.</div></div>`;
+    <div class="chalk-sub">You feel <b>${b}</b>${d < 20 ? ` (${d}%)` : ''}. ${S.me.hangover ? '<b>Your head is pounding</b> - no gut feelings until it passes. ' : ''}Somewhere in the buzz your gut gets good: right more often than not. Go past it and it lies to you just as confidently - then the hangover hits. Everyone's sweet spot is different, and it wears off over time.</div>
+    ${jobBox()}</div>`;
+}
+// ---------- side jobs from the bartender ----------
+function jobBox() {
+  if (S.phase !== 'play') return '';
+  const j = S.me.job, t = now(), pay = (x) => (x.tabCut ? `${$$(x.tabCut)} off Sal's tab` : $$(x.reward));
+  let body;
+  if (j) body = `<div class="chalk-say">"${esc(j.text)}"</div><div class="chalk-sub">➜ <b>${esc(j.step)}</b> · ${mmss(j.until - t)} left · pays ${pay(j)}</div>
+    <div class="row">${j.kind === 'collect' && j.stage === 'back' ? `<button class="chalkbtn" onclick="send({type:'jobAct'})">Hand over Sal's envelope</button>` : ''}<button class="chalkbtn" onclick="send({type:'jobDrop'})">Drop the job</button></div>`;
+  else if (t < (S.me.jobNext || 0)) body = `<div class="chalk-say">Bartender: "Nothing right now. Check back in ${mmss(S.me.jobNext - t)}."</div>`;
+  else body = `<div class="chalk-say">Bartender: "Want to make yourself useful? I always need a hand - and I know people who'll pay."</div><button class="chalkbtn" onclick="send({type:'jobTake'})">Ask for a job</button>`;
+  return `<div class="chalk-h" style="margin-top:16px">SIDE JOBS</div>${body}${S.me.jobsDone ? `<div class="chalk-sub">Jobs done tonight: ${S.me.jobsDone}</div>` : ''}`;
+}
+function jobHud() {
+  const j = S.me && S.me.job; if (!j || S.phase !== 'play') return '';
+  return `<div class="hud-job">🍸 <b>${esc(j.step)}</b> <span class="muted">${mmss(j.until - now())} · ${j.tabCut ? `${$$(j.tabCut)} off your tab` : $$(j.reward)}</span></div>`;
+}
+// ---------- Old Vinnie ----------
+function vinnieView() {
+  const cur = S.cur, t = cur && cur.vinnie, ev = cur && S.events[cur.idx];
+  let body;
+  if (!cur) body = `<div class="muted">"No game open, kid. Come back when there's action."</div>`;
+  else if (t) body = `<div class="side"><div class="muted">On ${esc(ev.label)}: ${esc(ev.a)} vs ${esc(ev.b)}</div><div class="big" style="font-size:18px">"${esc(t.text)}"</div><div class="muted">"${esc(t.totalText)}"</div><div>Vinnie likes <b>${esc(cur.intel[t.side].name)}</b> · ${t.total === 'over' ? 'Over' : 'Under'} ${cur.mk.total.line}</div></div>
+    <div class="muted">He's been right more often than not. Not always. He'll tell the whole crew the same thing.</div>`;
+  else body = `<div class="muted">"Buy an old man a drink and I'll tell you what I think about ${esc(ev.a)} and ${esc(ev.b)}."</div>
+    <button class="gold" ${S.me.money < S.me.vinniePrice ? 'disabled' : ''} onclick="send({type:'vinnie'})">Buy Vinnie a drink (${$$(S.me.vinniePrice)})</button>`;
+  return `<div class="card col" style="border-color:#2a6a62"><div class="big">🍷 Old Vinnie</div>
+    <div class="muted">Forty years on the same stool. He's seen every game twice and remembers most of them.</div>${body}</div>`;
+}
+// ---------- the newspaper ----------
+function paperView() {
+  const P = S.paper; if (!P) return '<div class="muted">Somebody took the paper.</div>';
+  return `<div class="paper"><div class="pp-top"><span>${esc(P.edition)}</span><span class="pp-torn">[date torn off]</span><span>25¢</span></div>
+    <div class="pp-mast">${esc(P.name)}</div>
+    <div class="pp-rule"><span>SPORTS</span><span>${esc(P.sport)}</span><span>FINAL</span></div>
+    <div class="pp-cols"><div class="pp-main"><div class="pp-head">${esc(P.head)}</div><div class="pp-sub">${esc(P.sub)}</div>
+      <div class="pp-box"><div class="pp-bh">STANDINGS</div>${P.standings.map((t) => `<div class="pp-st"><b>${esc(t.short)}</b><span>${esc(t.name)}</span><i>${esc(t.rec)}</i></div>`).join('')}</div>
+      ${P.stars.length ? `<div class="pp-box"><div class="pp-bh">WHO'S HOT</div>${P.stars.map((x) => `<div class="pp-st"><b>${esc(x.team)}</b><span>${esc(x.line)}</span></div>`).join('')}</div>` : ''}</div>
+    <div class="pp-side"><div class="pp-bh">IN OTHER NEWS</div>${P.briefs.map((b) => `<div class="pp-brief">${esc(b)}</div>`).join('')}<div class="pp-brief pp-small">${esc(P.filler)}</div>
+      <div class="pp-ad">COLD BEER<br><small>ask the bartender</small></div></div></div></div>`;
 }
 
 // roulette: a clickable felt layout. Click a spot to drop the selected chip on it (again to stack), right-click to take one off.
@@ -457,10 +514,21 @@ function endView() {
     <div>${s.fake ? 'Champion by the dice' : 'Real champion'}: <b>${esc(s.champion)}</b></div>
     <div>${s.altered ? `${s.fake ? 'Your fix overruled the dice' : 'History was rewritten'} - your champion was <b>${esc(s.finalWinner)}</b>.` : s.fake ? 'The dice played it straight.' : 'History played out as it happened.'}</div>
     ${s.players.map((p) => `<div class="pl"><span>${esc(p.name)} ${p.finalCorrect ? '✅' : '❌'}</span><span>${p.fate === 'dead' ? '💀 dead (half tickets, wears a toe tag next season)' : esc(p.fate)} · ${$$(p.money)} · 🧠 ${p.bk || 0} · +${p.tickets}🎟</span></div>`).join('')}
+    ${campEnd(s)}
     <button class="ghost" onclick="openShop()">🛍️ Spend tickets · 🎟 ${save.tix}</button>
-    ${host ? `<button onclick="send({type:'rematch'})">Back to lobby</button>` : '<div class="muted">Waiting for host...</div>'}</div></div>`;
+    ${host ? (s.camp && !s.camp.last ? `<button onclick="send({type:'rematch',next:true})">On to night ${s.camp.night + 1} →</button><button class="ghost" onclick="if(confirm('Abandon the campaign?'))send({type:'rematch'})">Quit the campaign</button>` : `<button onclick="send({type:'rematch'})">${s.camp ? 'New campaign' : 'Back to lobby'}</button>`) : '<div class="muted">Waiting for host...</div>'}</div></div>`;
 }
 
+function campEnd(s) {
+  const c = s.camp; if (!c) return '';
+  if (c.last) {
+    const R = { free: ['🕊️ FREE AND CLEAR', 'The books are clean. Sal pours you a drink on the house - first time in years. +25 tickets each.'], hooked: ['🪝 STILL ON THE HOOK', 'You got out alive, but somebody still owes Sal. He\'ll be seeing you.'], owned: ['💀 SAL OWNS YOU', 'Not everyone walked out of the back room. The crew works for Sal now.'] }[c.result];
+    return `<div class="card camp col"><div class="big">📖 Campaign over: ${R[0]}</div><div class="muted">${R[1]}</div><div class="muted">${c.log.map((l) => `Night ${l.night}: ${esc(l.season)} - ${esc(l.tier)}`).join('<br>')}</div></div>`;
+  }
+  return `<div class="card camp col"><div class="big">📖 Night ${c.night} of ${c.nights} done</div>
+    <div class="muted">Cash carries over. Sal's marker goes up. Whatever you didn't pay rolls over at 50% interest. Under $1,000? Sal fronts you the rest - on the tab.</div>
+    ${c.players.map((p) => `<div class="pl"><span>${esc(p.name)}${p.dead ? ' 💀' : ''}</span><span>brings ${$$(p.cash)}${p.fronted ? ` (+${$$(p.fronted)} fronted)` : ''} · owes ${$$(p.nextTab)} next night${p.rollover ? ` <b class="bad">(${$$(p.rollover)} rolled over)</b>` : ''}</span></div>`).join('')}</div>`;
+}
 // ---------- quota / bounties / events ----------
 function quotaHud() {
   if (!S.quota) return '';

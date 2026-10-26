@@ -302,3 +302,36 @@ body.cine #app .hud,body.cine #prompt,body.cine #cross,body.cine #toasts,body.ci
 .team .risk{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-top:4px}.team .risk.hi{color:var(--red)}
 .heat{font-weight:700;margin-top:6px}
 .tiers{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;font-weight:700}.mvp{font-size:18px;text-align:center;color:var(--gold)}
+
+/* ---------- campaign, side jobs, hitman pips ---------- */
+.card.camp{border-color:#6a4a1a;background:linear-gradient(180deg,#1d1608,#141b33)}
+.hud-job{position:absolute;left:12px;top:136px;max-width:300px;background:#1d1608e6;border:1px solid #6a4a1a;border-radius:12px;padding:7px 10px;font-size:12px;color:#ffe2a8}
+.gpips{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0}
+.gpip{display:inline-flex;align-items:center;gap:3px;background:#0008;border:1px solid #5a2230;border-radius:999px;padding:3px 9px;font-size:16px}
+.gpip i{display:inline-block;width:9px;height:9px;border-radius:50%;background:#ff4d5e;box-shadow:0 0 6px #ff4d5e}
+.gpip i.x{background:#333;box-shadow:none}
+.gpip.down{opacity:.55;border-color:#2a6a3a}
+
+/* ---------- The Daily Ledger: a broadsheet sports page ---------- */
+.paper{background:#efe7d2;color:#1a1714;font-family:Georgia,"Times New Roman",serif;padding:14px 18px 18px;border-radius:4px;box-shadow:inset 0 0 60px #c9bc9a,0 6px 24px #0008;
+  background-image:radial-gradient(#0000000a 1px,transparent 1px);background-size:3px 3px}
+.pp-top{display:flex;justify-content:space-between;font-size:11px;text-transform:uppercase;letter-spacing:.12em;border-bottom:1px solid #1a1714;padding-bottom:3px}
+.pp-torn{font-style:italic;color:#7a6a50;text-transform:none;letter-spacing:0}
+.pp-mast{font-family:"Old English Text MT","UnifrakturMaguntia","Times New Roman",serif;font-size:52px;text-align:center;line-height:1.05;margin:6px 0 2px}
+.pp-rule{display:flex;justify-content:space-between;border-top:3px double #1a1714;border-bottom:3px double #1a1714;font-size:11px;font-weight:700;letter-spacing:.2em;padding:3px 2px;margin-bottom:10px}
+.pp-cols{display:grid;grid-template-columns:2fr 1fr;gap:14px}
+.pp-main{border-right:1px solid #1a171455;padding-right:14px}
+.pp-head{font-size:34px;font-weight:900;line-height:1.02;text-transform:uppercase;letter-spacing:-.01em}
+.pp-sub{font-size:16px;font-style:italic;margin:6px 0 10px;border-bottom:1px solid #1a171455;padding-bottom:8px}
+.pp-box{border:1px solid #1a1714;padding:6px 8px;margin-top:8px;font-size:13px}
+.pp-bh{font-weight:900;letter-spacing:.14em;font-size:11px;border-bottom:1px solid #1a1714;margin-bottom:4px;padding-bottom:2px}
+.pp-st{display:flex;gap:8px;padding:2px 0;border-bottom:1px dotted #1a171455}
+.pp-st b{width:44px}.pp-st span{flex:1}.pp-st i{font-style:normal;font-variant-numeric:tabular-nums;font-weight:700}
+.pp-brief{font-size:14px;line-height:1.3;padding:6px 0;border-bottom:1px solid #1a171433}
+.pp-brief::first-letter{font-weight:900;font-size:18px}
+.pp-small{font-size:12px;font-style:italic;color:#4a4035}
+.pp-ad{margin-top:10px;border:3px double #1a1714;text-align:center;font-weight:900;font-size:20px;padding:8px;letter-spacing:.08em}
+.pp-ad small{font-weight:400;font-size:11px;letter-spacing:0}
+@media (max-width:640px){.pp-cols{grid-template-columns:1fr}.pp-main{border-right:0;padding-right:0}.pp-mast{font-size:38px}.pp-head{font-size:26px}}
+.hud-top .pill{white-space:nowrap}
+.pl{gap:12px}.pl>span:last-child{text-align:right}

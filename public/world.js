@@ -86,7 +86,7 @@ function exitSpot(s) {
 }
 BK.stand = () => { const s = me.sit; if (!s) return; audio.sfx('stand'); me.sit = null; const e = clearAt(s.exit[0], s.exit[1]) ? s.exit : exitSpot(s); me.x = e[0]; me.z = e[1]; };
 const active = () => { const S = BK.S; return S && ['play', 'hunt'].includes(S.phase); };
-const nearest = () => (bottles.aimedStation && bottles.aimedStation()) || stations.filter((s) => (!s.on || s.on()) && Math.hypot(s.x - me.x, s.z - me.z) < s.r).sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
+const nearest = () => (bottles.aimedStation && bottles.aimedStation()) || stations.filter((s) => (!s.on || s.on()) && Math.hypot(s.x - me.x, s.z - me.z) < s.r).sort((a, b) => (b.prio || 0) - (a.prio || 0) || Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
 
 addEventListener('keydown', (e) => {
   if (!active() || BK.ui.open || BK.ui.shop) return;
@@ -149,6 +149,7 @@ function grabDrops() { for (const [id, o] of drops) if (Math.hypot(o.x - me.x, o
 const goons = createGoonsView({ scene, BK, audio }); BK.goons = goons;
 const cine = createCine({ camera, BK, doors: bar.doors, goons, audio });
 let wasHeld = null;
+BK.onGoonDodge = (m) => { goons.dodge(m.id); const o = goons.get(m.id); if (o) audio.sfx('whoosh', { pos: { x: o.P.group.position.x, y: 1.3, z: o.P.group.position.z } }); };
 BK.onGoons = (m) => { goons.onMsg(m); const h = goons.held[BK.S && BK.S.you] || null; if (h !== wasHeld) { wasHeld = h; if (h) { if (me.sit) BK.stand(); games.leave(); audio.sfx('groan'); } window.render && window.render(); } };
 const heldBy = () => (BK.S && goons.held[BK.S.you]) || null, draggedBy = () => (BK.S && goons.drag[BK.S.you]) || null;
 // ---------- bar-fight brawlers ----------

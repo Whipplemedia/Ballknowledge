@@ -5,8 +5,8 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { jerseyTex, floralTex, buttonShirtTex } from './textures.js';
 
 // ---- authored Blender characters (blender/*.py -> public/models/*.glb). Procedural makePerson() below is the fallback. ----
-const AI_NAMES = ['bub', 'bartender', 'sal', 'hitman', 'jock', 'knowItAll', 'gambler', 'chill', 'dieHard', 'rookie'];
-const AI_HEIGHT = { bub: 1.88, bartender: 1.72, sal: 1.8, hitman: 1.95, jock: 1.9, knowItAll: 1.85, gambler: 1.8, chill: 1.86, dieHard: 1.84, rookie: 1.8 };
+const AI_NAMES = ['bub', 'bartender', 'sal', 'hitman', 'jock', 'knowItAll', 'gambler', 'chill', 'dieHard', 'rookie', 'gina', 'vinnie', 'ray', 'steve'];
+const AI_HEIGHT = { bub: 1.88, bartender: 1.72, sal: 1.8, hitman: 1.95, jock: 1.9, knowItAll: 1.85, gambler: 1.8, chill: 1.86, dieHard: 1.84, rookie: 1.8, gina: 1.7, vinnie: 1.74, ray: 1.9, steve: 1.82 };
 const MODEL_NAMES = AI_NAMES.map((n) => n + '_ai');
 const MODELS = {};
 if (typeof location !== 'undefined' && !/[?&]models=0/.test(location.search)) {
@@ -354,6 +354,11 @@ export const PRESETS = {
   dieHard: { skin: SK.tan, hair: 0x1a1210, hairStyle: 'short', hat: { color: 0x141414, style: 'beanie' }, outfit: 'jersey', shirt: 0xd2691e, number: 'T', beard: 'full', pants: 0x3a3a40, mouth: 'open' },
   rookie: { skin: SK.pale, hair: 0x2a2220, hairStyle: 'short', hat: { color: 0x7a7a80, backwards: true }, outfit: 'hoodie', shirt: 0x73737a, pants: 0x3a3a42, mouth: 'flat' },
   sal: { skin: SK.tan, hair: 0x1a1a1a, hairStyle: 'slick', outfit: 'suit', shirt: 0x15151a, pants: 0x15151a, tie: 0xb01818, cigar: true, fat: true, angry: true, mouth: 'flat', goatee: false },
+  // named regulars (Meshy models; the procedural fallback is only used if a model fails to load)
+  gina: { skin: SK.tan, hair: 0x5a3018, hairStyle: 'long', female: true, outfit: 'tank', shirt: 0x7a1e26, pants: 0x3a4458, mouth: 'smile' },
+  vinnie: { skin: SK.light, hair: 0x9a9a9a, hairStyle: 'short', outfit: 'hoodie', shirt: 0x1f6f6a, pants: 0x1f6f6a, stache: true, mouth: 'flat' },
+  ray: { skin: SK.brown, hair: 0x1a1210, hairStyle: 'short', beard: 'full', outfit: 'jersey', shirt: 0x1f6a34, number: '33', pants: 0x1f6a34, mouth: 'grin' },
+  steve: { skin: SK.light, hair: 0x7a5a32, hairStyle: 'messy', beard: 'stubble', outfit: 'tee', shirt: 0x8a3a3a, pants: 0x5a6a8a, fat: true, mouth: 'open' },
   hitman: { skin: SK.light, hair: 0x0a0a0a, hairStyle: 'short', hat: { color: 0x0c0c0e, style: 'fedora' }, outfit: 'suit', shirt: 0x0e0e12, pants: 0x0e0e12, sunglasses: true, mouth: 'flat', scale: 1.06 },
 };
 const PATRON_BASES = ['jock', 'knowItAll', 'gambler', 'chill', 'dieHard', 'rookie'];
