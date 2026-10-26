@@ -22,7 +22,7 @@ document.body.appendChild(cross); cross.style.display = 'none';
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false; // refreshed every other frame in frame()
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(72, 1, 0.08, 80);
 camera.rotation.order = 'YXZ';
@@ -59,6 +59,10 @@ BK.sfxAt = sfxAt;
 const koNow = () => !!(me.koUntil && BK.now() < me.koUntil);
 const bottles = createBottles({ scene, camera, BK, me, obstacles, getAvatars: () => avatars, getNpcs: () => bar.npcs, ROOM, busy: () => games.active() || BK.ui.open || BK.ui.shop || koNow() });
 BK.bottles = bottles; BK.onBottle = (m) => bottles.remote(m); bottles.addSpots(bar.bottleSpots, stations);
+// small or see-through static things (bottles, chips, glasses, little decor) don't need to cast shadows: fewer objects in the shadow pass
+{ const _s = new THREE.Vector3(); scene.updateMatrixWorld(true);
+  scene.traverse((o) => { if (!o.isMesh || o.isSkinnedMesh || !o.castShadow) return; const g = o.geometry; if (!g.boundingSphere) g.computeBoundingSphere(); o.getWorldScale(_s);
+    const mats = Array.isArray(o.material) ? o.material : [o.material]; if (g.boundingSphere.radius * Math.max(_s.x, _s.y, _s.z) < 0.22 || mats.some((m) => m.transparent && m.opacity < 0.95)) o.castShadow = false; }); }
 BK.onKo = (m) => {
   const until = m.until;
   if (m.id && m.id === (BK.S && BK.S.you)) { me.koUntil = until; if (me.sit) BK.stand(); games.leave(); audio.sfx('bonk'); audio.sfx('groan', { delay: 0.2 }); BK.toast && BK.toast('💫 You got bottled! Out cold for 5 seconds.', 'err'); }
@@ -206,7 +210,7 @@ function netSend(t) {
 }
 
 // ---------- loop ----------
-let prev = performance.now(), spawned = false, t0 = performance.now();
+let prev = performance.now(), spawned = false, t0 = performance.now(), shadowTick = 0;
 // auto performance mode: if the first ~2 seconds average under ~30fps, drop shadows, bloom and resolution
 const perf = { frames: 0, acc: 0, done: !!navigator.webdriver || /[?&]quality=high/.test(location.search), low: /[?&]quality=low/.test(location.search) };
 function setLowQuality() { renderer.setPixelRatio(1); renderer.shadowMap.enabled = false; scene.traverse((o) => { if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => (m.needsUpdate = true)); } }); fx.setBloom(false); resize(); console.log('Ball Knowledge: performance mode on'); }
@@ -220,6 +224,7 @@ BK.onRender = () => {
 
 function frame(now) {
   requestAnimationFrame(frame);
+  if ((shadowTick = (shadowTick + 1) % 2) === 0) renderer.shadowMap.needsUpdate = true; // shadows refresh at half rate: a big saving, invisible at bar speeds
   const rawDt = (now - prev) / 1000, dt = Math.min(0.1, rawDt); prev = now; const t = (now - t0) / 1000;
   if (perf.low) { perf.low = false; setLowQuality(); }
   if (!perf.done && active() && t > 1) { perf.acc += rawDt; if (++perf.frames >= 90) { perf.done = true; if (perf.acc / 90 > 0.034) setLowQuality(); } }

@@ -44,8 +44,12 @@ export function buildBar({ scene, BK, tv }) {
     cyl(0.03, 0.03, 1.2, M(0x111111), x, 4.4, z, 6, scene, false);
     const shade = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.34, 16, 1, true), M(0x1b3a2a, { side: THREE.DoubleSide })); shade.position.set(x, 3.75, z); scene.add(shade); }
     const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffd9a0).multiplyScalar(3) })); bulb.position.set(x, 3.68, z); scene.add(bulb);
-    const l = lamp(x, 3.5, z, 0xffd2a0, i === 1 ? 34 : 20, 14);
-    if (i === 1) { l.castShadow = true; l.shadow.mapSize.set(1024, 1024); l.shadow.bias = -0.002; l.shadow.camera.near = 0.5; l.shadow.camera.far = 16; }
+    if (i !== 1) lamp(x, 3.5, z, 0xffd2a0, 20, 14);
+    else { // the one shadow light: a wide downward spot (1 shadow render) instead of a point light (6 cube-face renders every frame), plus a weak fill for the ceiling/walls
+      const sp = new THREE.SpotLight(0xffd2a0, 30, 16, 1.32, 0.55, 2); sp.position.set(x, 3.5, z); sp.target.position.set(x, 0, z); scene.add(sp, sp.target);
+      sp.castShadow = true; sp.shadow.mapSize.set(2048, 2048); sp.shadow.bias = -0.0015; sp.shadow.normalBias = 0.02; sp.shadow.camera.near = 0.5; sp.shadow.camera.far = 16;
+      lamp(x, 3.5, z, 0xffd2a0, 8, 14);
+    }
   });
   lamp(9, 2.5, -5, 0xff3040, 40, 12); lamp(-9, 3, -5, 0x27e08a, 26, 12); lamp(0, 3.8, -6.5, 0x4da3ff, 38, 14); lamp(10.5, 3.2, 3, 0xffa030, 28, 12);
 
