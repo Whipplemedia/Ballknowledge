@@ -301,6 +301,7 @@ function bookView() {
       <div class="muted">Tip: grab a drink at the bar. Drunk confidence is real... until you have one too many.</div></div>`;
   }
   const cur = S.cur, ev = S.events[cur.idx], mk = cur.mk, h = cur.hint, A = cur.intel.a, B = cur.intel.b;
+  if (S.me.banUntil != null && cur.idx <= S.me.banUntil) return `<div class="card col"><div class="big">🚨 You're barred from the sportsbook</div><div class="muted">The league caught your fix. No bets until after game ${S.me.banUntil + 1}. You can still drink, hustle the arcade, play pool and roulette - and your crew can still bet.</div></div>`;
   const hs = (m, v) => !!(h && h[m] && (h[m].side === v || h[m].pick === v));
   const crew = cur.crew, ctot = crew.a + crew.b, sport = (S.sports.find((s) => s.id === S.sport) || {}).label || '';
   const sp = (s) => `${s.short} ${mk.spread[s === A ? 'a' : 'b'].line > 0 ? '+' : ''}${mk.spread[s === A ? 'a' : 'b'].line}`;
@@ -376,8 +377,9 @@ function mobView() {
     <div class="side"><b>Loan: ${$$(1000)}</b> - you owe back ${$$(1250)}. (${me.loans}/3 taken)<br>
       <button class="gold" style="margin-top:6px" ${me.loans >= 3 || S.phase !== 'play' ? 'disabled' : ''} onclick="send({type:'loan'})">Borrow</button></div>
     <div class="side"><b>Fix the open game</b> - pay off the refs and players. Adds <b>${cur ? $$(cur.fixPrice) : '...'}</b> to your tab when betting closes. The result gets flipped on the TV.<br>
-      <div class="muted">If someone fixes it the other way, the mob keeps both fees and nothing changes.</div>
-      ${cur ? `<div class="match2">${['a', 'b'].map((s) => `<button class="team ${fixed === s ? 'fix' : ''}" onclick="send({type:'fix',ev:${cur.idx},side:'${s}'})">${esc(cur.intel[s].name)} wins</button>`).join('')}</div>
+      <div class="muted">If someone fixes it the other way, the mob keeps both fees and nothing changes. <b>The league is watching:</b> every fix you buy raises your heat, bigger upsets draw more attention, and the final is the riskiest. If they catch it, the game is voided, Sal still wants his fee, and you're barred from betting for 2 games. A fixed title goes in the books as VACATED.</div>
+      <div class="heat">Your heat: ${'🔥'.repeat(Math.min(5, me.heat || 0)) || 'cool'}${me.banUntil != null && cur && cur.idx <= me.banUntil ? ` · <b class="bad">barred until after game ${me.banUntil + 1}</b>` : ''}</div>
+      ${cur ? `<div class="match2">${['a', 'b'].map((s) => `<button class="team ${fixed === s ? 'fix' : ''}" onclick="send({type:'fix',ev:${cur.idx},side:'${s}'})">${esc(cur.intel[s].name)} wins<span class="risk ${cur.fixRisk[s] >= 40 ? 'hi' : ''}">${cur.fixRisk[s]}% chance the league catches it</span></button>`).join('')}</div>
       ${fixed ? `<button class="ghost" style="margin-top:6px" onclick="send({type:'fix',ev:${cur.idx},side:null})">Cancel the fix</button>` : ''}` : '<div class="muted">Only while a game is open for betting.</div>'}</div>
     <div class="muted">At the end, the mob collects your tab (+20% of your profit if you win the title bet). Can't cover it? They come for you. Beat them as a crew, or earn it back at the arcade.</div></div>`;
 }
@@ -439,7 +441,8 @@ function spinNow() {
 function endView() {
   const s = S.summary, host = S.host;
   return `<div class="center"><div class="card col" style="width:min(560px,100%)">
-    <div class="logo" style="font-size:34px">${s.crewWon ? '<span>YOU WIN</span>' : 'GAME OVER'}</div>
+    <div class="logo" style="font-size:34px">${s.crewWon ? (s.vacated ? '<span>TITLE VACATED*</span>' : '<span>YOU WIN</span>') : 'GAME OVER'}</div>
+    ${s.vacated ? '<div class="bad">* The championship was fixed. The league struck your title from the books (half the crew bonus).</div>' : ''}${s.voidedFinal ? '<div class="bad">🚨 The league caught a fix on the championship and voided it. Nobody gets the title.</div>' : ''}
     <div class="tag">${s.correct}/${s.total} called the title</div>
     <div class="title">The season was</div>
     <div class="big">${s.year} ${esc(s.league)}</div>

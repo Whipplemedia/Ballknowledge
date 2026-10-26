@@ -216,6 +216,7 @@ function startGame(room) {
   room.events[0].openAt = now;
   for (const p of room.players.values()) {
     Object.assign(p, { money: START_MONEY, debt: 0, loans: 0, mobTied: false, bets: {}, fix: {}, results: {}, drunk: 0, drunkT: now, finalCorrect: null, fate: null, remaining: 0, tickets: 0, challenge: null, pool: null, streak: { darts: 0, bowling: 0, cornhole: 0 }, lastChallenge: 0 });
+    p.heat = 0; p.banUntil = null;
     p.tol = Math.round((Math.random() * 2 - 1) * 10); p.tips = {}; p.over = false; p.hangUntil = 0; // hidden drink sweet spot for this season
     p.bounties = [...BOUNTIES].sort(() => Math.random() - 0.5).slice(0, 3).map((b) => ({ ...b, done: false }));
   }
@@ -267,11 +268,18 @@ function lockEvent(room, ev) {
   const sides = new Set(fixers.map((p) => p.fix[ev.idx]));
   const price = fixPrice(room, ev);
   for (const p of fixers) { p.debt += price; p.mobTied = true; p._fixPaid = true; toast(p, `The mob took ${money(price)} for the fix on ${ev.label}. It's on your tab.`, 'mob'); }
-  let winner = nat, fixed = false, contested = sides.size > 1;
-  if (sides.size === 1) { const s = [...sides][0]; if (s !== nat) { winner = s; fixed = true; room.altered = true; } }
+  let winner = nat, fixed = false, contested = sides.size > 1, voided = false;
+  if (sides.size === 1) {
+    const s = [...sides][0], risk = Math.max(...fixers.map((p) => fixRisk(room, p, ev, s)));
+    if (Math.random() < risk) { // the league flags it: the game is void, the fee is still owed, the fixers are barred for two games
+      voided = true; for (const p of fixers) { p.banUntil = ev.idx + 2; toast(p, `🚨 The league caught your fix on ${ev.label}. Bets voided - and you're barred from the sportsbook for 2 games. Sal still wants his fee.`, 'err'); }
+      feed(room, `🚨 League investigators flagged the ${ev.label}. All bets are void; ${fixers.map((p) => p.name).join(' and ')} barred from betting for 2 games.`);
+    } else if (s !== nat) { winner = s; fixed = true; room.altered = true; }
+  }
+  for (const p of fixers) p.heat = (p.heat || 0) + 1;
   ev.rsa = ev.sa; ev.rsb = ev.sb;
   if (fixed) { ev.rsa = ev.sb; ev.rsb = ev.sa; } // flip the scoreboard
-  ev.result = { sa: ev.rsa, sb: ev.rsb, winner, fixed, contested };
+  ev.result = { sa: ev.rsa, sb: ev.rsb, winner, fixed, contested, voided };
   if (fixed && !contested) for (const p of fixers) award(room, p, 'fixFlip');
   const rng = seeded(room.code + ':air:' + ev.idx);
   ev.air = { plays: genHighlights(room.sportDef, ev, season, rng) };
@@ -283,6 +291,7 @@ function settleBets(room, ev) {
   const r = ev.result, win = r.winner;
   for (const p of room.players.values()) {
     const bets = p.bets[ev.idx] || {}, notes = []; let delta = 0, ret = 0;
+    if (r.voided) { for (const b of Object.values(bets)) ret += b.stake; p.money += ret; if (ev.final) p.finalCorrect = false; if (Object.keys(bets).length) { notes.push('🚨 VOID - the league caught a fix. Stakes returned.'); toast(p, `${ev.label}: VOID - stakes returned`, 'info'); } p.results[ev.idx] = { delta: 0, notes }; continue; }
     for (const [mk, b] of Object.entries(bets)) {
       let won = false, label;
       if (mk === 'ml') { won = b.pick === win; label = `${b.pick === 'a' ? ev.a : ev.b} ML`; }
@@ -359,6 +368,12 @@ function endBarEvent(room) {
 
 
 function _unused() {}
+// fix heat: every fix you buy raises your heat; each one can get flagged by the league. Bigger upsets and the final are riskier.
+function fixRisk(room, p, ev, side) {
+  const nat = ev.sa > ev.sb ? 'a' : 'b', ia = 1 / ev.mk.ml.a.dec, ib = 1 / ev.mk.ml.b.dec, pNat = (nat === 'a' ? ia : ib) / (ia + ib);
+  let r = 0.1 + 0.1 * (p.heat || 0) + (side !== nat ? 0.7 * Math.max(0, pNat - 0.5) : 0); if (ev.final) r *= 1.5;
+  return Math.max(0.05, Math.min(0.85, r));
+}
 const fixPrice = (room, ev) => 1500 + 300 * ev.idx + (ev.final ? 2000 : 0);
 
 // ---------- settlement (mob collects, hitmen arrive) ----------
@@ -391,10 +406,12 @@ function finish(room) {
   clearInterval(room.tick); room.barEvent = null; room.shake = null; room.cine = null; goons.stop(room);
   const s = room.season, ps = plist(room);
   for (const p of ps) if (!p.fate) p.fate = p.mobTied ? 'paid up' : 'safe';
-  const correct = ps.filter((p) => p.finalCorrect).length;
+  const correct = ps.filter((p) => p.finalCorrect).length, fin = room.events[room.events.length - 1], fr = (fin && fin.result) || {};
+  const crewWon = correct >= Math.ceil(ps.length / 2) && correct > 0, vacated = crewWon && !!fr.fixed, voidedFinal = !!fr.voided;
+  const crewBonus = crewWon ? (vacated ? Math.floor(TICKETS.crewWin / 2) : TICKETS.crewWin) : 0;
   room.summary = { year: s.year, league: s.league, champion: s.champion, finalWinner: room.finalWinner, altered: room.altered, blurb: s.blurb,
-    crewWon: correct >= Math.ceil(ps.length / 2) && correct > 0, correct, total: ps.length,
-    players: ps.map((p) => ({ id: p.id, name: p.name, finalCorrect: p.finalCorrect, fate: p.fate, money: Math.round(p.money), tickets: TICKETS.base + p.tickets + (p.fate === 'dead' ? 0 : 3) + (correct >= Math.ceil(ps.length / 2) && correct > 0 ? TICKETS.crewWin : 0), bounties: p.bounties.filter((b) => b.done).length })) };
+    crewWon, vacated, voidedFinal, correct, total: ps.length,
+    players: ps.map((p) => ({ id: p.id, name: p.name, finalCorrect: p.finalCorrect, fate: p.fate, money: Math.round(p.money), tickets: TICKETS.base + p.tickets + (p.fate === 'dead' ? 0 : 3) + crewBonus, bounties: p.bounties.filter((b) => b.done).length })) };
   room.phase = 'ended'; broadcast(room);
 }
 
@@ -497,12 +514,12 @@ function view(room, p) {
     v.spinning = room.spin ? { by: room.spin.name, until: room.spin.until } : null;
     const cur = room.events.find((e) => e.status === 'open');
     if (cur && room.phase === 'play') {
-      v.cur = { idx: cur.idx, mk: cur.mk, series: seriesText(room, cur), fixPrice: fixPrice(room, cur), intel: { a: intel(room, cur, 'a'), b: intel(room, cur, 'b') },
+      v.cur = { idx: cur.idx, mk: cur.mk, series: seriesText(room, cur), fixPrice: fixPrice(room, cur), fixRisk: { a: Math.round(fixRisk(room, p, cur, 'a') * 100), b: Math.round(fixRisk(room, p, cur, 'b') * 100) }, intel: { a: intel(room, cur, 'a'), b: intel(room, cur, 'b') },
         hint: room.barEvent && room.barEvent.kind === 'blackout' ? null : hintFor(room, p, cur), tip: room.barEvent && room.barEvent.tip && room.barEvent.tip.idx === cur.idx ? room.barEvent.tip : null, crew: plist(room).reduce((acc, q) => { const b = (q.bets[cur.idx] || {}).ml; if (b) acc[b.pick]++; return acc; }, { a: 0, b: 0 }) };
     }
   }
   if (room.phase === 'hunt') v.hunt = { hp: goons.hpLeft(room), maxHp: goons.hpMax(room), until: room.huntEnd };
-  v.cine = room.cine || null; v.me.held = p.heldBy || null; v.me.dead = !!p.dead; v.me.hangover = (room.phase === 'play' || room.phase === 'hunt') && drinkZone(p) === 'hangover';
+  v.cine = room.cine || null; v.me.held = p.heldBy || null; v.me.dead = !!p.dead; v.me.heat = p.heat || 0; v.me.banUntil = p.banUntil ?? null; v.me.hangover = (room.phase === 'play' || room.phase === 'hunt') && drinkZone(p) === 'hangover';
   if (room.phase === 'ended') v.summary = room.summary;
   return v;
 }
@@ -528,6 +545,7 @@ function handle(room, p, m) {
     } break;
     case 'bet': {
       const ev = room.events[m.ev]; if (room.phase !== 'play' || !ev || ev.status !== 'open') { toast(p, 'Betting is closed on that game.', 'err'); break; }
+      if (p.banUntil != null && ev.idx <= p.banUntil) { toast(p, `You're barred from the sportsbook until after game ${p.banUntil + 1}.`, 'err'); break; }
       const mk = m.market, pk = m.pick, stake = Math.floor(Number(m.stake));
       const okPick = (mk === 'ml' || mk === 'spread') ? ['a', 'b'].includes(pk) : mk === 'total' ? ['over', 'under'].includes(pk) : false;
       if (!okPick) break;

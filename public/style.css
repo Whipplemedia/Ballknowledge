@@ -299,3 +299,5 @@ body.cine #app .hud,body.cine #prompt,body.cine #cross,body.cine #toasts,body.ci
 #cinecap.on{opacity:1;transform:translateX(-50%)}#cinecap b{display:block;font:900 clamp(26px,4.4vw,48px)/1.05 system-ui;letter-spacing:3px;color:#ffd04a}#cinecap span{display:block;margin-top:8px;font:700 clamp(15px,2vw,20px) system-ui}
 #cinefade{position:fixed;inset:0;background:#000;opacity:0;z-index:39;pointer-events:none;transition:opacity .2s}
 .hunt.held{border-color:var(--red);box-shadow:0 0 0 2px var(--red),0 0 30px #ff4d5e66;animation:pulse 0.9s ease-in-out infinite}
+.team .risk{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-top:4px}.team .risk.hi{color:var(--red)}
+.heat{font-weight:700;margin-top:6px}

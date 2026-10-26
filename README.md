@@ -96,3 +96,8 @@ The scene has ~1,400 meshes and ~12 lights. If the first couple of seconds avera
 ## Drunk confidence (hints)
 - Each player gets a hidden sweet spot every season: meter 55–70, shifted ±10 (`p.tol`). Gut feelings by zone (`drinkZone`): under 20 none; warm 52% right (winner + total, vague); sweet spot 60% (all three markets, confident); past it just as confident but 35%; wasted (92+) obvious nonsense, a coin flip. Coming back down from past the spot = a 60 s hangover with no tips. A confident tip locks for that game.
 - The client never shows the zone: hint labels are "gut feeling" / "drunk confidence" (sweet and over look the same) / "wasted wisdom", the exact meter number only shows while sober, and the meters blur as you drink.
+
+## Fix heat
+- `fixRisk`: 10% + 10% per fix you've already bought + up to +35% for forcing a big upset, ×1.5 on the final, capped 5–85%; shown per side in Sal's tab. Each fix raises your heat.
+- Caught (rolled when betting closes): the game is void and every bet on it refunded, Sal still charges the fee, the fixers are barred from betting for the next 2 games. A caught championship = nobody gets the title.
+- A fixed championship that isn't caught still counts, but the end screen says TITLE VACATED* and the crew-win ticket bonus is halved.
