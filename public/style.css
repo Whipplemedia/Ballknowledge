@@ -270,3 +270,23 @@ body.ingame #app .hud button{pointer-events:auto}
 .reconn{position:fixed;left:50%;top:38%;transform:translateX(-50%);z-index:30;background:#2a1018f0;border:2px solid var(--red);color:#fff;font-weight:800;padding:12px 22px;border-radius:14px;box-shadow:0 8px 30px #000a;animation:pulse 1.2s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.6}}
 #loadbar{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted);font-weight:700}#loadbar b{display:block;height:8px;border-radius:99px;background:#0b1020;border:1px solid var(--line);overflow:hidden}#loadbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--green),var(--gold));transition:width .2s}
+
+/* compact HUD */
+body.compact .hud-goal.mini{font-size:12px;padding:4px 12px;max-width:min(380px,70vw);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.85}
+.hud-goal{transition:all .4s}
+.hud-feed div{transition:opacity .6s,transform .6s}
+body.compact .hud-feed div.gone{opacity:0;transform:translateX(-20px)}
+.hud-bounty .bmini{display:none;font-weight:800}
+body.compact .hud-bounty.mini .bmini{display:block}
+body.compact .hud-bounty.mini>:not(.bmini){display:none}
+body.compact .hud-bounty.mini{width:auto;padding:6px 10px;opacity:.85}
+/* Esc menu */
+.panel.menu{width:min(520px,94vw);max-height:94vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+.panel.menu .resume{font-size:18px;padding:12px}
+.msec{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.mrow{display:flex;align-items:center;gap:10px;font-weight:600}.mrow span{flex:1}.mrow input[type=range]{flex:1.4}.mrow b{width:52px;text-align:right;color:var(--gold)}
+.mrow input[type=checkbox]{width:20px;height:20px;accent-color:var(--green)}
+.mseg button{flex:1;background:var(--panel);color:var(--text);border:1px solid var(--line)}.mseg button.on{background:var(--green);color:#04120b;border-color:var(--green)}
+.keys{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:13px}.keys div{display:flex;gap:8px;align-items:center}
+.keys kbd{min-width:28px;text-align:center;padding:2px 6px;border-radius:6px;background:#0008;border:1px solid #fff5;font:800 12px system-ui}
+button.red-t{color:var(--red);border-color:#5a2230}

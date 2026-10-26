@@ -315,6 +315,7 @@ export function buildBar({ scene, BK, tv }) {
   npcs.forEach((n, i) => { if (!n.seated && ['Spectator', 'Patron', 'Watcher'].includes(n.name)) { n.wander = true; n.seed = 1000 + i * 17; n.phase = (i * 5.3) % SEG; n.wp = null; n.off = { x: 0, z: 0 }; } });
 
   function update(t, dt, me) {
+    let talking = npcs.filter((n) => n.bubble && n.bubble.sprite.visible).length;
     for (const n of npcs) {
       const koNow = n.ko && n.ko > BK.now();
       if (n.dizzy) n.dizzy.update(dt, t, headPos(n.P), !!koNow); // stars orbit the head while out cold, then shrink away
@@ -335,10 +336,13 @@ export function buildBar({ scene, BK, tv }) {
       }
       if (n.life) { life.tick(n.life, t, dt, { me, cam: { x: me.x, y: me.sit ? me.sit.sit + 0.76 : 1.65, z: me.z }, npcs }); animate(n.P, 'seated', t); life.place(n.life); }
       else { animate(n.P, mode, t); if (n.seated) n.P.legs.forEach((l) => (l.rotation.x = 1.45)); }
-      const near = Math.hypot(n.P.group.position.x - me.x, n.P.group.position.z - me.z) < 7;
-      if (n.bubble) {
-        if (t > n.until && n.bubble.sprite.visible) n.bubble.set('');
-        if (t > n.next && near) { n.bubble.set(n.lines[Math.floor(Math.random() * n.lines.length)]); n.until = t + 3.8; n.next = t + 8 + Math.random() * 14; }
+      if (n.bubble) { // speech bubbles: only nearby NPCs in front of you, at most two at once, sized by distance so they never fill the screen
+        const bs = n.bubble.sprite, gp = n.P.group.position, d = Math.hypot(gp.x - me.x, gp.z - me.z), want = !(BK.settings && BK.settings.bubbles === false);
+        if (bs.visible && (t > n.until || !want || d > 8)) { n.bubble.set(''); talking--; }
+        const ahead = me.yaw === undefined || ((gp.x - me.x) * -Math.sin(me.yaw) + (gp.z - me.z) * -Math.cos(me.yaw)) / (d || 1) > 0.25;
+        if (t > n.next && want && d < 6 && ahead && talking < 2 && !bs.visible) { n.bubble.set(n.lines[Math.floor(Math.random() * n.lines.length)]); n.until = t + 3.8; talking++; }
+        if (t > n.next) n.next = t + 8 + Math.random() * 14;
+        if (bs.visible) { const k = Math.min(1, Math.max(0.55, 0.38 + d * 0.11)); bs.scale.set(1.2 * k, 0.375 * k, 1); }
       }
     }
     const p = dg.attributes.position; for (let i = 0; i < dustN; i++) { p.array[i * 3 + 1] += dt * 0.03 * (1 + (i % 3)); if (p.array[i * 3 + 1] > 4.6) p.array[i * 3 + 1] = 0.1; p.array[i * 3] += Math.sin(t * 0.2 + i) * dt * 0.02; }

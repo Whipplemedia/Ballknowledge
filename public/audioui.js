@@ -18,7 +18,7 @@ export function createAudioUI(voice, BK) {
       <div class="arow"><span>Mic level</span><i class="meter"><u id="micmeter"></u></i></div>
       <p class="ahint">${peers} connected: ${[...voice.peers.values()].map((p) => `<span class="${p.speaking ? 'sp' : ''}">${names[p.id] || p.id} (${p.state})</span>`).join(', ') || 'nobody else on voice yet'}. M mutes.</p>` : '<p class="ahint">Voice is peer-to-peer. Your browser will ask for microphone access. Use headphones to avoid echo.</p>'}`;
   };
-  const open = () => { document.exitPointerLock && document.exitPointerLock(); paint(); box.classList.remove('hidden'); };
+  const open = () => { BK.freeMouse = true; document.exitPointerLock && document.exitPointerLock(); paint(); box.classList.remove('hidden'); };
   const close = () => box.classList.add('hidden');
   btn.onclick = () => (box.classList.contains('hidden') ? open() : close());
   addEventListener('keydown', (e) => { if (e.code === 'KeyO' && !/INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '')) (box.classList.contains('hidden') ? open() : close()); });

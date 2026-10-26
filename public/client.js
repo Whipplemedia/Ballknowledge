@@ -8,6 +8,11 @@ let ws, S = null, err = '', skew = 0, stateAt = 0;
 const ui = { shop: false, shopTab: 'all', reveal: null, tab: 'book', open: false, sel: null, stake: 100, giveTo: '', giveAmt: 100, rChip: 25, rBets: {}, rHist: [], fightStake: 50, intelTab: 'stats' };
 const now = () => Date.now() + skew;
 
+// ---------- player settings (Esc menu): saved in this browser ----------
+const SET_KEY = 'bk_settings_v1';
+const settings = Object.assign({ sens: 1, invert: false, fov: 72, quality: 'auto', compact: true, bubbles: true }, (() => { try { return JSON.parse(localStorage.getItem(SET_KEY)) || {}; } catch { return {}; } })());
+function saveSettings() { try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch {} }
+
 // ---------- local save: tickets + inventory (browser only) ----------
 const SAVE_KEY = 'bk_save_v1';
 function loadSave() { try { const o = JSON.parse(localStorage.getItem(SAVE_KEY)); if (o && Array.isArray(o.inv)) return o; } catch {} return { tix: 60, inv: [], eq: {} }; }
@@ -57,16 +62,49 @@ function toast(text, kind = 'info') {
 }
 
 // ---------- panels / pointer lock ----------
+// ---------- Esc menu: opens when the mouse is released (Esc / clicking away) during play. The bar keeps running - it's multiplayer.
+function openMenu() { if (!S || !['play', 'hunt'].includes(S.phase) || ui.open || ui.shop) return; ui.menu = true; render(); }
+function closeMenu(relock = true) { ui.menu = false; render(); if (relock) { try { document.getElementById('world').requestPointerLock(); } catch {} } }
+function setOpt(k, v) { settings[k] = v; saveSettings(); if (k === 'quality') window.BK.setQuality && window.BK.setQuality(v); render(); }
+function leaveGame() { if (!confirm('Leave this game? Your crew keeps playing; you can rejoin with the room code only while it is in the lobby.')) return; sess = null; saveSess(); if (ws) { ws.dead = true; try { ws.close(); } catch {} } location.reload(); }
+function menuView() {
+  const q = settings.quality, r = (k, v, l) => `<button class="${settings[k] === v ? 'on' : ''}" onclick="setOpt('${k}','${v}')">${l}</button>`;
+  const tog = (k, l) => `<label class="mrow"><span>${l}</span><input type="checkbox" ${settings[k] ? 'checked' : ''} onchange="setOpt('${k}',this.checked)"></label>`;
+  return `<div class="overlay"><div class="panel menu"><div class="mhead"><div class="big">⏸ Menu</div><div class="muted">The bar keeps going while you're in here.</div></div>
+    <button class="green resume" onclick="closeMenu()">▶ Resume</button>
+    <div class="msec"><div class="title">Controls</div>
+      <label class="mrow"><span>Mouse sensitivity</span><input type="range" min="0.3" max="3" step="0.05" value="${settings.sens}" oninput="settings.sens=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)+'x'" onchange="saveSettings()"><b>${(+settings.sens).toFixed(2)}x</b></label>
+      ${tog('invert', 'Invert mouse Y')}
+      <label class="mrow"><span>Field of view</span><input type="range" min="60" max="100" step="1" value="${settings.fov}" oninput="settings.fov=+this.value;this.nextElementSibling.textContent=this.value+'°'" onchange="saveSettings()"><b>${settings.fov}°</b></label></div>
+    <div class="msec"><div class="title">Graphics</div><div class="row mseg">${r('quality', 'auto', 'Auto')}${r('quality', 'high', 'High')}${r('quality', 'low', 'Low (faster)')}</div>
+      <div class="muted" style="font-size:12px">${q === 'auto' ? 'Drops to Low by itself if the first seconds run slowly.' : q === 'low' ? 'No shadows or glow, lower resolution.' : 'Shadows, glow and full resolution.'}</div></div>
+    <div class="msec"><div class="title">Screen</div>${tog('compact', 'Compact HUD (H)')}${tog('bubbles', 'NPC speech bubbles')}</div>
+    <div class="row"><button onclick="closeMenu(false);window.BK.audioUI&&window.BK.audioUI.open()">🔊 Sound &amp; voice</button><button onclick="ui.menuKeys=!ui.menuKeys;render()">⌨ ${ui.menuKeys ? 'Hide' : 'Show'} all controls</button></div>
+    ${ui.menuKeys ? `<div class="keys">${[['WASD', 'Move'], ['Shift', 'Run'], ['Space', 'Jump'], ['Mouse', 'Look'], ['E', 'Interact / sit / stand'], ['F or right-click', 'Throw a bottle'], ['1-9', 'Pop-up buttons'], ['Tab', 'Free the mouse'], ['C', 'Crew & wire money'], ['H', 'Compact / full HUD'], ['V', 'Push-to-talk'], ['M', 'Mute mic'], ['O', 'Sound & voice'], ['Esc', 'This menu']].map(([k, d]) => `<div><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</div>` : ''}
+    <div class="row"><span class="muted">Room <b>${S.code}</b></span><button class="ghost red-t" style="margin-left:auto" onclick="leaveGame()">Leave game</button></div>
+  </div></div>`;
+}
 function openPanel(tab) { window.BK.leaveGames && window.BK.leaveGames(); ui.open = true; if (tab) ui.tab = tab; document.exitPointerLock && document.exitPointerLock(); render(); }
 function closePanel() { ui.open = false; render(); try { document.getElementById('world').requestPointerLock(); } catch {} }
-window.BK = { get S() { return S; }, ui, send, openPanel, closePanel, now, toast, get drunk() { return drunkLevel(); } };
-addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (ui.shop) closeShop(); else if (ui.open) closePanel(); } });
+window.BK = { get S() { return S; }, ui, send, openPanel, closePanel, now, toast, settings, openMenu, get drunk() { return drunkLevel(); } };
+addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (ui.menu) closeMenu(); else if (ui.shop) closeShop(); else if (ui.open) closePanel(); } });
 function drunkLevel() { if (!S) return 0; return Math.max(0, S.me.drunk - (Date.now() - stateAt) / (S.me.decay || 6000)); }
 
 // ---------- render ----------
 let lastPhase = null;
 // ---------- HUD hotkeys: pop-ups (bar fight, collectors, hitmen) appear while the mouse is captured for looking around,
 // so every visible HUD button gets a number key (1-9) and Tab frees the cursor to click instead
+// compact HUD: things that just changed show in full, then step back after a few seconds
+function hudCompact() {
+  document.body.classList.toggle('compact', !!settings.compact);
+  if (!S || !S.me || !['play', 'hunt'].includes(S.phase) || !S.events) return;
+  const g = goalText(); if (g !== ui.goalText) { ui.goalText = g; ui.goalAt = Date.now(); }
+  const bs = JSON.stringify((S.me.bounties || []).map((b) => b.done)); if (bs !== ui.bSig) { ui.bSig = bs; ui.bAt = Date.now(); }
+  const t = Date.now(), c = settings.compact;
+  const ge = $('#goal'); if (ge) ge.classList.toggle('mini', c && t - ui.goalAt > 9000);
+  const be = $('#bounty'); if (be) be.classList.toggle('mini', c && t - ui.bAt > 12000);
+  for (const d of document.querySelectorAll('#app .hud-feed div[data-t]')) d.classList.toggle('gone', c && now() - Number(d.dataset.t) > 12000);
+}
 function hudHotkeys() {
   let k = 0;
   for (const b of document.querySelectorAll('#app .hud button')) {
@@ -78,11 +116,12 @@ function hudHotkeys() {
   const sig = [...document.querySelectorAll('#app .hud button[data-hk]')].map((b) => b.closest('.hud-event,.hunt')?.className || '').join('|');
   if (k && sig && sig !== ui.hkSig && document.pointerLockElement) toast(`Press 1${k > 1 ? '-' + k : ''} to choose, or Tab to use the mouse`, 'info');
   ui.hkSig = k ? sig : '';
-  const help = document.querySelector('#app .hud-help'); if (help) help.textContent = `WASD move · Space jump · Mouse look · E interact · C crew/wire${k ? ' · 1-' + k + ' pop-up buttons · Tab free the mouse' : ''} · Esc menu`;
+  const help = document.querySelector('#app .hud-help'); if (help) help.textContent = `WASD move · Space jump · Mouse look · E interact · C crew/wire${k ? ' · 1-' + k + ' pop-up buttons · Tab free the mouse' : ''} · H ${settings.compact ? 'full' : 'compact'} HUD · Esc menu`;
 }
 addEventListener('keydown', (e) => {
-  if (!S || !['play', 'hunt'].includes(S.phase) || ui.open || ui.shop || /INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '')) return;
-  if (e.code === 'Tab') { e.preventDefault(); if (document.pointerLockElement) document.exitPointerLock(); else { try { document.getElementById('world').requestPointerLock(); } catch {} } return; }
+  if (!S || !['play', 'hunt'].includes(S.phase) || ui.open || ui.shop || ui.menu || /INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '')) return;
+  if (e.code === 'KeyH' && !e.repeat) { settings.compact = !settings.compact; saveSettings(); toast(settings.compact ? 'Compact HUD on (H)' : 'Full HUD (H)', 'info'); render(); return; }
+  if (e.code === 'Tab') { e.preventDefault(); if (document.pointerLockElement) { window.BK.freeMouse = true; document.exitPointerLock(); } else { try { document.getElementById('world').requestPointerLock(); } catch {} } return; }
   const m = /^(?:Digit|Numpad)([1-9])$/.exec(e.code); if (!m || e.repeat) return;
   const b = document.querySelector(`#app .hud button[data-hk="${m[1]}"]`); if (!b || b.disabled) return;
   e.preventDefault(); b.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); b.click(); window.BK.sfx && window.BK.sfx('click');
@@ -106,8 +145,9 @@ function render() {
   else if (S.phase === 'ended') app.innerHTML = endView();
   else app.innerHTML = gameView();
   if (ui.shop) app.insertAdjacentHTML('beforeend', shopView());
+  if (ui.menu && S && ['play', 'hunt'].includes(S.phase) && !ui.open && !ui.shop) app.insertAdjacentHTML('beforeend', menuView()); else ui.menu = false;
   if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { el.setSelectionRange(keep.s, keep.e); } catch {} } }
-  tick(); hudHotkeys();
+  tick(); hudHotkeys(); hudCompact();
   window.BK.onRender && window.BK.onRender();
 }
 
@@ -171,7 +211,7 @@ function tick() {
   const st = $('#shaket'); if (st && S.shake) st.textContent = mmss(S.shake.until - now());
   const dm = $('#drunkfill'); if (dm) dm.style.width = Math.round(drunkLevel()) + '%';
 }
-setInterval(() => S && tick(), 250);
+setInterval(() => { if (S) { tick(); hudCompact(); } }, 250);
 
 // ---------- game HUD ----------
 function resultOf(e) { const r = S.me.results[e.idx]; return r ? r.delta : null; }
@@ -209,11 +249,11 @@ function gameView() {
     </div>
     ${ui.reconnecting ? '<div class="reconn">📶 Connection lost - reconnecting...</div>' : ''}
     <div class="hud-clock"><span class="pill time" id="timer"></span></div>
-    <div class="hud-goal">${goalText()}</div>
+    <div class="hud-goal" id="goal">${goalText()}</div>
     ${quotaHud()}${eventBanner()}${bountyHud()}${shakeBanner()}
     ${hunt ? huntBanner() : ''}
     <div class="hud-crew">${playerList()}</div>
-    <div class="hud-feed">${[...S.feed].slice(-4).reverse().map((f) => `<div>${esc(f.text)}</div>`).join('')}</div>
+    <div class="hud-feed">${[...S.feed].slice(-4).reverse().map((f) => `<div data-t="${f.t}">${esc(f.text)}</div>`).join('')}</div>
     <div class="hud-help">WASD move · Mouse look · E interact · C crew/wire · Esc menu</div>
   </div>
   ${ui.open ? `<div class="overlay"><div class="panel">
@@ -420,7 +460,8 @@ function quotaHud() {
 }
 function bountyHud() {
   const b = S.me.bounties || []; if (!b.length) return '';
-  return `<div class="hud-bounty"><div class="qt">🎯 BOUNTIES</div>${b.map((x) => `<div class="bn ${x.done ? 'done' : ''}">${x.done ? '✅' : '☐'} ${esc(x.text)} <b>+${x.reward}🎟</b></div>`).join('')}</div>`;
+  const done = b.filter((x) => x.done).length;
+  return `<div class="hud-bounty" id="bounty"><div class="bmini">🎯 BOUNTIES · ${done}/${b.length} done <span class="muted">(H shows all)</span></div><div class="qt">🎯 BOUNTIES</div>${b.map((x) => `<div class="bn ${x.done ? 'done' : ''}">${x.done ? '✅' : '☐'} ${esc(x.text)} <b>+${x.reward}🎟</b></div>`).join('')}</div>`;
 }
 // bar fight bets work from the keyboard: the banner pops up while the mouse is captured for looking around, so there is no cursor to click it
 const FIGHT_STAKES = [50, 100, 300];

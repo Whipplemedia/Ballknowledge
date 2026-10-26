@@ -80,3 +80,8 @@ The scene has ~1,400 meshes and ~12 lights. If the first couple of seconds avera
 - All character and prop GLBs are compressed with glTF-Transform (`gltf-transform webp --quality 88` then `gltf-transform meshopt --level medium`): ~18 MB → ~7.9 MB. They need the meshopt decoder (`public/vendor/addons/libs/meshopt_decoder.module.js`), wired up by `public/loading.js` (`gltfLoader()`); use it for any new GLB. Re-run the same two commands on new Meshy downloads before committing them.
 - `loading.js` also drives the loading bar (join screen, lobby, and an in-game "getting the bar ready" card if a game starts before the models finish).
 - The server serves static files with ETags (repeat visits get 304s) and caches gzip copies in memory (three.module.js 1.27 MB → 257 KB). First visit ≈ 7.8 MB on the wire instead of ≈ 20 MB.
+
+## HUD, speech bubbles & Esc menu
+- Compact HUD (default; H toggles, also in the menu): the objective banner shrinks to one line 9 s after it changes, feed lines fade after 12 s, and the bounties card collapses to a "0/3 done" line 12 s after a bounty changes.
+- NPC speech bubbles are smaller, scaled with distance (never screen-filling up close), hidden behind walls (depth tested), only from NPCs within 6 m in front of you, and at most two at once. They can be turned off in the menu.
+- Esc menu (`menuView` in client.js): opens whenever the mouse is released during play (Esc or clicking away), except when a panel, the shop, the sound panel or Tab released it. Resume, mouse sensitivity, invert Y, field of view, graphics Auto/High/Low (`BK.setQuality`), compact HUD, speech bubbles, sound & voice, full controls list, leave game. Settings are saved in `localStorage` (`bk_settings_v1`) and read by world.js each frame.

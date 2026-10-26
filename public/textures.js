@@ -89,7 +89,7 @@ export function label(text, color = '#fff', scale = 1, w = 256) {
 }
 export function bubble() {
   const { c, g, t } = canvasTex(512, 160, () => {});
-  const mat = new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true, toneMapped: false, fog: false }); const s = new THREE.Sprite(mat); s.scale.set(1.7, 0.53, 1); s.renderOrder = 11; s.visible = false;
+  const mat = new THREE.SpriteMaterial({ map: t, depthTest: true, depthWrite: false, transparent: true, toneMapped: false, fog: false }); const s = new THREE.Sprite(mat); s.scale.set(1.2, 0.375, 1); s.renderOrder = 11; s.visible = false; // hidden behind walls; bar.js scales it with distance
   return { sprite: s, set(text) {
     if (!text) { s.visible = false; return; }
     g.clearRect(0, 0, 512, 160); g.fillStyle = '#fff'; g.strokeStyle = '#222'; g.lineWidth = 6; g.beginPath(); g.roundRect(8, 8, 496, 110, 24); g.fill(); g.stroke();

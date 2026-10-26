@@ -51,7 +51,7 @@ const fx = createFX(renderer, scene, camera);
 // ---------- sound + voice ----------
 const voice = createVoice(BK), audioUI = createAudioUI(voice, BK);
 BK.onSession = () => { if (voice.enabled) BK.send({ type: 'rtc', to: '*', data: { k: 'hello' } }); }; // (re)joined: let voice peers find us again
-BK.audio = audio; BK.voice = voice; BK.sfx = (n, o) => audio.sfx(n, o); BK.onRtc = (m) => voice.onSignal(m);
+BK.audio = audio; BK.voice = voice; BK.audioUI = audioUI; BK.sfx = (n, o) => audio.sfx(n, o); BK.onRtc = (m) => voice.onSignal(m);
 document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('button,[onclick]') && !e.target.closest('#audiopanel')) audio.sfx('click'); }, true);
 const sfxAt = (n, x, z, y = 1.2, o = {}) => audio.sfx(n, { pos: { x, y, z }, ...o });
 BK.sfxAt = sfxAt;
@@ -97,11 +97,16 @@ addEventListener('keydown', (e) => {
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 let lockAt = 0;
-document.addEventListener('pointerlockchange', () => { lockAt = performance.now(); if (games.active()) games.setPaused(document.pointerLockElement !== canvas); });
+document.addEventListener('pointerlockchange', () => {
+  lockAt = performance.now(); if (games.active()) games.setPaused(document.pointerLockElement !== canvas);
+  if (document.pointerLockElement === canvas) { BK.freeMouse = false; if (BK.ui.menu) { BK.ui.menu = false; window.render && window.render(); } return; }
+  // mouse released by Esc / clicking away (not by a panel, the shop, Tab or the sound panel): show the Esc menu
+  if (active() && !BK.ui.open && !BK.ui.shop && !BK.freeMouse && !BK.ui.menu) BK.openMenu();
+});
 addEventListener('mousemove', (e) => {
   if (document.pointerLockElement !== canvas || roulette.lookTarget() || performance.now() - lockAt < 250 || koNow()) return;
   const mx = Math.max(-150, Math.min(150, e.movementX)), my = Math.max(-150, Math.min(150, e.movementY)); // ignore bogus jumps when the lock is (re)acquired
-  me.yaw -= mx * 0.0022; me.pitch = Math.max(-1.3, Math.min(1.3, me.pitch - my * 0.0022));
+  const ks = 0.0022 * ((BK.settings && BK.settings.sens) || 1), inv = BK.settings && BK.settings.invert ? -1 : 1; me.yaw -= mx * ks; me.pitch = Math.max(-1.3, Math.min(1.3, me.pitch - my * ks * inv));
   if (me.sit) { const d = Math.atan2(Math.sin(me.yaw - me.sit.yaw), Math.cos(me.yaw - me.sit.yaw)); if (Math.abs(d) > 1.75) me.yaw = me.sit.yaw + Math.sign(d) * 1.75; me.pitch = Math.max(-0.9, Math.min(0.8, me.pitch)); }
   games.clampLook();
 });
@@ -214,6 +219,10 @@ let prev = performance.now(), spawned = false, t0 = performance.now(), shadowTic
 // auto performance mode: if the first ~2 seconds average under ~30fps, drop shadows, bloom and resolution
 const perf = { frames: 0, acc: 0, done: !!navigator.webdriver || /[?&]quality=high/.test(location.search), low: /[?&]quality=low/.test(location.search) };
 function setLowQuality() { renderer.setPixelRatio(1); renderer.shadowMap.enabled = false; scene.traverse((o) => { if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => (m.needsUpdate = true)); } }); fx.setBloom(false); resize(); console.log('Ball Knowledge: performance mode on'); }
+function setHighQuality() { renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)); renderer.shadowMap.enabled = true; renderer.shadowMap.needsUpdate = true; scene.traverse((o) => { if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => (m.needsUpdate = true)); } }); fx.setBloom(true); resize(); }
+// graphics setting from the Esc menu: 'low' / 'high' are fixed; 'auto' keeps the first-seconds check (or leaves things as they are)
+BK.setQuality = (q) => { if (q === 'low') { perf.done = true; setLowQuality(); } else if (q === 'high') { perf.done = true; setHighQuality(); } };
+{ const q = BK.settings && BK.settings.quality; if (q === 'low') perf.low = true; else if (q === 'high') perf.done = true; }
 function resize() { renderer.setSize(innerWidth, innerHeight, false); fx.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 BK.onRender = () => {
@@ -245,6 +254,7 @@ function frame(now) {
   else camera.position.set(me.x, EYE + (me.jy || 0) + Math.sin(now / 180) * (moving ? 0.03 : 0.004), me.z);
   const off = games.camOffset(now);
   camera.rotation.set(me.pitch + off.p + Math.sin(t * 0.7) * drunkAmt * 0.03, me.yaw + off.y + Math.sin(t * 0.5) * drunkAmt * 0.05, Math.sin(t * 0.9) * drunkAmt * 0.07);
+  { const f = (BK.settings && BK.settings.fov) || 72; if (Math.abs(camera.fov - f) > 0.01) { camera.fov = f; camera.updateProjectionMatrix(); } }
   games.update(dt); games.rig(camera);
   { const gOn = games.active(); for (const n of bar.npcs) { const g = n.P.group, hide = gOn && Math.hypot(g.position.x - camera.position.x, g.position.z - camera.position.z) < 1.1 && !n.seated; if (g.visible === hide) g.visible = !hide; } }
   // ---- audio frame: listener, footsteps, bar-event cues, voice
@@ -295,8 +305,8 @@ function frame(now) {
     animate(h.P, 'walk', t + h.ph, 0.5);
   });
   const st = nearest();
-  if (st && !BK.ui.open && !BK.ui.shop && !me.sit && !games.active()) { promptEl.textContent = st.text; promptEl.classList.remove('hidden'); } else promptEl.classList.add('hidden');
-  if (!st && !games.active() && !BK.ui.open && !BK.ui.shop && document.pointerLockElement !== canvas) { promptEl.textContent = 'Click to look around'; promptEl.classList.remove('hidden'); }
+  if (st && !BK.ui.open && !BK.ui.shop && !BK.ui.menu && !me.sit && !games.active()) { promptEl.textContent = st.text; promptEl.classList.remove('hidden'); } else promptEl.classList.add('hidden');
+  if (!st && !games.active() && !BK.ui.open && !BK.ui.shop && !BK.ui.menu && document.pointerLockElement !== canvas) { promptEl.textContent = 'Click to look around'; promptEl.classList.remove('hidden'); }
   fx.setDrunk(drunkAmt, t);
   fx.render();
 }
