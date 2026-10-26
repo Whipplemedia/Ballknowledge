@@ -58,7 +58,7 @@ export function createBottles({ scene, camera, BK, me, obstacles, getAvatars, ge
     fx(dt) {
       for (let i = st.shards.length - 1; i >= 0; i--) { const s = st.shards[i]; s.life -= dt; s.v.y -= G * dt; s.m.position.addScaledVector(s.v, dt); s.m.rotation.x += 9 * dt; if (s.m.position.y < 0.02) { s.m.position.y = 0.02; s.v.set(0, 0, 0); } if (s.life <= 0) { scene.remove(s.m); st.shards.splice(i, 1); } }
     },
-    setKo(secsLeft) { ko.classList.toggle('hidden', !(secsLeft > 0)); if (secsLeft > 0) ko.innerHTML = `<b>💫 KNOCKED OUT 💫</b><span>${Math.ceil(secsLeft)}</span>`; },
+    setKo(secsLeft) { ko.classList.toggle('hidden', !(secsLeft > 0)); if (secsLeft > 0) ko.innerHTML = `<b>SEEING STARS</b><span>${Math.ceil(secsLeft)}</span>`; },
     paint,
   };
   // ---- bottles standing on tables around the bar: E (or aim + E) takes one; the server hides it for everyone and respawns it later

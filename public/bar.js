@@ -4,6 +4,7 @@ import { hasProp, prop } from './props.js';
 import { makePreset, makePerson, randomPatron, animate } from './people.js';
 import { BY_ID, applyCosmetics } from './cosmetics.js';
 import { createSeatedLife } from './seated.js';
+import { makeDizzy, headPos } from './dizzy.js';
 
 export const ROOM = { x: 12, z: 8, h: 5 };
 
@@ -312,10 +313,11 @@ export function buildBar({ scene, BK, tv }) {
   function update(t, dt, me) {
     for (const n of npcs) {
       const koNow = n.ko && n.ko > BK.now();
+      if (n.dizzy) n.dizzy.update(dt, t, headPos(n.P), !!koNow); // stars orbit the head while out cold, then shrink away
       if (koNow || n._koOn) { // knocked out by a bottle: stars, slump (seated) or fall flat on the back (standing)
-        if (koNow && !n._koOn) { n._koOn = true; n.P.group.rotation.order = 'YXZ'; if (!n.star) { n.star = TX.label('💫 KO 💫', '#ffd04a', 0.7); n.star.position.y = 2.35; n.P.group.add(n.star); } n.star.visible = true; }
-        if (koNow) { animate(n.P, n.seated ? 'sleep' : 'idle', t); if (n.life) life.place(n.life); if (!n.seated) { n.P.group.rotation.x += (Math.PI / 2 - n.P.group.rotation.x) * Math.min(1, dt * 12); n.P.group.position.y = (n.P.baseY || 0) + 0.2; } else n.P.legs.forEach((l) => (l.rotation.x = 1.45)); n.star.material.rotation = Math.sin(t * 6) * 0.15; if (n.bubble) n.bubble.set(''); continue; }
-        n._koOn = false; if (n.wander) { const s = wanderPos(n, BK.now() / 1000); n.off.x = n.P.group.position.x - s.x; n.off.z = n.P.group.position.z - s.z; n._sx = n.P.group.position.x; n._sz = n.P.group.position.z; } n.P.group.rotation.x = 0; n.P.group.position.y = n.P.baseY || 0; if (n.star) n.star.visible = false; BK.sfx && BK.sfx('boing', { pos: { x: n.P.group.position.x, y: 1.4, z: n.P.group.position.z } });
+        if (koNow && !n._koOn) { n._koOn = true; n.P.group.rotation.order = 'YXZ'; if (!n.dizzy) n.dizzy = makeDizzy(scene); }
+        if (koNow) { animate(n.P, n.seated ? 'sleep' : 'idle', t); if (n.life) life.place(n.life); if (!n.seated) { n.P.group.rotation.x += (Math.PI / 2 - n.P.group.rotation.x) * Math.min(1, dt * 12); n.P.group.position.y = (n.P.baseY || 0) + 0.2; } else n.P.legs.forEach((l) => (l.rotation.x = 1.45)); if (n.bubble) n.bubble.set(''); continue; }
+        n._koOn = false; if (n.wander) { const s = wanderPos(n, BK.now() / 1000); n.off.x = n.P.group.position.x - s.x; n.off.z = n.P.group.position.z - s.z; n._sx = n.P.group.position.x; n._sz = n.P.group.position.z; } n.P.group.rotation.x = 0; n.P.group.position.y = n.P.baseY || 0;  BK.sfx && BK.sfx('boing', { pos: { x: n.P.group.position.x, y: 1.4, z: n.P.group.position.z } });
       }
       let mode = n.mode;
       if (n.wander) {

@@ -10,6 +10,7 @@ import { createVoice } from './voice.js';
 import { createAudioUI } from './audioui.js';
 import { createBottles } from './bottles.js';
 import { label } from './textures.js';
+import { makeDizzy, headPos } from './dizzy.js';
 import { CATALOG, BY_ID, RARITY, SLOTS, rollCrate, createPreview, applyCosmetics, tickCosmetics } from './cosmetics.js';
 
 const BK = window.BK;
@@ -108,7 +109,7 @@ BK.onPos = (m) => { const a = avatars.get(m.id); if (a) { a.tx = m.x; a.tz = m.z
 function syncAvatars() {
   const S = BK.S, inGame = active();
   const ids = new Set(inGame ? S.players.filter((p) => p.id !== S.you).map((p) => p.id) : []);
-  for (const [id, a] of avatars) if (!ids.has(id)) { scene.remove(a.P.group); if (a.life) bar.life.remove(a.life); avatars.delete(id); }
+  for (const [id, a] of avatars) if (!ids.has(id)) { scene.remove(a.P.group); if (a.dizzy) scene.remove(a.dizzy.root); if (a.life) bar.life.remove(a.life); avatars.delete(id); }
   if (!inGame) return;
   for (const p of S.players) {
     if (p.id === S.you) continue;
@@ -194,6 +195,8 @@ function seatedLife(a, seat) {
   } }); a.lifeSeat = seat; }
   else if (a.lifeSeat !== seat) { bar.life.refit(a.life, opts); a.lifeSeat = seat; }
 }
+// your own knockout: stars circling across your (tilted) view
+const myDizzy = makeDizzy(camera, { radius: 0.17, scale: 1 }); myDizzy.root.position.set(0, 0.08, -0.55);
 let lastSend = 0, lastPos = '', lastBeat = 0;
 function netSend(t) {
   if (t - lastSend < 80) return; lastSend = t;
@@ -240,7 +243,7 @@ function frame(now) {
   { const gOn = games.active(); for (const n of bar.npcs) { const g = n.P.group, hide = gOn && Math.hypot(g.position.x - camera.position.x, g.position.z - camera.position.z) < 1.1 && !n.seated; if (g.visible === hide) g.visible = !hide; } }
   // ---- audio frame: listener, footsteps, bar-event cues, voice
   audio.update(dt, camera); audioUI.show(active()); voice.update(dt, avatars);
-  bottles.update(dt); bottles.updateSpots(dt); { const left = koNow() ? (me.koUntil - BK.now()) / 1000 : 0; bottles.setKo(left); if (!left && me.koUntil) { me.koUntil = 0; audio.sfx('boing'); } if (left) { camera.position.y = 0.32; camera.rotation.z = 1.25; camera.rotation.x = 0.4; } }
+  bottles.update(dt); bottles.updateSpots(dt); { const left = koNow() ? (me.koUntil - BK.now()) / 1000 : 0; myDizzy.update(dt, t, null, left > 0); bottles.setKo(left); if (!left && me.koUntil) { me.koUntil = 0; audio.sfx('boing'); } if (left) { camera.position.y = 0.32; camera.rotation.z = 1.25; camera.rotation.x = 0.4; } }
   { const mvd = Math.hypot(me.x - (me._lx ?? me.x), me.z - (me._lz ?? me.z)); me._lx = me.x; me._lz = me.z;
     if (!me.sit && !games.active() && mvd < 1.2) { me._step = (me._step || 0) + mvd; if (me._step > (keys.ShiftLeft ? 0.95 : 0.7)) { me._step = 0; audio.sfx('step', { v: keys.ShiftLeft ? 0.9 : 0.6 }); } } }
   { const be = BK.S && BK.S.barEvent, kind = be ? be.kind : null; if (kind !== audio._ev) { const prev = audio._ev; audio._ev = kind;
@@ -268,10 +271,11 @@ function frame(now) {
       const near = dist < 0.55; if (a.hideNear !== near) { a.hideNear = near; g.children.forEach((o) => { if (!o.isSprite) o.visible = !near; }); } }
     if (!a.mic) { a.mic = label('🎙', '#2ee09a', 0.55); a.mic.position.y = 2.65; a.mic.visible = false; g.add(a.mic); } const spk = voice.speaking(a.id); if (a.mic.visible !== spk) a.mic.visible = spk;
     { const down = a.ko && a.ko > BK.now();
+      if (a.dizzy) a.dizzy.update(dt, t, headPos(a.P), down);
       if (down || a._koOn) {
-        if (down && !a._koOn) { a._koOn = true; g.rotation.order = 'YXZ'; if (!a.star) { a.star = label('💫 KO 💫', '#ffd04a', 0.7); a.star.position.y = 2.35; g.add(a.star); } a.star.visible = true; }
+        if (down && !a._koOn) { a._koOn = true; g.rotation.order = 'YXZ'; if (!a.dizzy) a.dizzy = makeDizzy(scene); }
         if (down) { animate(a.P, 'idle', t); g.rotation.x += (Math.PI / 2 - g.rotation.x) * Math.min(1, dt * 12); g.position.y = (a.P.baseY || 0) + 0.2; continue; }
-        a._koOn = false; g.rotation.x = 0; g.position.y = a.P.baseY || 0; if (a.star) a.star.visible = false; audio.sfx('boing', { pos: { x: g.position.x, y: 1.4, z: g.position.z } });
+        a._koOn = false; g.rotation.x = 0; g.position.y = a.P.baseY || 0; audio.sfx('boing', { pos: { x: g.position.x, y: 1.4, z: g.position.z } });
       } }
     a.P.moveSpeed = sp;
     if (seat && a.P.skinned) { seatedLife(a, seat); bar.life.tick(a.life, t, dt, {}); animate(a.P, 'seated', t); bar.life.place(a.life); tickCosmetics(a.P, t); continue; }
