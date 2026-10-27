@@ -41,6 +41,7 @@ function connect(msg) {
     else if (m.type === 'goonDodge') window.BK.onGoonDodge && window.BK.onGoonDodge(m);
     else if (m.type === 'ko') window.BK.onKo && window.BK.onKo(m);
     else if (m.type === 'spin') window.BK.onSpin && window.BK.onSpin(m);
+    else if (m.type === 'slot') { window.BK.onSlot && window.BK.onSlot(m); if (S && m.by === S.you) slotResult(m); }
     else if (m.type === 'pelt') window.BK.onPelt && window.BK.onPelt(m);
     else if (m.type === 'kiss') window.BK.onKiss && window.BK.onKiss(m);
     else if (m.type === 'npcSay') window.BK.onNpcSay && window.BK.onNpcSay(m);
@@ -78,7 +79,7 @@ function menuView() {
   const q = settings.quality, r = (k, v, l) => `<button class="${settings[k] === v ? 'on' : ''}" onclick="setOpt('${k}','${v}')">${l}</button>`;
   const tog = (k, l) => `<label class="mrow"><span>${l}</span><input type="checkbox" ${settings[k] ? 'checked' : ''} onchange="setOpt('${k}',this.checked)"></label>`;
   return `<div class="overlay"><div class="panel menu"><div class="mhead"><div class="big">⏸ Menu</div><div class="muted">The bar keeps going while you're in here.</div></div>
-    <button class="green resume" onclick="closeMenu()">▶ Resume</button>
+    <button class="green resume cta" onclick="closeMenu()">▶ Resume</button>
     <div class="msec"><div class="title">Controls</div>
       <label class="mrow"><span>Mouse sensitivity</span><input type="range" min="0.3" max="3" step="0.05" value="${settings.sens}" oninput="settings.sens=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)+'x'" onchange="saveSettings()"><b>${(+settings.sens).toFixed(2)}x</b></label>
       ${tog('invert', 'Invert mouse Y')}
@@ -174,7 +175,7 @@ function joinView() {
     ${ui.rejoining ? `<div class="muted">Rejoining room <b>${esc(sess.code)}</b>...</div>` : ''}${err ? `<div class="bad">${esc(err)}</div>` : ''}
     <input id="name" placeholder="Your name" maxlength="16">
     ${loadBar()}
-    <button onclick="doJoin()">Create a crew</button>
+    <button class="cta" onclick="doJoin()">Create a crew</button>
     <div class="row"><input id="code" placeholder="Room code" maxlength="4" style="text-transform:uppercase"><button class="ghost fit" onclick="doJoin(true)">Join</button></div>
   </div></div>`;
 }
@@ -217,7 +218,7 @@ function lobbyView() {
     <div class="title">Pace</div>
     <div class="row">${S.paces.map((p) => `<button class="sport ${S.pace === p.id ? 'sel' : ''}" ${S.host ? '' : 'disabled'} onclick="send({type:'setPace',pace:'${p.id}'})">${esc(p.label)}</button>`).join('')}</div>
     <button class="ghost" onclick="openShop()">🛍️ Pro Shop · 🎟 ${save.tix} tickets</button>
-    ${S.host ? `<button onclick="send({type:'start'})">${S.camp && S.camp.night > 1 ? `Start night ${S.camp.night}` : S.mode === 'fake' ? 'Start - generate a made-up season' : 'Start - assign a mystery season'}</button>` : ''}
+    ${S.host ? `<button class="cta" onclick="send({type:'start'})">${S.camp && S.camp.night > 1 ? `Start night ${S.camp.night}` : S.mode === 'fake' ? 'Start - generate a made-up season' : 'Start - assign a mystery season'}</button>` : ''}
   </div></div>`;
 }
 
@@ -371,9 +372,9 @@ function goalText() {
 }
 function gameView() {
   const me = S.me, hunt = S.phase === 'hunt';
-  const extra = ui.tab === 'bar' ? [['bar', '🍺 Bar']] : ui.tab === 'vinnie' ? [['vinnie', '🍷 Old Vinnie']] : ui.tab === 'paper' ? [['paper', '📰 Paper']] : ui.tab === 'wheel' ? [['wheel', '🎰 Roulette']] : ui.tab === 'challenge' ? [['challenge', '🎯 Challenge']] : ui.tab === 'pool' ? [['pool', '🎱 Pool']] : [];
+  const extra = ui.tab === 'bar' ? [['bar', '🍺 Bar']] : ui.tab === 'vinnie' ? [['vinnie', '🍷 Old Vinnie']] : ui.tab === 'paper' ? [['paper', '📰 Paper']] : ui.tab === 'wheel' ? [['wheel', '🎰 Roulette']] : ui.tab === 'challenge' ? [['challenge', '🎯 Challenge']] : ui.tab === 'pool' ? [['pool', '🎱 Pool']] : ui.tab === 'slot' ? [['slot', '🎰 Slots']] : [];
   const tabs = [['book', '📱 Sportsbook'], ['bets', '🧾 My Bets'], ['mob', '🕴️ The Mob'], ['crew', '👥 Crew'], ...extra];
-  const body = { book: bookView, bets: betsView, mob: mobView, crew: crewView, bar: barView, vinnie: vinnieView, paper: paperView, wheel: wheelView, challenge: challengeView, pool: typeof poolView === 'function' ? poolView : () => '' }[ui.tab]();
+  const body = { book: bookView, bets: betsView, mob: mobView, crew: crewView, bar: barView, vinnie: vinnieView, paper: paperView, wheel: wheelView, challenge: challengeView, slot: slotView, pool: typeof poolView === 'function' ? poolView : () => '' }[ui.tab]();
   if (!window.__worldReady) return `<div class="center"><div class="card col" style="width:min(420px,100%)"><div class="big">Getting the bar ready...</div>${loadBar()}<div class="muted">Your crew can already see you. The game has started - you'll be dropped in as soon as the bar finishes loading.</div></div></div>`;
   return `<div class="hud">
     <div class="hud-top">
@@ -510,6 +511,42 @@ function betsView() {
       ${r ? `<div class="${r.delta >= 0 ? 'ok' : 'bad'}">${r.delta >= 0 ? '+' : ''}${$$(r.delta)}</div>${r.notes.map((n) => `<div class="muted">${esc(n)}</div>`).join('')}` : ''}</div>`;
   }).join('')}</div>`;
 }
+
+// ---------- slot machines (gas-station casino): the server spins, the panel rolls the reels and reveals ----------
+const SLOT_PAY = [['7', '7', '7', 100], ['ball', 'ball', 'ball', 30], ['bar', 'bar', 'bar', 20], ['bell', 'bell', 'bell', 12], ['cherry', 'cherry', 'cherry', 10], ['lemon', 'lemon', 'lemon', 8]];
+function slotView() {
+  const busy = ui.slotAnim && performance.now() < ui.slotAnim.end, bet = ui.slotBet || 25, m = (ui.slotM ?? 0) + 1;
+  return `<div class="card col slotcab"><div class="row" style="justify-content:space-between"><div class="big">🎰 Lucky 7 <span class="muted">machine ${m}</span></div><span class="pill money">${$$(S.me.money)}</span></div>
+    <canvas id="slotcv" width="660" height="240"></canvas>
+    <div class="slotmsg" id="slotmsg">${ui.slotMsg || 'Pick a bet and pull.'}</div>
+    <div class="row slotbets">${[10, 25, 50, 100].map((v) => `<button class="${bet === v ? 'on' : ''}" ${busy ? 'disabled' : ''} onclick="ui.slotBet=${v};render()">${$$(v)}</button>`).join('')}
+      <button class="cta spin" ${busy || S.me.money < bet ? 'disabled' : ''} onclick="slotSpin()">SPIN</button></div>
+    <div class="paytab">${SLOT_PAY.map(([a, b, c, x]) => `<div><span class="ps" data-s="${a}"></span><span class="ps" data-s="${b}"></span><span class="ps" data-s="${c}"></span><b>${x}x</b></div>`).join('')}<div><span class="ps" data-s="cherry"></span><span class="ps" data-s="cherry"></span><i>any</i><b>1.5x</b></div><div><span class="ps" data-s="cherry"></span><i>any</i><i>any</i><b>0.5x</b></div></div>
+    <div class="muted" style="font-size:13px">Space spins. The house wins in the long run (about 91% back). Wins land in your pocket when the reels stop.</div></div>`;
+}
+function slotSpin() { const bet = ui.slotBet || 25; if (ui.slotAnim && performance.now() < ui.slotAnim.end) return; if (S.me.money < bet) { toast('Not enough cash for that bet.', 'err'); return; } send({ type: 'slot', m: ui.slotM ?? 0, bet }); window.BK.sfx && window.BK.sfx('click'); ui.slotMsg = 'Spinning...'; const el = $('#slotmsg'); if (el) el.textContent = ui.slotMsg; }
+function slotResult(m) {
+  const t = performance.now(); ui.slotAnim = { reels: m.reels, start: t, stops: [t + 900, t + 1250, t + 1600], end: t + 1600, win: m.win, bet: m.bet, shown: false }; render();
+}
+function slotFrame() {
+  requestAnimationFrame(slotFrame);
+  const cv = document.getElementById('slotcv'); if (!cv || !window.BK.slotDraw) return; const g = cv.getContext('2d'), W = cv.width, H = cv.height, a = ui.slotAnim, t = performance.now();
+  for (const el of document.querySelectorAll('.paytab .ps:not(.done)')) { const c = document.createElement('canvas'); c.width = c.height = 44; window.BK.slotDraw(c.getContext('2d'), el.dataset.s, 22, 22, 40); el.appendChild(c); el.classList.add('done'); }
+  g.fillStyle = '#0a0a14'; g.fillRect(0, 0, W, H);
+  const rest = a ? a.reels : ui.slotLast || ['7', 'bar', 'cherry'];
+  for (let k = 0; k < 3; k++) { const x0 = 18 + k * 214; g.fillStyle = '#f4f0e6'; g.fillRect(x0, 14, 196, H - 28); g.save(); g.beginPath(); g.rect(x0, 14, 196, H - 28); g.clip();
+    if (a && t < a.stops[k]) { const v = (t - a.start) / 1000 * 11 + k * 0.4, off = v % 1, base = Math.floor(v) + k * 2; const SY = ['7', 'ball', 'bar', 'bell', 'lemon', 'cherry']; for (let r = -1; r <= 1; r++) window.BK.slotDraw(g, SY[(base + r + 60) % 6], x0 + 98, H / 2 + (r + off) * 150 - 75, 130); if (Math.floor(v * 1.4) !== a['tk' + k]) { a['tk' + k] = Math.floor(v * 1.4); window.BK.sfx && window.BK.sfx('rTick', { pitch: 1.5 }); } }
+    else window.BK.slotDraw(g, rest[k], x0 + 98, H / 2, 150);
+    g.restore(); if (a && t >= a.stops[k] && !a['st' + k]) { a['st' + k] = true; window.BK.sfx && window.BK.sfx('chip'); } }
+  g.fillStyle = 'rgba(255,40,60,0.75)'; g.fillRect(0, H / 2 - 1.5, W, 3);
+  if (a && t >= a.end && !a.shown) { a.shown = true; ui.slotLast = a.reels; const big = a.win >= a.bet * 20;
+    ui.slotMsg = a.win > 0 ? (big ? `JACKPOT! +${$$(a.win)}` : a.win >= a.bet ? `WIN +${$$(a.win)}` : `${$$(a.win)} back`) : 'Nothing. Again?';
+    const el = $('#slotmsg'); if (el) { el.textContent = ui.slotMsg; el.className = 'slotmsg ' + (a.win > 0 ? (big ? 'jack' : 'win') : ''); }
+    const B = window.BK; if (a.win > 0) { B.sfx && B.sfx(big ? 'win' : 'coin'); if (big) { B.sfx && B.sfx('cash'); B.sfx && B.sfx('cheer', { v: 1 }); } } else B.sfx && B.sfx('buzz');
+    render(); }
+}
+requestAnimationFrame(slotFrame);
+addEventListener('keydown', (e) => { if (e.code === 'Space' && ui.open && ui.tab === 'slot' && !/INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '')) { e.preventDefault(); slotSpin(); } });
 
 function mobView() {
   const me = S.me, cur = S.cur, ev = cur && S.events[cur.idx], fixed = cur && me.fix[cur.idx];

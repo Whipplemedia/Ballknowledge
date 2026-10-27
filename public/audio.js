@@ -177,12 +177,12 @@ export const audio = (() => {
   A.loop = (name, o = {}) => {
     if (!A.ready) return { stop() {}, set() {} };
     const c = A.ctx, g = c.createGain(); g.gain.value = 0.0001; g.gain.exponentialRampToValueAtTime(o.g || 0.5, c.currentTime + 0.15); let out = A.buses.sfx;
-    if (o.pos) { const p = panner(o.pos); p.connect(A.buses.sfx); g.connect(p); } else g.connect(out);
+    let pn = null; if (o.pos) { pn = panner(o.pos, o.ref || 2.5, o.roll ?? 1.1); pn.connect(A.buses.sfx); g.connect(pn); } else g.connect(out);
     const s = c.createBufferSource(); s.buffer = noiseBuf(c); s.loop = true; const f = c.createBiquadFilter(); f.type = 'lowpass'; s.connect(f); f.connect(g);
     const low = c.createOscillator(); low.type = 'sine'; const lg = c.createGain(); lg.gain.value = 0.5; low.connect(lg); lg.connect(g);
     if (name === 'bowlRoll') { f.frequency.value = 420; low.frequency.value = 58; } else if (name === 'wheel') { f.frequency.value = 900; low.frequency.value = 120; lg.gain.value = 0.1; }
     s.start(); low.start();
-    return { set(x) { g.gain.setTargetAtTime(Math.max(0.0001, x), c.currentTime, 0.08); }, stop() { g.gain.setTargetAtTime(0.0001, c.currentTime, 0.08); setTimeout(() => { try { s.stop(); low.stop(); g.disconnect(); } catch {} }, 400); } };
+    return { set(x) { g.gain.setTargetAtTime(Math.max(0.0001, x), c.currentTime, 0.08); }, setPos(q) { if (pn && pn.positionX) { pn.positionX.value = q.x; pn.positionY.value = q.y; pn.positionZ.value = q.z; } }, stop() { g.gain.setTargetAtTime(0.0001, c.currentTime, 0.08); setTimeout(() => { try { s.stop(); low.stop(); g.disconnect(); } catch {} }, 400); } };
   };
 
   // ---- ambience: a constant crowd bed + scheduled one-shots at random spots in the room

@@ -51,9 +51,9 @@ function scorebug(g, x, y, w, h, A, B, sa, sb, info, info2) {
   g.fillStyle = '#0b1430f0'; g.fillRect(x, y, w, h);
   const seg = w * 0.7 / 2;
   [[A, sa, x + 6], [B, sb, x + 6 + seg]].forEach(([T, s, px]) => {
-    g.fillStyle = T.color; g.fillRect(px, y + 6, 10, h - 12); fit(g, T.short, px + 24, y + h * 0.66, seg * 0.45, `900 ${h * 0.5}px system-ui`, '#fff', 'left'); fit(g, String(s), px + seg - 18, y + h * 0.7, seg * 0.4, `900 ${h * 0.62}px system-ui`, '#ffc83d', 'right');
+    g.fillStyle = T.color; g.fillRect(px, y + 6, 10, h - 12); fit(g, T.short, px + 24, y + h * 0.66, seg * 0.45, `400 ${h * 0.5}px Bungee, system-ui`, '#fff', 'left'); fit(g, String(s), px + seg - 18, y + h * 0.7, seg * 0.4, `400 ${h * 0.62}px Bungee, system-ui`, '#ffc83d', 'right');
   });
-  g.fillStyle = '#1b2f6a'; g.fillRect(x + w * 0.7, y, w * 0.3, h); fit(g, info, x + w * 0.85, y + h * 0.44, w * 0.28, `800 ${h * 0.34}px system-ui`, '#fff'); fit(g, info2, x + w * 0.85, y + h * 0.82, w * 0.28, `700 ${h * 0.3}px system-ui`, '#ffc83d');
+  g.fillStyle = '#1b2f6a'; g.fillRect(x + w * 0.7, y, w * 0.3, h); fit(g, info, x + w * 0.85, y + h * 0.44, w * 0.28, `800 ${h * 0.34}px "Barlow Condensed", system-ui`, '#fff'); fit(g, info2, x + w * 0.85, y + h * 0.82, w * 0.28, `700 ${h * 0.3}px "Barlow Condensed", system-ui`, '#ffc83d');
 }
 
 // the crowd reacts to every score the way YOU feel about it: cheers when it helps your bet, boos when it hurts.
@@ -77,26 +77,26 @@ export function createTV(BK) {
     const air = S.events.filter((e) => e.status === 'airing').sort((a, b) => a.closeAt - b.closeAt);
     if (!air.length) {
       drawScene(g, W, H, kind, ts / 1000, '#2a5aa8', '#b02a2a', 3); g.fillStyle = '#000b'; g.fillRect(0, 0, W, H);
-      fit(g, 'BKN SPORTS NETWORK', W / 2, 200, W - 60, '900 58px system-ui', '#27e08a');
+      fit(g, 'BKN SPORTS NETWORK', W / 2, 200, W - 60, '400 58px Bungee, system-ui', '#27e08a');
       const open = S.events.find((e) => e.status === 'open'), up = S.events.find((e) => e.status === 'upcoming');
-      if (open) { fit(g, 'NOW TAKING BETS', W / 2, 290, W - 60, '800 38px system-ui', '#ffc83d'); fit(g, `${open.a}  vs  ${open.b}`, W / 2, 350, W - 60, '700 36px system-ui'); fit(g, `Betting closes in ${mmss(open.closeAt - now)}`, W / 2, 425, W - 60, '800 42px system-ui', '#ff7a88'); }
-      else if (up) fit(g, `Next game opens in ${mmss(up.openAt - now)}`, W / 2, 340, W - 60, '800 42px system-ui', '#ffc83d');
-      else fit(g, 'All games are final', W / 2, 340, W - 60, '800 42px system-ui', '#ffc83d');
-      fit(g, 'Highlights air here after betting closes.', W / 2, 520, W - 60, '600 26px system-ui', '#8f9bc7'); upd(C); return;
+      if (open) { fit(g, 'NOW TAKING BETS', W / 2, 290, W - 60, '800 38px "Barlow Condensed", system-ui', '#ffc83d'); fit(g, `${open.a}  vs  ${open.b}`, W / 2, 350, W - 60, '700 36px "Barlow Condensed", system-ui'); fit(g, `Betting closes in ${mmss(open.closeAt - now)}`, W / 2, 425, W - 60, '800 42px "Barlow Condensed", system-ui', '#ff7a88'); }
+      else if (up) fit(g, `Next game opens in ${mmss(up.openAt - now)}`, W / 2, 340, W - 60, '800 42px "Barlow Condensed", system-ui', '#ffc83d');
+      else fit(g, 'All games are final', W / 2, 340, W - 60, '800 42px "Barlow Condensed", system-ui', '#ffc83d');
+      fit(g, 'Highlights air here after betting closes.', W / 2, 520, W - 60, '600 26px "Barlow Condensed", system-ui', '#8f9bc7'); upd(C); return;
     }
     const ev = air[0], A = team(S, ev.a), B = team(S, ev.b), f = clamp((now - ev.closeAt) / (ev.resolveAt - ev.closeAt), 0, 1);
     let i = 0; const P = ev.plays; while (i + 1 < P.length && P[i + 1].f <= f) i++;
     const cur = P[i]; { const L = (center.last = center.last || {}); const key = ev.idx; if (L.key !== key) { L.key = key; L.sa = cur.sa; L.sb = cur.sb; L.final = false; } else { const d = Math.max(cur.sa - L.sa, cur.sb - L.sb); if (d > 0) { const big = KIND[S.sport] === 'basketball' ? 3 : KIND[S.sport] === 'football' ? 6 : 1, good = rootsFor(S, ev, cur.sa - L.sa >= cur.sb - L.sb ? 'a' : 'b'); window.BK.onScore && window.BK.onScore(good); window.BK.sfx && window.BK.sfx(good ? 'cheer' : 'boo', { v: Math.min(1, 0.35 + d / (big * 2)), pos: { x: 0, y: 2.5, z: -4 }, ref: 6 }); L.sa = cur.sa; L.sb = cur.sb; } else if (f >= 0.985 && !L.final) { L.final = true; window.BK.sfx && window.BK.sfx('bell'); if (!Object.keys((S.me && S.me.bets[ev.idx]) || {}).length) window.BK.sfx && window.BK.sfx('cheer', { v: 0.9, pos: { x: 0, y: 2.5, z: -4 }, ref: 6 }); /* with money on it, the phone's result brings the cheer or the boos */ } } }
     const recent = []; for (let k = i; k >= 0 && recent.length < 2; k--) if (P[k].txt) recent.push(P[k].txt);
     drawScene(g, W, H, kind, ts / 1000, A.color, B.color, ev.idx * 7);
-    g.fillStyle = '#c4111a'; g.fillRect(0, 0, 330, 44); fit(g, `HIGHLIGHTS · ${ev.label.toUpperCase()}`.slice(0, 26), 14, 31, 310, '900 23px system-ui', '#fff', 'left');
-    g.fillStyle = '#0b1430dd'; g.fillRect(W - 210, 0, 210, 44); fit(g, 'BKN SPORTS', W - 105, 31, 190, '900 24px system-ui', '#ffc83d');
+    g.fillStyle = '#c4111a'; g.fillRect(0, 0, 330, 44); fit(g, `HIGHLIGHTS · ${ev.label.toUpperCase()}`.slice(0, 26), 14, 31, 310, '400 23px Bungee, system-ui', '#fff', 'left');
+    g.fillStyle = '#0b1430dd'; g.fillRect(W - 210, 0, 210, 44); fit(g, 'BKN SPORTS', W - 105, 31, 190, '400 24px Bungee, system-ui', '#ffc83d');
     // lower third
-    g.fillStyle = '#000c'; g.fillRect(0, H - 220, W, 90); recent.forEach((t, k) => fit(g, t, W / 2, H - 172 + k * 36, W - 60, k === 0 ? '800 34px system-ui' : '600 24px system-ui', k === 0 ? '#fff' : '#9aa6d0'));
+    g.fillStyle = '#000c'; g.fillRect(0, H - 220, W, 90); recent.forEach((t, k) => fit(g, t, W / 2, H - 172 + k * 36, W - 60, k === 0 ? '800 34px "Barlow Condensed", system-ui' : '600 24px "Barlow Condensed", system-ui', k === 0 ? '#fff' : '#9aa6d0'));
     scorebug(g, 40, H - 118, W - 80, 78, A, B, cur.sa, cur.sb, f >= 0.985 ? 'FINAL' : (cur.per || 'LIVE'), f >= 0.985 ? ' ' : ev.label.split('·')[0].trim().slice(0, 14));
     g.fillStyle = '#1b2442'; g.fillRect(40, H - 26, W - 80, 8); g.fillStyle = '#27e08a'; g.fillRect(40, H - 26, (W - 80) * f, 8);
-    fit(g, `FINAL IN ${mmss(ev.resolveAt - now)}`, W - 44, H - 38, 300, '700 18px system-ui', '#8f9bc7', 'right');
-    if (air.length > 1) fit(g, `+${air.length - 1} more queued`, 44, H - 38, 300, '700 18px system-ui', '#ffc83d', 'left');
+    fit(g, `FINAL IN ${mmss(ev.resolveAt - now)}`, W - 44, H - 38, 300, '700 18px "Barlow Condensed", system-ui', '#8f9bc7', 'right');
+    if (air.length > 1) fit(g, `+${air.length - 1} more queued`, 44, H - 38, 300, '700 18px "Barlow Condensed", system-ui', '#ffc83d', 'left');
     upd(C);
   }
   function ambient(S, now, ts) {
@@ -111,53 +111,53 @@ export function createTV(BK) {
   function left(S, now) {
     const { g, c } = L, W = c.width, H = c.height; bg(g, W, H, '#0e2a22', '#04100c');
     const cur = S.events.find((e) => e.status === 'open'), up = S.events.find((e) => e.status === 'upcoming');
-    fit(g, cur ? 'NOW OPEN' : up ? 'UP NEXT' : 'BETS CLOSED', W / 2, 52, W, '900 40px system-ui', '#27e08a');
-    if (!cur && up) { fit(g, up.label, W / 2, 150, W - 40, '800 40px system-ui', '#ffc83d'); fit(g, 'Matchup revealed when betting opens', W / 2, 205, W - 40, '600 24px system-ui', '#8f9bc7'); fit(g, 'OPENS ' + mmss(up.openAt - now), W / 2, 300, W - 40, '900 38px system-ui', '#fff'); upd(L); return; }
+    fit(g, cur ? 'NOW OPEN' : up ? 'UP NEXT' : 'BETS CLOSED', W / 2, 52, W, '400 40px Bungee, system-ui', '#27e08a');
+    if (!cur && up) { fit(g, up.label, W / 2, 150, W - 40, '800 40px "Barlow Condensed", system-ui', '#ffc83d'); fit(g, 'Matchup revealed when betting opens', W / 2, 205, W - 40, '600 24px "Barlow Condensed", system-ui', '#8f9bc7'); fit(g, 'OPENS ' + mmss(up.openAt - now), W / 2, 300, W - 40, '400 38px Bungee, system-ui', '#fff'); upd(L); return; }
     const ev = cur;
-    if (!ev) { fit(g, 'Watch the highlights', W / 2, 200, W - 40, '700 32px system-ui', '#8f9bc7'); upd(L); return; }
-    fit(g, ev.label, W / 2, 96, W - 40, '700 26px system-ui', '#ffc83d');
-    const badge = (name, x) => { const T = team(S, name); g.fillStyle = T.color; g.beginPath(); g.arc(x, 190, 48, 0, 7); g.fill(); g.strokeStyle = '#fff6'; g.lineWidth = 3; g.stroke(); fit(g, T.short, x, 190 + 10, 80, '900 30px system-ui'); };
-    badge(ev.a, 130); badge(ev.b, W - 130); fit(g, 'VS', W / 2, 202, 100, '900 36px system-ui', '#8f9bc7');
-    fit(g, ev.a, 130, 262, 240, '700 22px system-ui'); fit(g, ev.b, W - 130, 262, 240, '700 22px system-ui');
-    const ms = (cur ? ev.closeAt : ev.openAt) - now; fit(g, (cur ? 'BETS CLOSE ' : 'OPENS ') + mmss(ms), W / 2, 330, W - 40, '900 38px system-ui', ms < 20000 && cur ? '#ff4d5e' : '#fff');
+    if (!ev) { fit(g, 'Watch the highlights', W / 2, 200, W - 40, '700 32px "Barlow Condensed", system-ui', '#8f9bc7'); upd(L); return; }
+    fit(g, ev.label, W / 2, 96, W - 40, '700 26px "Barlow Condensed", system-ui', '#ffc83d');
+    const badge = (name, x) => { const T = team(S, name); g.fillStyle = T.color; g.beginPath(); g.arc(x, 190, 48, 0, 7); g.fill(); g.strokeStyle = '#fff6'; g.lineWidth = 3; g.stroke(); fit(g, T.short, x, 190 + 10, 80, '400 30px Bungee, system-ui'); };
+    badge(ev.a, 130); badge(ev.b, W - 130); fit(g, 'VS', W / 2, 202, 100, '400 36px Bungee, system-ui', '#8f9bc7');
+    fit(g, ev.a, 130, 262, 240, '700 22px "Barlow Condensed", system-ui'); fit(g, ev.b, W - 130, 262, 240, '700 22px "Barlow Condensed", system-ui');
+    const ms = (cur ? ev.closeAt : ev.openAt) - now; fit(g, (cur ? 'BETS CLOSE ' : 'OPENS ') + mmss(ms), W / 2, 330, W - 40, '400 38px Bungee, system-ui', ms < 20000 && cur ? '#ff4d5e' : '#fff');
     upd(L);
   }
   // results board: only games that are over (newest on top) plus the one on the air. Nothing about games still to come.
   function right(S, now) {
     const { g, c } = R, W = c.width, H = c.height; bg(g, W, H, '#1a1030', '#07040f');
-    fit(g, 'RESULTS', W / 2, 40, W, '900 34px system-ui', '#ff60e0');
+    fit(g, 'RESULTS', W / 2, 40, W, '400 34px Bungee, system-ui', '#ff60e0');
     const sh = (nm) => team(S, nm).short, air = S.events.filter((e) => e.status === 'airing'), done = S.events.filter((e) => e.status === 'final').reverse();
     const rows = [...air.map((e) => ({ e, live: true })), ...done.map((e) => ({ e }))], rh = 30, max = Math.floor((H - 70) / rh);
-    if (!rows.length) fit(g, 'No games final yet', W / 2, H / 2, W - 40, '700 26px system-ui', '#566');
+    if (!rows.length) fit(g, 'No games final yet', W / 2, H / 2, W - 40, '700 26px "Barlow Condensed", system-ui', '#566');
     rows.slice(0, max).forEach(({ e, live }, i) => {
       const y = 66 + i * rh + rh * 0.72, col = live ? '#ffc83d' : '#e8ecff', sz = Math.round(rh * 0.72);
-      fit(g, `G${e.idx + 1}`, 24, y, 50, `800 ${sz}px system-ui`, '#8f9bc7', 'left');
-      if (live) fit(g, `${sh(e.a)} vs ${sh(e.b)}`, 84, y, 260, `700 ${sz}px system-ui`, col, 'left');
+      fit(g, `G${e.idx + 1}`, 24, y, 50, `800 ${sz}px "Barlow Condensed", system-ui`, '#8f9bc7', 'left');
+      if (live) fit(g, `${sh(e.a)} vs ${sh(e.b)}`, 84, y, 260, `700 ${sz}px "Barlow Condensed", system-ui`, col, 'left');
       else { const aw = e.result.sa > e.result.sb; fit(g, `${sh(e.a)} ${e.result.sa}`, 84, y, 130, `${aw ? 900 : 600} ${sz}px system-ui`, aw ? '#fff' : '#9aa3c4', 'left'); fit(g, `${e.result.sb} ${sh(e.b)}`, 214, y, 140, `${aw ? 600 : 900} ${sz}px system-ui`, aw ? '#9aa3c4' : '#fff', 'left'); }
-      fit(g, live ? 'ON AIR' : e.ot ? 'F/OT' : 'FINAL', W - 22, y, 120, `800 ${Math.round(rh * 0.6)}px system-ui`, live ? '#ffc83d' : '#8f9bc7', 'right');
+      fit(g, live ? 'ON AIR' : e.ot ? 'F/OT' : 'FINAL', W - 22, y, 120, `800 ${Math.round(rh * 0.6)}px "Barlow Condensed", system-ui`, live ? '#ffc83d' : '#8f9bc7', 'right');
     });
     upd(R);
   }
   function kiosk(S, now) {
     const { g, c } = K, W = c.width; bg(g, W, c.height, '#0b2a55', '#03101f');
-    fit(g, 'SPORTSBOOK', W / 2, 110, W - 30, '900 60px system-ui', '#fff');
+    fit(g, 'SPORTSBOOK', W / 2, 110, W - 30, '400 60px Bungee, system-ui', '#fff');
     const cur = S.events.find((e) => e.status === 'open');
-    if (cur) { fit(g, cur.label, W / 2, 215, W - 40, '700 32px system-ui', '#ffc83d'); fit(g, cur.a, W / 2, 285, W - 40, '700 40px system-ui'); fit(g, 'vs', W / 2, 330, W - 40, '600 28px system-ui', '#8f9bc7'); fit(g, cur.b, W / 2, 380, W - 40, '700 40px system-ui'); fit(g, mmss(cur.closeAt - now), W / 2, 500, W - 40, '900 96px system-ui', cur.closeAt - now < 20000 ? '#ff5a5a' : '#2ee09a'); }
-    else fit(g, 'No game open', W / 2, 330, W - 40, '700 44px system-ui', '#8f9bc7');
-    fit(g, 'PRESS E', W / 2, 580, W, '800 32px system-ui', '#ffc83d'); upd(K);
+    if (cur) { fit(g, cur.label, W / 2, 215, W - 40, '700 32px "Barlow Condensed", system-ui', '#ffc83d'); fit(g, cur.a, W / 2, 285, W - 40, '700 40px "Barlow Condensed", system-ui'); fit(g, 'vs', W / 2, 330, W - 40, '600 28px "Barlow Condensed", system-ui', '#8f9bc7'); fit(g, cur.b, W / 2, 380, W - 40, '700 40px "Barlow Condensed", system-ui'); fit(g, mmss(cur.closeAt - now), W / 2, 500, W - 40, '400 96px Bungee, system-ui', cur.closeAt - now < 20000 ? '#ff5a5a' : '#2ee09a'); }
+    else fit(g, 'No game open', W / 2, 330, W - 40, '700 44px "Barlow Condensed", system-ui', '#8f9bc7');
+    fit(g, 'PRESS E', W / 2, 580, W, '800 32px "Barlow Condensed", system-ui', '#ffc83d'); upd(K);
   }
   let last = 0;
   return { center: C.t, left: L.t, right: R.t, kiosk: K.t, amb: AMB.map((o) => o.t),
     blackout: false,
     draw(S, ts) {
-      if (this.blackout) { if (ts - last < 120) return; last = ts; const nz = (o, label) => { const { g, c } = o, W = c.width, H = c.height; g.fillStyle = '#0c0c10'; g.fillRect(0, 0, W, H); for (let i = 0; i < 220; i++) { g.fillStyle = `rgba(255,255,255,${Math.random() * 0.45})`; g.fillRect(Math.random() * W, Math.random() * H, 8 + Math.random() * 70, 2 + Math.random() * 3); } if (label) fit(g, 'NO SIGNAL', W / 2, H / 2, W - 40, '900 56px system-ui', '#8f9bc7'); upd(o); }; nz(C, true); nz(L, false); nz(R, false); AMB.forEach((o) => nz(o, false)); return; }
+      if (this.blackout) { if (ts - last < 120) return; last = ts; const nz = (o, label) => { const { g, c } = o, W = c.width, H = c.height; g.fillStyle = '#0c0c10'; g.fillRect(0, 0, W, H); for (let i = 0; i < 220; i++) { g.fillStyle = `rgba(255,255,255,${Math.random() * 0.45})`; g.fillRect(Math.random() * W, Math.random() * H, 8 + Math.random() * 70, 2 + Math.random() * 3); } if (label) fit(g, 'NO SIGNAL', W / 2, H / 2, W - 40, '400 56px Bungee, system-ui', '#8f9bc7'); upd(o); }; nz(C, true); nz(L, false); nz(R, false); AMB.forEach((o) => nz(o, false)); return; }
       if (!S || !S.events) { // title / lobby: idle splash
         if (ts - last < 190) return; last = ts; const sec = ts / 1000, { g, c } = C; drawScene(g, c.width, c.height, 'football', sec, '#2a5aa8', '#b02a2a', 3); g.fillStyle = '#000a'; g.fillRect(0, 0, c.width, c.height);
-        if (LOGO.complete && LOGO.naturalWidth) { const w = c.width * 0.62, h = w * LOGO.naturalHeight / LOGO.naturalWidth; g.drawImage(LOGO, (c.width - w) / 2, 250 - h * 0.62, w, h); } else fit(g, 'BALL KNOWLEDGE', c.width / 2, 240, c.width - 60, '900 76px system-ui', '#27e08a');
-        fit(g, 'Waiting for kickoff...', c.width / 2, 250 + c.width * 0.62 * 0.48 * 0.38 + 30, c.width - 60, '700 36px system-ui', '#ffc83d'); upd(C);
+        if (LOGO.complete && LOGO.naturalWidth) { const w = c.width * 0.62, h = w * LOGO.naturalHeight / LOGO.naturalWidth; g.drawImage(LOGO, (c.width - w) / 2, 250 - h * 0.62, w, h); } else fit(g, 'BALL KNOWLEDGE', c.width / 2, 240, c.width - 60, '400 76px Bungee, system-ui', '#27e08a');
+        fit(g, 'Waiting for kickoff...', c.width / 2, 250 + c.width * 0.62 * 0.48 * 0.38 + 30, c.width - 60, '700 36px "Barlow Condensed", system-ui', '#ffc83d'); upd(C);
         AMB.forEach((o, k) => { drawScene(o.g, o.c.width, o.c.height, ['football', 'basketball', 'hockey'][k % 3], sec + k * 11, '#2a5aa8', '#b02a2a', k); upd(o); });
-        { const l = L; bg(l.g, l.c.width, l.c.height, '#0e2a22', '#04100c'); fit(l.g, 'TONIGHT', l.c.width / 2, 120, l.c.width, '900 56px system-ui', '#27e08a'); fit(l.g, 'A mystery season', l.c.width / 2, 200, l.c.width - 30, '700 34px system-ui', '#ffc83d'); fit(l.g, 'Real or made-up', l.c.width / 2, 250, l.c.width - 30, '700 30px system-ui', '#e8ecff'); upd(l); }
-        { const r = R; bg(r.g, r.c.width, r.c.height, '#1a1030', '#07040f'); fit(r.g, 'RESULTS', r.c.width / 2, 40, r.c.width, '900 34px system-ui', '#ff60e0'); fit(r.g, 'No games final yet', r.c.width / 2, r.c.height / 2, r.c.width - 40, '700 26px system-ui', '#566'); upd(r); }
+        { const l = L; bg(l.g, l.c.width, l.c.height, '#0e2a22', '#04100c'); fit(l.g, 'TONIGHT', l.c.width / 2, 120, l.c.width, '400 56px Bungee, system-ui', '#27e08a'); fit(l.g, 'A mystery season', l.c.width / 2, 200, l.c.width - 30, '700 34px "Barlow Condensed", system-ui', '#ffc83d'); fit(l.g, 'Real or made-up', l.c.width / 2, 250, l.c.width - 30, '700 30px "Barlow Condensed", system-ui', '#e8ecff'); upd(l); }
+        { const r = R; bg(r.g, r.c.width, r.c.height, '#1a1030', '#07040f'); fit(r.g, 'RESULTS', r.c.width / 2, 40, r.c.width, '400 34px Bungee, system-ui', '#ff60e0'); fit(r.g, 'No games final yet', r.c.width / 2, r.c.height / 2, r.c.width - 40, '700 26px "Barlow Condensed", system-ui', '#566'); upd(r); }
         return;
       } if (ts - last < 190) return; last = ts; const now = BK.now(); center(S, now, ts); ambient(S, now, ts); left(S, now); right(S, now); kiosk(S, now); } };
 }

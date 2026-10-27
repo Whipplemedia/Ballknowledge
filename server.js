@@ -344,6 +344,12 @@ function settleBets(room, ev) {
   }
 }
 
+// ---------- slot machines (the gas-station casino, public/outside.js) ----------
+const SLOT_N = 6, SLOT_BETS = [10, 25, 50, 100], SLOT_SYMS = ['7', 'ball', 'bar', 'bell', 'lemon', 'cherry'], SLOT_W = [1, 2, 3, 4, 5, 5];
+const SLOT_PAY = { '7': 100, ball: 30, bar: 20, bell: 12, lemon: 8, cherry: 10 }; // three of a kind, times the bet
+const slotSym = () => { let x = Math.random() * 20; for (let k = 0; k < SLOT_SYMS.length; k++) { if ((x -= SLOT_W[k]) < 0) return SLOT_SYMS[k]; } return 'cherry'; };
+const slotPay = (r) => { if (r[0] === r[1] && r[1] === r[2]) return SLOT_PAY[r[0]]; const ch = r.filter((x) => x === 'cherry').length; return ch === 2 ? 1.5 : ch === 1 ? 0.5 : 0; };
+
 // ---------- the crowd: bottles for big losers, Gina for whoever goes all in and hits ----------
 const PELT_LOSS = 500, PELT_MS = 4200, GINA_PRICE = 20;
 function pelt(room, p, lost) {
@@ -551,7 +557,7 @@ function hintFor(room, p, ev) {
 // ---------- side jobs from the bartender ----------
 // One job at a time, 3 minutes to finish it. Targets are named regulars at fixed spots (they match bar.js); the server
 // checks you are standing next to them. Collecting for Sal pays in a smaller tab instead of cash.
-const SPOTS = { 'Gina': [5.4, 3.4], 'Celtics Ray': [8.3, 4.6], 'Sloppy Steve': [7.6, 6.2], 'Dealer': [-7.0, -5.8], 'Clerk': [-8.6, 6.4], bar: [8.3, 2.5] };
+const SPOTS = { 'Gina': [5.4, 3.4], 'Celtics Ray': [8.3, 4.6], 'Sloppy Steve': [7.6, 6.2], 'Dealer': [21.5, 38.95] /* the gas-station casino (public/outside.js OUT.dealer) */, 'Clerk': [-8.6, 6.4], bar: [8.3, 2.5] };
 const JOB_MS = 180000, JOB_GAP_MS = 20000;
 function makeJob(p) {
   const kind = pick(['deliver', 'deliver', 'collect', 'bounce', 'hustle']);
@@ -816,6 +822,16 @@ function handle(room, p, m) {
       else if (m.to === '*') for (const q of room.players.values()) if (q !== p) send(q, { type: 'rtc', from: p.id, data: m.data });
       break;
     }
+    case 'slot': { // gas-station slot machine: 3 reels, weighted symbols, ~91% back (see SLOT_*). Stake now, winnings when the reels stop
+      const t = Date.now(), i = Math.floor(Number(m.m)), bet = Math.floor(Number(m.bet));
+      if (room.phase !== 'play' || !(i >= 0 && i < SLOT_N) || !SLOT_BETS.includes(bet) || t - (p.lastSlot || 0) < 1800) break;
+      if (p.money < bet) { toast(p, "Not enough cash for that bet.", 'err'); break; }
+      p.lastSlot = t; p.money -= bet; const reels = [0, 1, 2].map(() => slotSym()), win = Math.round(bet * slotPay(reels));
+      for (const q of room.players.values()) send(q, { type: 'slot', m: i, reels, bet, win, by: p.id });
+      broadcast(room);
+      if (win > 0) setTimeout(() => { p.money += win; if (win >= bet * 20) feed(room, `🎰 ${p.name} hit ${reels.join(' · ').toUpperCase()} on the slots for ${money(win)}!`); broadcast(room); }, 1650);
+      break;
+    }
     case 'splash': { // restroom sink: cold water knocks the buzz down a notch
       const t = Date.now(); if (!inPlay(room)) break; if (t - (p.lastSplash || 0) < 20000) { toast(p, 'Give it a minute. Your face is still wet.', 'info'); break; }
       p.lastSplash = t; drunkNow(p); p.drunk = Math.max(0, p.drunk - 15); toast(p, '💦 Cold water. Things come back into focus a little.', 'info'); broadcast(room); break;
@@ -860,7 +876,7 @@ function handle(room, p, m) {
     case 'pos': {
       const x = Number(m.x), z = Number(m.z), ry = Number(m.ry);
       if (![x, z, ry].every(Number.isFinite)) break;
-      p.x = clamp(x, -30, 30); p.z = clamp(z, -30, 30); p.ry = ry; const sit = Number.isFinite(Number(m.sit)) && Number(m.sit) > 0 ? clamp(Number(m.sit), 0.2, 1.2) : 0; const jy = Number.isFinite(Number(m.jy)) ? clamp(Number(m.jy), 0, 1.2) : 0; const lp = Number.isFinite(Number(m.p)) ? clamp(Number(m.p), -1.6, 1.6) : 0;
+      p.x = clamp(x, -60, 60); p.z = clamp(z, -60, 60); // the street and the gas station are out past the bar walls p.ry = ry; const sit = Number.isFinite(Number(m.sit)) && Number(m.sit) > 0 ? clamp(Number(m.sit), 0.2, 1.2) : 0; const jy = Number.isFinite(Number(m.jy)) ? clamp(Number(m.jy), 0, 1.2) : 0; const lp = Number.isFinite(Number(m.p)) ? clamp(Number(m.p), -1.6, 1.6) : 0;
       for (const q of room.players.values()) if (q !== p) send(q, { type: 'pos', id: p.id, x: p.x, z: p.z, ry, sit, jy, p: lp });
       break;
     }

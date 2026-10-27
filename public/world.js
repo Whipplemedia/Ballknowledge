@@ -3,6 +3,7 @@ import { createGames } from './games.js';
 import { buildBar, ROOM } from './bar.js';
 import { createTV } from './tv.js';
 import { createRoulette } from './roulette.js';
+import { createOutside, OUT, drawSym } from './outside.js';
 import { createFX } from './fx.js';
 import { makePreset, animate } from './people.js';
 import { audio } from './audio.js';
@@ -46,8 +47,10 @@ const helpers = {
 const me = { x: 0, z: 2, yaw: 0, pitch: 0 };
 const keys = {};
 const games = createGames({ scene, camera, BK, me, keys, helpers, stations, obstacles });
-const roulette = createRoulette({ scene, BK, me, stations, obstacles });
+const roulette = createRoulette({ scene, BK, me, stations, obstacles, at: OUT.roulette }); // in the gas-station casino across the street
 BK.onSpin = (m) => roulette.onSpin(m);
+const outside = createOutside({ scene, BK, stations, obstacles, bar, ROOM });
+BK.onSlot = (m) => outside.onSlot(m); BK.slotDraw = drawSym;
 BK.leaveGames = () => games.leave();
 BK.startGame = (name, ch) => games.start(name, ch);
 const fx = createFX(renderer, scene, camera);
@@ -228,16 +231,25 @@ canvas.addEventListener('mousedown', (e) => {
 
 // ---------- movement ----------
 // the bar, plus the restroom through the door past Sal's booth (open while the bar is: no hiding in there from collectors or hitmen)
-const bathOpen = () => !!(BK.S && BK.S.phase === 'play' && !BK.S.shake);
-function clampToRooms() {
-  const B = bar.backroom.bounds, lane = me.z > B.dz0 + 0.28 && me.z < B.dz1 - 0.28, inside = me.x > ROOM.x + 0.2;
-  if ((inside || (lane && me.x > ROOM.x - 0.62)) && bathOpen()) {
-    if (inside) { me.x = Math.max(B.x0 + 0.32, Math.min(B.x1 - 0.32, me.x)); me.z = Math.max(B.z0 + 0.32, Math.min(B.z1 - 0.32, me.z)); }
-    else me.z = Math.max(B.dz0 + 0.28, Math.min(B.dz1 - 0.28, me.z)); // in the doorway
-    return;
-  }
-  if (me.x > ROOM.x - 0.6 && (inside || lane)) { me.x = ROOM.x - 0.9; me.z = -6.6; } // the restroom closed with you in it: you're shown out
-  me.x = Math.max(-ROOM.x + 0.6, Math.min(ROOM.x - 0.6, me.x)); me.z = Math.max(-ROOM.z + 0.6, Math.min(ROOM.z - 0.6, me.z));
+// where you can be: the bar, plus (while the bar is open, i.e. no collectors or hitmen) the restroom, the street, the gas-station lot and its casino,
+// joined by doorway lanes. px/pz: how close to a space's edges you can walk; h: its ceiling (bottles shatter on it)
+const openOut = () => !!(BK.S && BK.S.phase === 'play' && !BK.S.shake);
+const SPACES = (() => { const B = bar.backroom.bounds, D = OUT.door, C = OUT.casino, S = OUT.street, L = OUT.lot;
+  return [
+    { x0: -ROOM.x, x1: ROOM.x, z0: -ROOM.z, z1: ROOM.z, px: 0.6, pz: 0.6, h: ROOM.h },
+    { x0: ROOM.x - 0.7, x1: ROOM.x + 0.5, z0: B.dz0, z1: B.dz1, px: 0, pz: 0.28, h: 2.34, gated: true },              // restroom doorway
+    { x0: B.x0, x1: B.x1, z0: B.z0, z1: B.z1, px: 0.32, pz: 0.32, h: 3, gated: true },                                   // restroom
+    { x0: D.x - D.w / 2, x1: D.x + D.w / 2, z0: ROOM.z - 0.7, z1: ROOM.z + 0.9, px: 0.28, pz: 0, h: D.h, gated: true },  // front door
+    { x0: -36, x1: 40, z0: ROOM.z + 0.3, z1: S.z1 + 4, px: 0.3, pz: 0.3, h: 60, gated: true },                           // sidewalks + street
+    { x0: L.x0, x1: L.x1, z0: S.z1 + 3, z1: C.z0, px: 0.3, pz: 0.3, h: 60, gated: true },                                // gas-station lot
+    { x0: C.door.x - C.door.w / 2, x1: C.door.x + C.door.w / 2, z0: C.z0 - 0.5, z1: C.z0 + 0.5, px: 0.28, pz: 0, h: C.door.h, gated: true },
+    { x0: C.x0 + 0.06, x1: C.x1 - 0.06, z0: C.z0 + 0.06, z1: C.z1 - 0.06, px: 0.32, pz: 0.32, h: C.h, gated: true },   // casino
+  ]; })();
+const spaceAt = (x, z, walk = true) => { for (const s of SPACES) { if (walk && s.gated && !openOut()) continue; const px = walk ? s.px : 0, pz = walk ? s.pz : 0; if (x >= s.x0 + px && x <= s.x1 - px && z >= s.z0 + pz && z <= s.z1 - pz) return s; } return null; };
+BK.spaceAt = spaceAt;
+function walkClamp(ox, oz) { // slide along whichever axis still lands somewhere walkable
+  if (spaceAt(me.x, me.z)) return; if (spaceAt(me.x, oz)) { me.z = oz; return; } if (spaceAt(ox, me.z)) { me.x = ox; return; } if (spaceAt(ox, oz)) { me.x = ox; me.z = oz; return; }
+  if (me.x > ROOM.x - 0.6 && me.z < 0) { me.x = ROOM.x - 0.9; me.z = -6.6; } else { me.x = OUT.door.x; me.z = ROOM.z - 1.4; } // a space closed with you in it: you're shown back into the bar
 }
 function move(dt, t, drunkAmt) {
   if (kissLook(dt)) return;
@@ -248,9 +260,10 @@ function move(dt, t, drunkAmt) {
   const moving = f || s;
   dx = (dx / len) * sp * dt * (moving ? 1 : 0); dz = (dz / len) * sp * dt * (moving ? 1 : 0);
   if (drunkAmt > 0.25) { const drift = Math.sin(t * 1.3) * drunkAmt * 1.4 * dt * (moving ? 1 : 0.3); dx += cos * drift; dz += -sin * drift; }
-  me.x += dx; me.z += dz;
-  clampToRooms();
+  const ox = me.x, oz = me.z; me.x += dx; me.z += dz;
+  walkClamp(ox, oz);
   for (const o of obstacles) { const ex = me.x - o.x, ez = me.z - o.z, d = Math.hypot(ex, ez), min = o.r + 0.3; if (d < min && d > 0) { me.x = o.x + (ex / d) * min; me.z = o.z + (ez / d) * min; } }
+  if (!spaceAt(me.x, me.z)) { me.x = ox; me.z = oz; } // pushed off a table into a wall
 }
 // which seat a remote player is on (they only send position + seat height); cached until they move off it
 function seatOf(a) {
@@ -348,7 +361,12 @@ function frame(now) {
   brawlers.forEach((b, k) => { const g = b.P.group, sway = Math.sin(t * 3 + k) * 0.35; g.position.x = b.x + sway * (k ? -1 : 1) * 0.6; g.position.z = -2.2 + Math.sin(t * 2.3 + k * 2) * 0.35; animate(b.P, 'fight', t + k, 1); });
   roulette.update(dt); bar.update(t, dt, me); tv.draw(BK.S, now);
   { const c = BK.S && BK.S.cine, killOn = !!(c && c.kind === 'kill' && BK.now() < c.until + 200), dn = (x, z) => Math.hypot(x - ROOM.x, z + 6.6) < 1.8; // restroom door: opens for anyone near it (the kill scene drives it itself)
-    const near = bathOpen() && (dn(me.x, me.z) || [...avatars.values()].some((a) => dn(a.P.group.position.x, a.P.group.position.z))); bar.backroom.tick(dt, t, killOn ? null : near); }
+    const near = openOut() && (dn(me.x, me.z) || [...avatars.values()].some((a) => dn(a.P.group.position.x, a.P.group.position.z))); bar.backroom.tick(dt, t, killOn ? null : near);
+    const cineOnNow = !!(c && BK.now() < c.until + 200), fn = (x, z) => Math.hypot(x - OUT.door.x, z - ROOM.z) < 2.0; // the street door: same, unless a cutscene is using it
+    bar.frontDoor(dt, cineOnNow ? null : openOut() && (fn(me.x, me.z) || [...avatars.values()].some((a) => fn(a.P.group.position.x, a.P.group.position.z))));
+    if (!spaceAt(me.x, me.z) && !cineOnNow && !me.sit) walkClamp(me.x, me.z); // outside when collectors or hitmen showed up: back in the bar
+    outside.update(dt, BK.now()); }
+
   for (const a of avatars.values()) {
     const g = a.P.group, k = Math.min(1, dt * 10); g.position.x += (a.tx - g.position.x) * k; g.position.z += (a.tz - g.position.z) * k;
     const dgo = goons.drag[a.id] && goons.get(goons.drag[a.id]), grabbed = goons.held[a.id] || dgo;

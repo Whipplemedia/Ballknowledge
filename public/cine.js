@@ -51,7 +51,7 @@ export function createCine({ camera, BK, doors, goons, audio, backroom }) {
       const c = BK.S && BK.S.cine, now = BK.now();
       const on = !!(c && now < c.until + 200);
       document.body.classList.toggle('cine', on);
-      if (!on) { if (shown) { shown = null; cues = {}; caption(''); fade.style.opacity = 0; flash.style.opacity = 0; if (backroom) backroom.show(false); } door(doors.front, false, dt); return null; } // the restroom door opens for whoever walks up to it (bar.js)
+      if (!on) { if (shown) { shown = null; cues = {}; caption(''); fade.style.opacity = 0; flash.style.opacity = 0; if (backroom) backroom.show(false); } return null; } // outside a cutscene, both doors open for whoever walks up to them (bar.js)
       if (shown !== c.start) { shown = c.start; cues = {}; }
       const t = (now - c.start) / 1000, L = lead();
       fade.style.opacity = 0;

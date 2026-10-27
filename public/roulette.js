@@ -12,8 +12,10 @@ const STEP = (Math.PI * 2) / 37;
 const TRACK_Y = 0.07, ROTOR_Y = 0.05, SURF = 0.012, BALL_R = 0.017, FRET_H = 0.014, POCKET_IN = 0.2, POCKET_OUT = 0.29, REST_R = 0.245;
 const REST_Y = ROTOR_Y + SURF + BALL_R, ROLL_Y = TRACK_Y + BALL_R;
 
-export function createRoulette({ scene, BK, me, stations, obstacles }) {
-  const TX = -6.9, TZ = -5.3, WX = -5.75, WY = 0.94;
+// at: where the table goes. Everything below is laid out around the table's original spot in the bar (TX, TZ) inside a group moved by (at - that spot).
+export function createRoulette({ scene: world, BK, me, stations, obstacles, at = { x: -6.9, z: -5.3 } }) {
+  const TX = -6.9, TZ = -5.3, WX = -5.75, WY = 0.94, DX = at.x - TX, DZ = at.z - TZ;
+  const scene = new THREE.Group(); scene.position.set(DX, 0, DZ); world.add(scene);
   const std = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, ...o });
   // table
   const top = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.1, 1.7), std(0x3a2210, { roughness: 0.4 })); top.position.set(TX, 0.9, TZ); top.castShadow = top.receiveShadow = true; scene.add(top);
@@ -41,7 +43,7 @@ export function createRoulette({ scene, BK, me, stations, obstacles }) {
   const chipCols = [0xe4e4ea, 0xc0182a, 0x1d6ab0, 0x1c1c20, 0x1d8a4a, 0xe0a020];
   const chipStack = (x, z, n, ci) => { for (let i = 0; i < n; i++) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.009, 18), std(chipCols[ci], { roughness: 0.4 })); m.position.set(x + (i % 2) * 0.002, 0.962 + i * 0.0098, z); m.castShadow = true; scene.add(m); const s = new THREE.Mesh(new THREE.CylinderGeometry(0.031, 0.031, 0.004, 18), std(0xffffff)); s.position.copy(m.position); s.scale.set(0.5, 1, 0.5); scene.add(s); } };
   [[-8.2, -5.98, 9, 1], [-8.1, -6.02, 6, 0], [-7.98, -5.97, 7, 2], [-7.86, -6.03, 5, 3], [-7.74, -5.98, 8, 4], [-7.62, -6.02, 4, 5], [-7.5, -5.97, 6, 0], [-7.38, -6.03, 5, 1], [-7.26, -5.98, 7, 3]] /* dealer's bank, off the felt */.forEach(([x, z, n, c]) => chipStack(x, z, n, c));
-  { const t = neon('HIGH ROLLER', '#ff4ad0', { w: 512, h: 160, size: 70 }).t; const m = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.69), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, toneMapped: false })); m.position.set(TX, 3.5, -7.85); scene.add(m); const l = new THREE.PointLight(0xff40c0, 16, 7); l.position.set(TX, 3.2, -7.2); scene.add(l); }
+  { const t = neon('HIGH ROLLER', '#ff4ad0', { w: 512, h: 160, size: 70 }).t; const m = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.69), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, toneMapped: false })); const sz = at.signZ !== undefined ? at.signZ - DZ : -7.85; m.position.set(TX, at.signY ?? 3.5, sz); scene.add(m); const l = new THREE.PointLight(0xff40c0, 16, 7); l.position.set(TX, Math.min(3.2, (at.signY ?? 3.5) - 0.3), sz + 0.65); scene.add(l); }
   // wheel
   const wheel = new THREE.Group(); wheel.position.set(WX, WY, TZ); wheel.scale.setScalar(1.3); scene.add(wheel);
   // bowl + ball track: an open ring so the rotor below stays visible; the ball rolls on the track (TRACK_Y) then drops into a pocket
@@ -68,9 +70,9 @@ export function createRoulette({ scene, BK, me, stations, obstacles }) {
   const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.18, 0.06, 24), std(0x5a3a18, { roughness: 0.3 })); hub.position.y = 0.04; D.add(hub);
   const tur = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.13, 12), std(0xd8b04a, { metalness: 0.9, roughness: 0.2 })); tur.position.y = 0.13; D.add(tur);
   const ball = new THREE.Mesh(new THREE.SphereGeometry(BALL_R, 14, 10), std(0xffffff, { roughness: 0.1, metalness: 0.3 })); ball.castShadow = true; ball.visible = false; wheel.add(ball);
-  obstacles.push({ x: TX - 0.9, z: TZ, r: 1.0 }, { x: TX + 0.2, z: TZ, r: 1.0 }, { x: WX, z: TZ, r: 0.95 });
+  obstacles.push({ x: TX - 0.9 + DX, z: TZ + DZ, r: 1.0 }, { x: TX + 0.2 + DX, z: TZ + DZ, r: 1.0 }, { x: WX + DX, z: TZ + DZ, r: 0.95 });
   const sl = label('🎰 ROULETTE'); sl.position.set(TX, 2.3, TZ); scene.add(sl);
-  stations.push({ x: -6.2, z: -3.5, r: 2.3, text: 'E - Roulette table', act: () => BK.openPanel('wheel') });
+  stations.push({ x: -6.2 + DX, z: -3.5 + DZ, r: 2.3, text: 'E - Roulette table', act: () => BK.openPanel('wheel') });
 
   // the spinner's bets as chip stacks on the felt (everyone sees them), cleared after the result
   const betChips = new THREE.Group(); scene.add(betChips);
@@ -98,7 +100,7 @@ export function createRoulette({ scene, BK, me, stations, obstacles }) {
     },
     active: () => !!spin && (performance.now() - spin.start) / 1000 < spin.T + 4.5,
     debug() { const th = Math.atan2(ball.position.x, ball.position.z), rel = trueMod(th - D.rotation.y); return { under: ORDER[Math.floor(rel / STEP)], expected: spin ? spin.n : null, t: spin ? (performance.now() - spin.start) / 1000 : null, popup: !pop.classList.contains('hidden'), popText: pop.textContent, radius: Math.hypot(ball.position.x, ball.position.z) }; },
-    lookTarget() { return spin && spin.mine && (performance.now() - spin.start) / 1000 < spin.T + 2.5 ? { x: -5.75, z: -3.6, yaw: 0, pitch: -0.5 } : null; },
+    lookTarget() { return spin && spin.mine && (performance.now() - spin.start) / 1000 < spin.T + 2.5 ? { x: -5.75 + DX, z: -3.6 + DZ, yaw: 0, pitch: -0.5 } : null; },
     update(dt) {
       if (!spin) { psi += wheelW * 0.15 * dt; D.rotation.y = psi; return; }
       const t = (performance.now() - spin.start) / 1000, T = spin.T;
@@ -111,7 +113,7 @@ export function createRoulette({ scene, BK, me, stations, obstacles }) {
         y = ROLL_Y + (REST_Y - ROLL_Y) * e + (u > 0.35 ? Math.abs(Math.sin(t * 9)) * 0.03 * (1 - e) : 0) + (u >= 1 ? Math.abs(Math.sin((t / T - 0.8) * 60)) * 0.012 * Math.exp(-(t / T - 0.8) * 28) : 0);
       } else { th = spin.thetaK + psi; r = REST_R; y = REST_Y; }
       ball.position.set(r * Math.sin(th), y + 0.0, r * Math.cos(th));
-      { const wp = { x: -5.75, y: 1.0, z: -3.6 }; // sound: wheel whir while spinning, pocket ticks as the ball skitters over the pockets, a drop-in rattle at the end
+      { const wp = { x: -5.75 + DX, y: 1.0, z: -3.6 + DZ }; // sound: wheel whir while spinning, pocket ticks as the ball skitters over the pockets, a drop-in rattle at the end
         if (t < T) { if (!spin.snd) { spin.snd = audio.loop('wheel', { pos: wp, g: 0.2 }); spin.cell = -1; } spin.snd.set(0.2 * (1 - t / T) + 0.02);
           if (t / T > 0.55) { const cell = Math.floor(trueMod(th - psi) / STEP); if (cell !== spin.cell) { spin.cell = cell; audio.sfx('rTick', { pos: wp, pitch: 0.85 + Math.random() * 0.4, ref: 2.5 }); } } }
         else if (!spin.dropped) { spin.dropped = true; if (spin.snd) { spin.snd.stop(); spin.snd = null; } audio.sfx('rDrop', { pos: wp, ref: 2.5 }); } }

@@ -5,6 +5,7 @@ import { makePreset, makePerson, randomPatron, animate } from './people.js';
 import { buildItem, applyCosmetics } from './cosmetics.js';
 import { createSeatedLife } from './seated.js';
 import { makeDizzy, headPos } from './dizzy.js';
+import { OUT } from './outside.js';
 
 export const ROOM = { x: 12, z: 8, h: 5 };
 
@@ -30,7 +31,7 @@ export function buildBar({ scene, BK, tv }) {
   const wallPaint = TX.paintedWall('#56684a', [6, 1.5]).t, panel = TX.paneling([6, 1]).t;
   // the right wall has a doorway (the restroom, past Sal's booth): gap = {c: centre along the wall, w, h}. Local x runs along the wall (+z for the right wall).
   const DOOR = { c: -6.6, w: 1.24, h: 2.34 };
-  const walls = [[ROOM.x * 2, 0, -ROOM.z, 0], [ROOM.x * 2, 0, ROOM.z, Math.PI], [ROOM.z * 2, -ROOM.x, 0, Math.PI / 2], [ROOM.z * 2, ROOM.x, 0, -Math.PI / 2, DOOR]];
+  const walls = [[ROOM.x * 2, 0, -ROOM.z, 0], [ROOM.x * 2, 0, ROOM.z, Math.PI, { c: -OUT.door.x, w: OUT.door.w, h: OUT.door.h }], [ROOM.z * 2, -ROOM.x, 0, Math.PI / 2], [ROOM.z * 2, ROOM.x, 0, -Math.PI / 2, DOOR]]; // front wall: the street door (the wall group is turned PI, so its local x is -world x)
   const rep = (t, k) => { const c = t.clone(); c.repeat.set(t.repeat.x * k, t.repeat.y); c.needsUpdate = true; return c; };
   for (const [len, x, z, ry, gap] of walls) {
     const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
@@ -217,8 +218,9 @@ export function buildBar({ scene, BK, tv }) {
   const sleeper = spawn(makePreset('rookie', { beard: 'stubble', hat: null, hairStyle: 'messy', hair: 0x5a4a3a, shirt: 0x6a6a2a, outfit: 'tee' }), 2.5, hasProp('booth') ? BOOTH.hipA : 7.3, 0, 'sleep', ['zzz... not the under...', '...five more minutes...'], 'Sleeper', hasProp('booth') ? BOOTH.seat : 0.45);
   spawn(makePreset('steve'), 7.6, hasProp('couch') ? 6.92 : 6.7, 0, 'drink', ['This couch has seen things.', 'I\'m not drunk. YOU\'RE drunk.', 'Who wants to fight? Nobody? Cool.'], 'Couch guy', 0.45).who = 'Sloppy Steve';
   // roulette dealer, bowling & cornhole spectators
-  spawn(makePreset('knowItAll', { glasses: false, outfit: 'suit', shirt: 0x1d2a22, tie: 0x2a8a4a, hairStyle: 'slick', hair: 0x1a1210, mouth: 'smile' }), -7.0, -6.75, Math.PI, 'idle', ['Place your bets.', 'No more bets.', 'Red or black?'], 'Dealer');
-  tag('Dealer', -7.0, 2.7, -6.75);
+  // the roulette dealer works the gas-station casino across the street now (outside.js)
+  spawn(makePreset('knowItAll', { glasses: false, outfit: 'suit', shirt: 0x1d2a22, tie: 0x2a8a4a, hairStyle: 'slick', hair: 0x1a1210, mouth: 'smile' }), OUT.dealer.x, OUT.dealer.z, Math.PI, 'idle', ['Place your bets.', 'No more bets.', 'Red or black?'], 'Dealer');
+  tag('Dealer', OUT.dealer.x, 2.7, OUT.dealer.z);
   spawn(randomPatron(3), -8.8, 3.6, face(-8.8, 3.6, -10.6, 3.0), 'cheer', ['Strike! Strike!', 'Come on, pocket!', 'Gutter. Classic.'], 'Spectator');
   spawn(randomPatron(6), -8.0, 1.6, face(-8.0, 1.6, -6.0, 4.4), 'drink', ['Bags up!', 'Watch the wind.', 'Nice toss.'], 'Spectator');
   spawn(randomPatron(9), -8.5, -4.6, face(-8.5, -4.6, -10, -7.6), 'point', ['Triple twenty!', 'Don\'t choke.', 'He\'s shaking.'], 'Spectator');
@@ -228,7 +230,7 @@ export function buildBar({ scene, BK, tv }) {
   // ---------- Old Vinnie (tipster) and the bartender's job targets ----------
   stations.push({ x: 8.3, z: 3.4, r: 1.15, text: 'E - Buy Old Vinnie a drink (tips)', act: () => BK.openPanel('vinnie') });
   const jobOf = () => BK.S && BK.S.me && BK.S.me.job;
-  for (const [who, x, z] of [['Gina', 5.4, 3.4], ['Celtics Ray', 8.3, 4.6], ['Sloppy Steve', 7.6, 6.2], ['Dealer', -7.0, -5.8], ['Clerk', -8.6, 6.4]]) {
+  for (const [who, x, z] of [['Gina', 5.4, 3.4], ['Celtics Ray', 8.3, 4.6], ['Sloppy Steve', 7.6, 6.2], ['Dealer', OUT.dealer.x, OUT.dealer.z + 1.0], ['Clerk', -8.6, 6.4]]) {
     stations.push({ x, z, r: 1.8, prio: 2, on: () => { const j = jobOf(); return !!(j && j.target === who && (j.kind === 'deliver' || (j.kind === 'collect' && j.stage === 'go'))); },
       get text() { const j = jobOf(); return j && j.kind === 'deliver' ? `E - Hand ${who} the round` : `E - Collect Sal's envelope from ${who}`; }, act: () => BK.send({ type: 'jobAct' }) });
   }
@@ -495,5 +497,7 @@ export function buildBar({ scene, BK, tv }) {
   }
   // scripted speech: say('Bartender' | 'Old Vinnie' | 'Uncle Sal', text) - by display name (n.who) or role name
   const say = (who, text, secs = 6) => { const n = npcs.find((x) => x.who === who) || npcs.find((x) => x.name === who); if (!n || !n.bubble) return null; if (n.bubble.sprite.visible && !n.forced) n.bubble.set(''); n.forced = { text, secs, shown: false }; return n; };
-  return { stations, obstacles, npcs, seats, update, wanderPos, life, bottleSpots, doors, say, backroom, kiss, ginaHead };
+  // the street door opens for anyone walking up to it (null: a cutscene is driving it)
+  const frontDoor = (dt, near) => { const d = doors.front; if (!d || near === null) return; const tgt = (d.userData.base ?? (d.userData.base = d.rotation.y)) + (near ? 1.35 : 0); d.rotation.y += (tgt - d.rotation.y) * Math.min(1, dt * 6); };
+  return { stations, obstacles, npcs, seats, update, wanderPos, life, bottleSpots, doors, say, backroom, kiss, ginaHead, spawn, frontDoor };
 }

@@ -143,6 +143,27 @@ The scene has ~1,400 meshes and ~12 lights. If the first couple of seconds avera
 - `MESHY` in cosmetics.js sets how each one sits: rotation, target size, and an anchor (bottom, center, front for glasses, top for things held by the grip). `buildItem` shows the old primitive version until the model arrives, and keeps it if the model can't load. The Pro Shop stands and wall rack use the same models.
 - **Outfits (11 body items):** Meshy retextures of Bub's original model, generated with his UVs. Only the clothing is kept (torso and arm triangles, plus Bub's shirt-colored pixels). Bare skin is mapped back to Bub's skin tone, then everything is baked onto his texture (`public/models/cos/<id>.jpg`, ~210 KB each). Wearing one swaps the player's body texture (`setOutfit` in people.js), keeping their own skin and hair colors. Characters that aren't Bub (like the Pro Shop clerk) still get the primitive version.
 
+## Outside: the street, the gas station, the casino (`public/outside.js`)
+- The bar's front door (EXIT) opens onto a Chicago street at night:
+  - sidewalks and a two-lane street;
+  - the L's green steel trestle overhead, with a train every 90 s by the shared clock and a moving rumble;
+  - brick and greystone walk-ups with lit windows on both sides, street lamps, a hydrant, a mailbox, a news box, a dumpster and parked cars;
+  - a painted skyline and a sky dome.
+- **The gas station** is across the street and to the right: a canopy over two pump islands, and the store at the back of the lot.
+- **The store is a little gas-station casino.** It has the roulette table, moved here from the bar together with the Dealer (the Dealer's side job follows him), six **slot machines**, a checkout counter and a clerk. Two regulars feed their machines.
+- **Slots (functional):**
+  - Bets are $10 / $25 / $50 / $100, on three weighted reels (`SLOT_*` in server.js) that return about 91%: 7-7-7 pays 100x, three balls 30x, three BARs 20x, three bells 12x, three cherries 10x, three lemons 8x, two cherries 1.5x, one cherry 0.5x.
+  - The server takes the stake and picks the reels. Every client rolls that machine's screen. The winnings land when the reels stop (1.65 s). Big hits go to the feed.
+  - The panel (`slotView` in client.js) rolls the same reels. Space spins.
+- **Where you can walk** is a list of boxes (`SPACES` in world.js): the bar, the restroom, the street, the lot and the casino, joined by doorway lanes. Movement slides along whichever axis stays inside. Bottles shatter at the edge of every space (`BK.spaceAt`).
+- Everything outside the bar is open only while the bar is (play phase, no collectors). When collectors or hitmen show up, anyone outside is put back inside, so there's no hiding.
+- Both doors open for anyone walking up to them, unless a cutscene is driving them.
+- **Art drop-in:** everything out here is a stand-in made from boxes and canvas textures for now. Reference art listed in `public/art/manifest.json` (as `public/art/<name>.webp`) replaces those textures: skyline, facade_brick, facade_greystone, bar_exterior, gas_station_store, sidewalk. Outside surfaces glow faintly with their own texture (`lit()`), so the street reads at night without dozens of lights.
+
+## Type
+- **Bungee:** titles, big buttons (`.cta`), promo graphics, TV headlines, slot symbols and splashes.
+- **Barlow Condensed:** everything else (menus, odds, stats, the HUD). Both load from Google Fonts in index.html. On the TVs, weight-900 text uses Bungee and the rest uses Barlow Condensed.
+
 ## The phone (bet results)
 - Every settled game buzzes your phone. The server stores one line per bet in `p.results[idx].lines` (`{mk, label, won, stake, net}`, or `void: true` when the league catches a fix). The client diffs `S.me.results` against what it has already buzzed for, so a page refresh or a new night never replays old results. There is no settle toast any more; the phone replaces it.
 - **A bet hits:** a big "BET HIT! +$X" splash across the screen, a green edge flash, falling cash, the win, cash and coin sounds, and the phone peeks up from the bottom right with the result.
