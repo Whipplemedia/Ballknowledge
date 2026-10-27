@@ -66,6 +66,19 @@
         "style": 0.6
       },
       "direction": "excited TV play-by-play announcer"
+    },
+    "gina": {
+      "voices": [
+        "Elli",
+        "Bella",
+        "Rachel"
+      ],
+      "settings": {
+        "stability": 0.45,
+        "similarity_boost": 0.75,
+        "style": 0.4
+      },
+      "direction": "young woman at a dive bar pool table, bored, flat, not interested"
     }
   },
   "lines": [
@@ -193,6 +206,11 @@
       "id": "an_final",
       "speaker": "announcer",
       "text": "And that is the ball game!"
+    },
+    {
+      "id": "gina_bf",
+      "speaker": "gina",
+      "text": "I have a boyfriend."
     }
   ]
 }

@@ -5,7 +5,7 @@ import { animate } from './people.js';
 // player sees the same beats. Returns true while it owns the camera; world.js then skips input and its own camera.
 // Shots are short, letterboxed, with a caption; doors swing on cue.
 const FRONT_IN = new THREE.Vector3(5, 1.3, 7.9), BACK_IN = new THREE.Vector3(11.7, 1.2, -6.6);
-// the kill: dragged out (0 - DRAG s), then the back room: Sal, a bat, lights out (BR = seconds after the cut)
+// the kill: dragged out (0 - DRAG s), then the restroom: Sal, a bat, lights out (BR = seconds after the cut)
 const DRAG = 6.5, BR = { talk: 2.3, wind: 3.5, hit: 3.75, black: 4.4 };
 export function createCine({ camera, BK, doors, goons, audio, backroom }) {
   const top = document.createElement('div'), bot = document.createElement('div'), cap = document.createElement('div'), fade = document.createElement('div'), flash = document.createElement('div');
@@ -20,19 +20,19 @@ export function createCine({ camera, BK, doors, goons, audio, backroom }) {
   const door = (d, open, dt, ang = 1.35) => { if (!d) return; const tgt = open ? ang : 0; /* swings into the room */ d.rotation.y += ((d.userData.base ?? (d.userData.base = d.rotation.y)) + tgt - d.rotation.y) * Math.min(1, dt * 7); };
   const shot = (px, py, pz, lx, ly, lz) => { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); };
 
-  // first person in the chair: Sal talks, winds up, swings. u = seconds since the cut to the back room
+  // first person on your knees on the restroom floor: Sal talks, winds up, swings. u = seconds since the cut
   function backroomPOV(u) {
     const B = backroom, P = B.sal, ch = B.chair; B.show(true);
-    B.pivot.rotation.z = Math.sin(u * 1.7) * 0.22; B.pivot.rotation.x = Math.cos(u * 1.3) * 0.1; B.light.intensity = Math.random() < 0.04 ? 0.9 : 2.4;
+    B.light.intensity = Math.random() < 0.06 ? 1.0 : 4.5; // the tube stutters
     // Sal: idle with the bat, bat overhead, then down at you
     animate(P, 'idle', u); const [aL, aR] = P.arms, wind = ease((u - BR.talk) / (BR.wind - BR.talk)), sw = ease((u - BR.wind) / (BR.hit - BR.wind));
     const x = -0.25 - 2.85 * wind + 1.9 * sw; /* arm forward-up is negative x: hanging, cocked over his shoulder, then a diagonal swipe across his body at your face */
     aR.rotation.x = u < BR.talk ? -0.25 + Math.sin(u * 3) * 0.08 : x; aL.rotation.x = u < BR.talk ? -0.9 : lerp(-0.9, x + 0.15, wind); aR.rotation.z = lerp(0, -0.55, wind) - 0.95 * sw; aL.rotation.z = lerp(0, 0.55, wind) - 0.3 * sw;
     P.torso.rotation.x = -0.15 * wind + 0.4 * sw; P.head.rotation.x = -0.1 * wind + 0.2 * sw;
     P.group.position.x = ch.x - 1.45 + 0.12 * wind + 0.12 * sw; if (P.skinUpdate) P.skinUpdate();
-    // camera: slumped in the chair looking up at him; the hit knocks you sideways to the floor
+    // camera: kneeling, looking up at him; the hit knocks you sideways onto the tiles
     const hit = Math.max(0, u - BR.hit), fall = ease(hit / 0.45);
-    camera.position.set(ch.x + 0.05, 1.08 - fall * 0.55 + Math.sin(u * 1.1) * 0.01, ch.z + fall * 0.3);
+    camera.position.set(ch.x + 0.05, 0.98 - fall * 0.55 + Math.sin(u * 1.1) * 0.01, ch.z + fall * 0.3);
     camera.lookAt(P.group.position.x, 1.45 + wind * 0.3 - sw * 0.25 - fall * 0.8, ch.z - fall * 0.4);
     if (sw > 0 && sw < 1) camera.rotation.z += Math.sin(u * 60) * 0.01; /* flinch */
     camera.rotation.z += fall * 0.9 + (hit > 0 && hit < 0.3 ? (Math.random() - 0.5) * 0.12 : 0);
@@ -41,7 +41,7 @@ export function createCine({ camera, BK, doors, goons, audio, backroom }) {
     if (u > 0.5) cue('br_vo', () => BK.vo && BK.vo.play('sal_backroom'));
     flash.style.opacity = hit > 0 ? Math.max(0, 1 - hit / 0.35) : 0;
     fade.style.opacity = u < 0.8 ? 1 - u / 0.8 : u > BR.hit + 0.15 ? Math.min(1, (u - BR.hit - 0.15) / (BR.black - BR.hit - 0.15)) : 0;
-    if (u > 0.6 && u < BR.talk) caption('THE BACK ROOM', '"I told you, kid. I always collect."');
+    if (u > 0.6 && u < BR.talk) caption('THE MEN\'S ROOM', '"I told you, kid. I always collect."');
     else if (u > BR.black + 0.3) caption('LIGHTS OUT.', ''); else caption('', '');
   }
 
@@ -51,7 +51,7 @@ export function createCine({ camera, BK, doors, goons, audio, backroom }) {
       const c = BK.S && BK.S.cine, now = BK.now();
       const on = !!(c && now < c.until + 200);
       document.body.classList.toggle('cine', on);
-      if (!on) { if (shown) { shown = null; cues = {}; caption(''); fade.style.opacity = 0; flash.style.opacity = 0; if (backroom) backroom.show(false); } door(doors.front, false, dt); door(doors.back, false, dt, -1.35); return null; }
+      if (!on) { if (shown) { shown = null; cues = {}; caption(''); fade.style.opacity = 0; flash.style.opacity = 0; if (backroom) backroom.show(false); } door(doors.front, false, dt); return null; } // the restroom door opens for whoever walks up to it (bar.js)
       if (shown !== c.start) { shown = c.start; cues = {}; }
       const t = (now - c.start) / 1000, L = lead();
       fade.style.opacity = 0;
@@ -107,10 +107,10 @@ export function createCine({ camera, BK, doors, goons, audio, backroom }) {
           const g = o.P.group, ry = g.rotation.y, fx = -Math.sin(ry), fz = -Math.cos(ry);
           camera.position.set(g.position.x - fx * 0.75, 0.95 + Math.sin(t * 7) * 0.03, g.position.z - fz * 0.75); camera.lookAt(camera.position.x - fx * 4, 1.25, camera.position.z - fz * 4);
           camera.rotation.z += Math.sin(t * 3) * 0.06;
-          caption(t > 1 ? 'SAL WANTS A WORD' : '', t > 1 ? 'in the back room...' : '');
+          caption(t > 1 ? 'SAL WANTS A WORD' : '', t > 1 ? 'in the bathroom...' : '');
           fade.style.opacity = Math.max(0, Math.min(1, (t - (DRAG - 1.2)) / 1.1));
         } else {
-          shot(8.4, 1.85, -3.0, BACK_IN.x - 0.4, 1.1, BACK_IN.z); caption(t > 0.8 ? `${(c.names || []).join(' and ')} couldn't pay` : '', t > 0.8 ? 'Sal wants a word in the back room.' : '');
+          shot(8.4, 1.85, -3.0, BACK_IN.x - 0.4, 1.1, BACK_IN.z); caption(t > 0.8 ? `${(c.names || []).join(' and ')} couldn't pay` : '', t > 0.8 ? 'Sal wants a word in the bathroom.' : '');
         }
         return 'camera';
       }

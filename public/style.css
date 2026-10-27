@@ -391,3 +391,13 @@ body.cine #app .hud,body.cine #prompt,body.cine #cross,body.cine #toasts,body.ci
 @keyframes bflash{0%,30%{opacity:1}100%{opacity:0}}
 .cashrain span{position:fixed;top:-70px;z-index:34;font-size:36px;pointer-events:none;animation-name:fall;animation-timing-function:linear;animation-fill-mode:both}
 @keyframes fall{to{transform:translateY(calc(100vh + 120px)) rotate(var(--r))}}
+/* crowd bottle hit + Gina's kiss */
+#hitflash{position:fixed;inset:0;z-index:23;pointer-events:none;opacity:0;box-shadow:inset 0 0 140px 50px #d01020}
+#hitflash.on{animation:hitf .45s ease-out}
+@keyframes hitf{0%{opacity:1}100%{opacity:0}}
+#kissfx{position:fixed;inset:0;z-index:34;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0;text-align:center}
+#kissfx.on{animation:kissin 6.5s ease-out forwards;background:radial-gradient(ellipse at center,#0000 40%,#ff3a8a55 100%)}
+#kissfx .kf-lips{font-size:clamp(90px,16vw,180px);filter:drop-shadow(0 6px 18px #000a);transform:rotate(-12deg)}
+#kissfx .kf-txt{font-size:clamp(28px,4vw,46px);font-weight:900;color:#ff7ab0;text-shadow:0 3px 14px #000}
+#kissfx .kf-sub{font-size:15px;color:#fff;text-shadow:0 2px 8px #000;margin-top:4px}
+@keyframes kissin{0%{opacity:0}6%{opacity:1}80%{opacity:1}100%{opacity:0}}

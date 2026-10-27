@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { jerseyTex, floralTex } from './textures.js';
-import { makePreset } from './people.js';
+import { makePreset, setOutfit, canWearOutfit } from './people.js';
+import { gltfLoader } from './loading.js';
 
 // ~50 wearable items. Built from primitives so they work with no assets. Slots: head, face, body, hand, back.
 export const RARITY = { common: { label: 'Common', color: '#9fb0d8', w: 58 }, rare: { label: 'Rare', color: '#4da3ff', w: 28 }, epic: { label: 'Epic', color: '#b060ff', w: 11 }, legendary: { label: 'Legendary', color: '#ffc83d', w: 3 } };
@@ -90,11 +91,56 @@ export const CATALOG = [
 ];
 export const BY_ID = Object.fromEntries(CATALOG.map((c) => [c.id, c]));
 
+// ---- Meshy models (public/models/cos/<id>.glb, made from text prompts; task ids in blender/meshy_cosmetics.json) ----
+// The primitive version above shows while a model streams in (and stays if it can't load).
+// fit: rotate (rx/ry/rz; Meshy fronts face +z, ours face -z, so worn things turn ry: PI), scale to w (x width) / h (height) / len (longest side),
+// then put an anchor of the box at `at` in the mount's space: bottom | center | front (nearest -z face, for glasses) | top (hand items: grip at the top, hanging down)
+const PI = Math.PI;
+const MESHY = {
+  bucket_hat: { w: 0.58, at: [0, 0.1, 0] }, sweatband: { w: 0.45, rx: 0.58, at: [0, 0.03, 0.01] }, party_hat: { w: 0.26, rz: 0.15, at: [0.02, 0.2, 0] }, chef_hat: { h: 0.42, at: [0, 0.12, 0] },
+  bat_helmet: { w: 0.5, ry: PI, at: [0, -0.01, 0] }, hockey_helmet: { w: 0.48, ry: PI, at: [0, -0.05, -0.02] }, cowboy: { w: 0.78, ry: PI, at: [0, 0.12, 0] }, tophat: { w: 0.56, at: [0, 0.15, 0] },
+  propeller: { w: 0.47, ry: PI, at: [0, 0.13, 0] }, helmet_fb: { w: 0.54, ry: PI, at: [0, -0.2, -0.04] }, viking: { w: 0.8, ry: PI, at: [0, -0.1, 0.07] }, wizard: { w: 0.56, ry: PI, at: [0, 0.12, 0] },
+  sombrero: { w: 1.15, at: [0, 0.12, 0] }, crown: { w: 0.46, ry: PI, at: [0, 0.14, 0] }, halo: { w: 0.44, rx: 0.2, at: [0, 0.5, 0], anchor: 'center', glow: 0xffd860 },
+  clown_nose: { w: 0.11, at: [0, -0.04, -0.27], anchor: 'front' }, aviators: { w: 0.44, ry: PI, at: [0, 0.05, -0.25], anchor: 'front' }, ski_goggles: { w: 0.48, ry: PI, at: [0, 0.08, -0.26], anchor: 'front' },
+  handlebar: { w: 0.3, ry: PI, at: [0, -0.09, -0.24], anchor: 'front' }, neon_shades: { w: 0.42, ry: PI, at: [0, 0.05, -0.24], anchor: 'front' }, monocle: { w: 0.2, ry: PI, at: [0.1, 0.0, -0.24], anchor: 'front' },
+  groucho: { w: 0.44, ry: PI, at: [0, 0.0, -0.27], anchor: 'front' },
+  golf_club: { len: 0.9, rz: PI, rx: -0.15, at: [0, 0.1, 0], anchor: 'top' }, golden_club: { len: 0.9, rx: -0.15, at: [0, 0.1, 0], anchor: 'top' }, bat: { len: 0.82, rx: -0.3, at: [0, 0.1, 0], anchor: 'top' },
+  hockey_stick: { len: 1.4, rx: -0.2, ry: -PI / 2, at: [0, 0.55, 0], anchor: 'top' }, bowling_pin: { len: 0.42, at: [0, 0.06, 0], anchor: 'top' },
+  foam_finger: { len: 0.55, ry: PI, at: [0, -0.06, -0.06] }, racket: { len: 0.68, rz: PI, ry: PI / 2, at: [0, 0.08, 0], anchor: 'top' }, trophy: { len: 0.42, ry: PI, at: [0, -0.04, -0.06] }, stein: { len: 0.3, ry: -PI / 2, at: [0, -0.06, -0.1] },
+  megaphone: { len: 0.5, ry: -PI / 2, at: [0, -0.1, -0.14], anchor: 'center' },
+  cape: { h: 1.0, at: [0, 0.28, 0.02], anchor: 'top' }, golf_bag: { h: 0.9, rz: 0.3, at: [0, 0, 0.1], anchor: 'center' }, banner: { h: 1.35, at: [0, -0.45, 0.06] },
+  jetpack: { h: 0.55, at: [0, 0, 0.17], anchor: 'center' }, angel_wings: { w: 1.4, at: [0, 0.1, 0.12], anchor: 'center' }, dragon_wings: { w: 1.6, at: [0, 0.15, 0.16], anchor: 'center' },
+};
+const cosLoader = typeof document !== 'undefined' ? gltfLoader() : null, glbs = new Map(), fits = new Map();
+const loadModel = (id) => { if (!glbs.has(id)) glbs.set(id, cosLoader.loadAsync(`models/cos/${id}.glb`).then((g) => {
+  g.scene.traverse((o) => { if (!o.isMesh) return; o.castShadow = false; const m = o.material; if (m) { m.metalness = Math.min(m.metalness ?? 0, 0.35); m.roughness = Math.max(m.roughness ?? 1, 0.45); if (MESHY[id].glow) { m.emissive = new THREE.Color(MESHY[id].glow); m.emissiveIntensity = 0.8; } } }); // no env map in the bar: keep metals readable
+  return g.scene; }).catch(() => null)); return glbs.get(id); };
+function fitted(id, src) {
+  if (!fits.has(id)) { // place once per item, clone the placed template after that
+    const f = MESHY[id], wrap = new THREE.Group(), inner = new THREE.Group(), mid = new THREE.Group(); mid.add(src.clone(true)); mid.rotation.set(f.rx || 0, f.ry || 0, f.rz || 0, 'YXZ'); inner.add(mid); wrap.add(inner);
+    wrap.updateMatrixWorld(true); let b = new THREE.Box3().setFromObject(inner); const sz = b.getSize(new THREE.Vector3());
+    inner.scale.setScalar(f.w ? f.w / sz.x : f.h ? f.h / sz.y : f.len / Math.max(sz.x, sz.y, sz.z)); wrap.updateMatrixWorld(true); b = new THREE.Box3().setFromObject(inner); const c = b.getCenter(new THREE.Vector3());
+    const at = f.at, an = f.anchor || 'bottom';
+    inner.position.set(at[0] - c.x, at[1] - (an === 'bottom' ? b.min.y : an === 'top' ? b.max.y : c.y), at[2] - (an === 'front' ? b.min.z : c.z));
+    fits.set(id, wrap);
+  }
+  return fits.get(id).clone(true);
+}
+// build an item into group g: the primitive stand-in now, the Meshy model when it arrives (if g is still in use)
+export function buildItem(id, g) {
+  const it = BY_ID[id]; if (!it) return; it.make(g);
+  if (!MESHY[id] || !cosLoader) return;
+  loadModel(id).then((src) => { if (!src || g.userData.dead) return; for (const ch of [...g.children]) g.remove(ch); g.userData.bob = null; g.userData.spin = null; g.rotation.set(0, 0, 0); g.add(fitted(id, src)); if (id === 'halo') g.userData.bob = true; });
+}
+const outfitTex = new Map(); const OUTFITS = new Set(['jersey_bb', 'jersey_fb', 'jersey_hockey', 'jersey_base', 'ref_shirt', 'hawaiian', 'letterman', 'lucky_vest', 'tux', 'tracksuit', 'robe']);
+const loadOutfit = (id) => { if (!outfitTex.has(id)) outfitTex.set(id, new THREE.TextureLoader().loadAsync(`models/cos/${id}.jpg`).then((t) => { t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; return t; }).catch(() => null)); return outfitTex.get(id); };
+
 // ---- applying to a person ----
 const SLOT_MOUNT = { head: (P) => ({ parent: P.head }), face: (P) => ({ parent: P.head }), hand: (P) => ({ parent: P.arms[1], pos: [0, -0.6, -0.04] }), back: (P) => ({ parent: P.group, pos: [0, 1.25, 0.2] }) };
 export function applyCosmetics(P, cos = {}) {
-  if (P._cos) for (const { obj, parent } of P._cos) parent.remove(obj);
+  if (P._cos) for (const { obj, parent } of P._cos) { parent.remove(obj); obj.userData.dead = true; }
   P._cos = []; P._anim = [];
+  if (P._outfit && P._outfit !== cos.body) { setOutfit(P, null); P._outfit = null; } // took the outfit off
   if (cos.tag === 'toe_tag') { // worn for a season after dying: a morgue tag dangling at the right foot
     const g = new THREE.Group(), card = new THREE.Mesh(new THREE.PlaneGeometry(0.17, 0.1), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, map: (() => { const c = document.createElement('canvas'); c.width = 128; c.height = 76; const g = c.getContext('2d'); g.fillStyle = '#f2ecd8'; g.fillRect(0, 0, 128, 76); g.strokeStyle = '#8a6a3a'; g.lineWidth = 4; g.strokeRect(3, 3, 122, 70); g.fillStyle = '#b01818'; g.font = '900 34px system-ui'; g.textAlign = 'center'; g.fillText('D.O.A.', 64, 50); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })() }));
     const str = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.09, 4), new THREE.MeshBasicMaterial({ color: 0x9a7a4a })); str.position.y = 0.045; card.position.set(0.03, -0.05, 0); card.rotation.z = 0.35; g.add(str, card);
@@ -105,11 +151,15 @@ export function applyCosmetics(P, cos = {}) {
   }
   for (const slot of ['body', 'head', 'face', 'hand', 'back']) {
     const it = BY_ID[cos[slot]]; if (!it || it.slot !== slot) continue;
-    if (slot === 'body') { for (const a of it.make(P)) { a.parent.add(a.obj); P._cos.push(a); } continue; }
+    if (slot === 'body') {
+      if (OUTFITS.has(it.id) && canWearOutfit(P)) { // Bub-bodied players wear the real thing: the Meshy outfit painted onto their own body
+        P._outfit = it.id; loadOutfit(it.id).then((t) => { if (P._outfit !== it.id) return; if (t) setOutfit(P, t); else { P._outfit = null; for (const a of it.make(P)) { a.parent.add(a.obj); P._cos.push(a); } } }); continue;
+      }
+      for (const a of it.make(P)) { a.parent.add(a.obj); P._cos.push(a); } continue;
+    }
     const mt = SLOT_MOUNT[slot](P), g = new THREE.Group(); if (mt.pos) g.position.set(...mt.pos);
-    it.make(g); mt.parent.add(g); P._cos.push({ obj: g, parent: mt.parent });
-    if (g.userData.spin) P._anim.push((t) => { g.userData.spin.rotation.y = t * 14; });
-    if (g.userData.bob) P._anim.push((t) => { g.position.y = Math.sin(t * 2) * 0.02; });
+    buildItem(it.id, g); mt.parent.add(g); P._cos.push({ obj: g, parent: mt.parent });
+    P._anim.push((t) => { if (g.userData.spin) g.userData.spin.rotation.y = t * 14; if (g.userData.bob) g.position.y = (mt.pos ? mt.pos[1] : 0) + Math.sin(t * 2) * 0.02; });
   }
 }
 export const tickCosmetics = (P, t) => { if (P._anim) for (const f of P._anim) f(t); };

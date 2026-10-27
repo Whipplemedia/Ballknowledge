@@ -337,8 +337,26 @@ function settleBets(room, ev) {
     if (ev.final) p.finalCorrect = !!(bets.ml && bets.ml.pick === win);
     if (p.fix[ev.idx]) notes.push(r.contested ? 'Another crew fixed it the other way - the mob kept both fees.' : r.fixed ? 'The fix was in.' : 'You paid for a fix on a result that was already going your way.');
     p.results[ev.idx] = { delta: Math.round(delta), notes, lines };
+    { const lost = lines.filter((l) => l.won === false).reduce((x, l) => x + l.stake, 0);
+      if (lost >= PELT_LOSS && room.phase === 'play') pelt(room, p, lost); // blow $500+ on one game and the bar lets you have it
+      if (lines.some((l) => l.won && bets[l.mk] && bets[l.mk].allIn)) kiss(room, p); } // went all in and hit
     // no toast: the phone buzzes with the result (client diffs p.results)
   }
+}
+
+// ---------- the crowd: bottles for big losers, Gina for whoever goes all in and hits ----------
+const PELT_LOSS = 500, PELT_MS = 4200, GINA_PRICE = 20;
+function pelt(room, p, lost) {
+  const t = Date.now(); for (const q of room.players.values()) send(q, { type: 'pelt', id: p.id, until: t + PELT_MS });
+  feed(room, `🍾 ${p.name} just lost ${money(lost)} on one game. The bar lets them have it.`);
+  setTimeout(() => { // the barrage ends with you on the floor
+    if (room.phase !== 'play' || room.players.get(p.id) !== p) return; const t2 = Date.now(); if (p.koUntil > t2) return;
+    p.koUntil = t2 + 6000; p.koImmune = p.koUntil + 3000; for (const q of room.players.values()) send(q, { type: 'ko', id: p.id, until: p.koUntil, pelt: true }); broadcast(room);
+  }, PELT_MS);
+}
+function kiss(room, p) {
+  const t = Date.now(); if ((room.kissAt || 0) > t) return; room.kissAt = t + 12000;
+  for (const q of room.players.values()) send(q, { type: 'kiss', id: p.id, at: t }); feed(room, `💋 ${p.name} went all in and hit. Gina noticed.`);
 }
 
 function finalizeEvent(room, ev) {
@@ -590,7 +608,10 @@ function seriesText(room, ev) {
 
 // ---------- state views ----------
 function evSummary(ev, forTv) {
-  const o = { idx: ev.idx, label: ev.label, a: ev.a, b: ev.b, status: ev.status, openAt: ev.openAt, closeAt: ev.closeAt, resolveAt: ev.resolveAt, final: !!ev.final, n: !!ev.n, ot: !!ev.ot, ex: ev.ex || 0 };
+  // games that haven't opened stay secret: who plays (and how far a series runs) would give the season away
+  if (ev.status === 'upcoming') return { idx: ev.idx, label: `Game ${ev.idx + 1}`, a: null, b: null, status: ev.status, openAt: ev.openAt, closeAt: ev.closeAt, resolveAt: ev.resolveAt, final: !!ev.final, hidden: true };
+  const done = ev.status === 'final'; // overtime / extra innings are part of the result
+  const o = { idx: ev.idx, label: ev.label, a: ev.a, b: ev.b, status: ev.status, openAt: ev.openAt, closeAt: ev.closeAt, resolveAt: ev.resolveAt, final: !!ev.final, n: !!ev.n, ot: done && !!ev.ot, ex: done ? ev.ex || 0 : 0 };
   if (ev.status === 'final') o.result = ev.result;
   if (ev.status === 'airing') o.plays = ev.air.plays;
   return o;
@@ -689,7 +710,7 @@ function handle(room, p, m) {
       if (!(stake >= 10) || stake > p.money) { toast(p, 'Invalid stake.', 'err'); broadcast(room); break; }
       const mkt = ev.mk, d = mk === 'ml' ? mkt.ml[pk].dec : mk === 'spread' ? mkt.spread[pk].dec : mkt.total[pk].dec;
       const line = mk === 'spread' ? mkt.spread[pk].line : mk === 'total' ? mkt.total.line : null;
-      p.money -= stake; bets[mk] = { pick: pk, stake, dec: d, line, band: band(drunkNow(p)) }; broadcast(room); break;
+      p.money -= stake; bets[mk] = { pick: pk, stake, dec: d, line, band: band(drunkNow(p)), allIn: p.money < 1 && stake >= 50 /* the MAX button: everything you have */ }; broadcast(room); break;
     }
     case 'cancelBet': {
       const ev = room.events[m.ev]; if (!ev || ev.status !== 'open') break;
@@ -794,6 +815,17 @@ function handle(room, p, m) {
       const to = room.players.get(m.to); if (to && to !== p) send(to, { type: 'rtc', from: p.id, data: m.data });
       else if (m.to === '*') for (const q of room.players.values()) if (q !== p) send(q, { type: 'rtc', from: p.id, data: m.data });
       break;
+    }
+    case 'splash': { // restroom sink: cold water knocks the buzz down a notch
+      const t = Date.now(); if (!inPlay(room)) break; if (t - (p.lastSplash || 0) < 20000) { toast(p, 'Give it a minute. Your face is still wet.', 'info'); break; }
+      p.lastSplash = t; drunkNow(p); p.drunk = Math.max(0, p.drunk - 15); toast(p, '💦 Cold water. Things come back into focus a little.', 'info'); broadcast(room); break;
+    }
+    case 'ginaDrink': { // she takes the drink. She has a boyfriend.
+      const t = Date.now(); if (!inPlay(room) || t - (p.lastGina || 0) < 8000) break;
+      if (p.money < GINA_PRICE) { toast(p, `A drink for Gina is ${money(GINA_PRICE)}. You don't have it.`, 'err'); break; }
+      p.lastGina = t; p.money -= GINA_PRICE;
+      for (const q of room.players.values()) send(q, { type: 'npcSay', who: 'Gina', text: 'I have a boyfriend.', secs: 4, vo: 'gina_bf', by: p.id });
+      feed(room, `🍸 ${p.name} bought Gina a drink. She has a boyfriend.`); broadcast(room); break;
     }
     case 'pickup': { // knocked-out players drop chips; walk over them to grab
       const d = (room.drops || []).find((x) => x.id === m.id); if (!d || !inPlay(room) || Math.hypot(p.x - d.x, p.z - d.z) > 1.4) break;

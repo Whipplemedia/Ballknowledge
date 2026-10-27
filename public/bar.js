@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import * as TX from './textures.js';
 import { hasProp, prop } from './props.js';
 import { makePreset, makePerson, randomPatron, animate } from './people.js';
-import { BY_ID, applyCosmetics } from './cosmetics.js';
+import { buildItem, applyCosmetics } from './cosmetics.js';
 import { createSeatedLife } from './seated.js';
 import { makeDizzy, headPos } from './dizzy.js';
 
@@ -28,12 +28,23 @@ export function buildBar({ scene, BK, tv }) {
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM.x * 2, ROOM.z * 2), MT(fl.t, { roughness: 0.55 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
   const ceil = new THREE.Mesh(new THREE.PlaneGeometry(ROOM.x * 2, ROOM.z * 2), MT(TX.ceilingTiles([12, 8]).t, { color: 0x6d5e4e })); ceil.rotation.x = Math.PI / 2; ceil.position.y = ROOM.h; scene.add(ceil);
   const wallPaint = TX.paintedWall('#56684a', [6, 1.5]).t, panel = TX.paneling([6, 1]).t;
-  const walls = [[ROOM.x * 2, 0, -ROOM.z, 0], [ROOM.x * 2, 0, ROOM.z, Math.PI], [ROOM.z * 2, -ROOM.x, 0, Math.PI / 2], [ROOM.z * 2, ROOM.x, 0, -Math.PI / 2]];
-  for (const [len, x, z, ry] of walls) {
+  // the right wall has a doorway (the restroom, past Sal's booth): gap = {c: centre along the wall, w, h}. Local x runs along the wall (+z for the right wall).
+  const DOOR = { c: -6.6, w: 1.24, h: 2.34 };
+  const walls = [[ROOM.x * 2, 0, -ROOM.z, 0], [ROOM.x * 2, 0, ROOM.z, Math.PI], [ROOM.z * 2, -ROOM.x, 0, Math.PI / 2], [ROOM.z * 2, ROOM.x, 0, -Math.PI / 2, DOOR]];
+  const rep = (t, k) => { const c = t.clone(); c.repeat.set(t.repeat.x * k, t.repeat.y); c.needsUpdate = true; return c; };
+  for (const [len, x, z, ry, gap] of walls) {
     const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
-    const up = new THREE.Mesh(new THREE.PlaneGeometry(len, ROOM.h - 1.4), MT(wallPaint.clone ? wallPaint : wallPaint)); up.position.set(0, 1.4 + (ROOM.h - 1.4) / 2, 0.01); g.add(up);
-    const lo = new THREE.Mesh(new THREE.PlaneGeometry(len, 1.4), MT(panel)); lo.position.set(0, 0.7, 0.01); g.add(lo);
-    box(len, 0.08, 0.1, M(0x2a170b), 0, 1.4, 0.05, g, false); box(len, 0.18, 0.08, M(0x1d1008), 0, 0.09, 0.05, g, false);
+    const segs = gap ? [[-len / 2, gap.c - gap.w / 2], [gap.c + gap.w / 2, len / 2]] : [[-len / 2, len / 2]];
+    for (const [a, b] of segs) {
+      const L = b - a, cx = (a + b) / 2, k = L / len;
+      const up = new THREE.Mesh(new THREE.PlaneGeometry(L, ROOM.h - 1.4), MT(k < 1 ? rep(wallPaint, k) : wallPaint)); up.position.set(cx, 1.4 + (ROOM.h - 1.4) / 2, 0.01); g.add(up);
+      const lo = new THREE.Mesh(new THREE.PlaneGeometry(L, 1.4), MT(k < 1 ? rep(panel, k) : panel)); lo.position.set(cx, 0.7, 0.01); g.add(lo);
+      box(L, 0.08, 0.1, M(0x2a170b), cx, 1.4, 0.05, g, false); box(L, 0.18, 0.08, M(0x1d1008), cx, 0.09, 0.05, g, false);
+    }
+    if (gap) { // the wall above the doorway, and a wooden frame around it
+      const k = gap.w / len, lin = new THREE.Mesh(new THREE.PlaneGeometry(gap.w, ROOM.h - gap.h), MT(rep(wallPaint, k))); lin.position.set(gap.c, gap.h + (ROOM.h - gap.h) / 2, 0.01); g.add(lin);
+      const fm = M(0x2a170b); box(gap.w + 0.16, 0.1, 0.16, fm, gap.c, gap.h + 0.05, 0.02, g, false); for (const sx of [-1, 1]) box(0.08, gap.h, 0.16, fm, gap.c + sx * (gap.w / 2 + 0.04), gap.h / 2, 0.02, g, false);
+    }
   }
 
   // ---------- lighting ----------
@@ -51,7 +62,7 @@ export function buildBar({ scene, BK, tv }) {
       lamp(x, 3.5, z, 0xffd2a0, 8, 14);
     }
   });
-  lamp(9, 2.5, -5, 0xff3040, 40, 12); lamp(-9, 3, -5, 0x27e08a, 26, 12); lamp(0, 3.8, -6.5, 0x4da3ff, 38, 14); lamp(10.5, 3.2, 3, 0xffa030, 28, 12);
+  lamp(9, 2.5, -5, 0xff3040, 34, 5.5); /* short reach: Sal's red glow stays out of the restroom */ lamp(-9, 3, -5, 0x27e08a, 26, 12); lamp(0, 3.8, -6.5, 0x4da3ff, 38, 14); lamp(10.5, 3.2, 3, 0xffa030, 28, 12);
 
   // string lights
   const bulbGeo = new THREE.SphereGeometry(0.055, 8, 6), cols = [0xff4040, 0xffd040, 0x40ff80, 0x40a0ff, 0xff60e0];
@@ -68,7 +79,7 @@ export function buildBar({ scene, BK, tv }) {
     const { t } = TX.neon(text, color, { w: 512, h: Math.round(512 * h / w), size });
     plane(w, h, new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, toneMapped: false }), x, y, z, ry);
   };
-  neonPlane('BALL KNOWLEDGE', '#27e08a', 8, 0.85, 0, 4.68, -ROOM.z + 0.12, 0, 56);
+  neonPlane('THE DUGOUT', '#27e08a', 6, 0.85, 0, 4.68, -ROOM.z + 0.12, 0, 60);
   neonPlane('OPEN', '#ff3040', 1.6, 0.6, 9.5, 3.4, -ROOM.z + 0.12, 0, 80);
   neonPlane('BAR', '#ffb030', 1.8, 0.8, ROOM.x - 0.12, 4.0, 5.5, -Math.PI / 2, 90);
   neonPlane('LIVE SPORTS', '#ff60e0', 3, 0.7, -ROOM.x + 0.12, 3.9, 2.5, Math.PI / 2, 52);
@@ -221,6 +232,8 @@ export function buildBar({ scene, BK, tv }) {
     stations.push({ x, z, r: 1.8, prio: 2, on: () => { const j = jobOf(); return !!(j && j.target === who && (j.kind === 'deliver' || (j.kind === 'collect' && j.stage === 'go'))); },
       get text() { const j = jobOf(); return j && j.kind === 'deliver' ? `E - Hand ${who} the round` : `E - Collect Sal's envelope from ${who}`; }, act: () => BK.send({ type: 'jobAct' }) });
   }
+  // Gina at the end of the pool table: you can buy her a drink. She has a boyfriend.
+  stations.push({ x: 5.4, z: 3.4, r: 1.5, text: 'E - Buy Gina a drink ($20)', act: () => BK.send({ type: 'ginaDrink' }) });
   // ---------- the newspaper on the counter: masthead + tonight's headline (redrawn each night) ----------
   const paperTex = TX.canvasTex(512, 384, () => {}), paperG = new THREE.Group();
   const drawPaper = (head) => {
@@ -243,9 +256,9 @@ export function buildBar({ scene, BK, tv }) {
 
   // ---------- Pro Shop corner ----------
   box(2.4, 1.0, 0.8, M(0x4a2a14), -8.6, 0.5, 6.7); box(2.55, 0.07, 0.95, M(0x8a5a30, { roughness: 0.3 }), -8.6, 1.03, 6.7);
-  const stand = (id, x, y = 1.07) => { const g = new THREE.Group(); g.position.set(x, y, 6.65); BY_ID[id].make(g); g.scale.setScalar(0.8); scene.add(g); box(0.12, 0.1, 0.12, M(0x222), x, 1.1, 6.65); return g; };
+  const stand = (id, x, y = 1.07) => { const g = new THREE.Group(); g.position.set(x, y, 6.65); buildItem(id, g); g.scale.setScalar(0.8); scene.add(g); box(0.12, 0.1, 0.12, M(0x222), x, 1.1, 6.65); return g; };
   [['helmet_fb', -9.5], ['tophat', -8.9], ['crown', -8.3], ['viking', -7.7]].forEach(([id, x]) => { const s = stand(id, x, 1.35); s.position.y = 1.2; });
-  for (const [id, x] of [['golf_club', -9.9], ['bat', -9.5], ['hockey_stick', -9.1]]) { const g = new THREE.Group(); g.position.set(x, 1.6, ROOM.z - 0.2); BY_ID[id].make(g); g.rotation.set(0, 0, 0); g.children.forEach(() => {}); g.rotation.x = 0.0; g.rotation.z = 0.0; g.rotation.x = 0; g.position.y = 0.9; scene.add(g); }
+  for (const [id, x] of [['golf_club', -9.9], ['bat', -9.5], ['hockey_stick', -9.1]]) { const g = new THREE.Group(); g.position.set(x, 1.9, ROOM.z - 0.2); buildItem(id, g); scene.add(g); } // on the wall rack, hanging by the grip
   neonPlane('PRO SHOP', '#ffc83d', 2.4, 0.7, -8.6, 3.3, ROOM.z - 0.12, Math.PI, 70);
   const clerk = spawn(makePreset('jock', { glasses: false, hairStyle: 'slick', hair: 0x2a1a10 }), -8.6, 7.55, 0, 'idle', ['Cosmetics! Crates! Dignity not included.', 'Every crate is a surprise.', 'Dress for the occasion.'], 'Clerk');
   applyCosmetics(clerk.P, { body: 'ref_shirt', head: 'sweatband' }); tag('Pro Shop', -8.6, 2.7, 7.55, '#ffc83d');
@@ -266,44 +279,72 @@ export function buildBar({ scene, BK, tv }) {
   const doors = { front: hinge(5.0 - 0.6, ROOM.z - 0.08, 0), back: hinge(ROOM.x - 0.08, -6.6 - 0.6, -Math.PI / 2) };
   box(1.2, 2.3, 0.1, doorM, 0.6, 1.15, 0, doors.front); box(0.7, 1.0, 0.04, glassM, 0.6, 1.55, -0.06, doors.front, false);
   box(1.2, 2.3, 0.1, M(0x2a1a10), 0.6, 1.15, 0, doors.back); box(0.18, 0.18, 0.04, M(0xc8a24a, { metalness: 0.8, roughness: 0.3 }), 1.05, 1.1, 0.07, doors.back, false);
-  neonPlane('BACK ROOM', '#ff3030', 1.2, 0.34, ROOM.x - 0.1, 2.6, -6.6, -Math.PI / 2, 60);
-  // ---------- the back room (behind the back door, x > ROOM.x): only seen in the kill cutscene ----------
-  // concrete, one bare bulb on a cord, a chair in the middle, crates, Sal's counting table. A second Sal waits here with a bat.
+  neonPlane('RESTROOMS', '#4da3ff', 1.4, 0.36, ROOM.x - 0.1, 2.62, -6.6, -Math.PI / 2, 52);
+  // ---------- the restroom (through the door past Sal's booth, x > ROOM.x): anyone can walk in while the bar is open.
+  // It's also where Sal settles accounts: the kill cutscene drags a broke player in here, where a second Sal waits with a bat.
   const backroom = (() => {
-    const g = new THREE.Group(); g.visible = false; scene.add(g);
-    const BX = ROOM.x + 2.85, BZ = -6.6, W = 5.6, D = 5.4, H = 3.0;
-    const shell = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), [MT(TX.brick([2, 1]).t, { color: 0x6a5a50, side: THREE.BackSide }), MT(TX.brick([2, 1]).t, { color: 0x6a5a50, side: THREE.BackSide }), M(0x1a1714, { side: THREE.BackSide }), M(0x3a3632, { side: THREE.BackSide, roughness: 0.95 }), MT(TX.brick([2, 1]).t, { color: 0x6a5a50, side: THREE.BackSide }), MT(TX.brick([2, 1]).t, { color: 0x6a5a50, side: THREE.BackSide })]);
-    shell.position.set(BX, H / 2, BZ); shell.receiveShadow = true; g.add(shell);
-    box(0.06, 2.3, 1.2, M(0x2a1a10), ROOM.x + 0.1, 1.15, BZ, g, false); box(0.08, 0.1, 1.36, M(0x1a120c), ROOM.x + 0.1, 2.33, BZ, g, false); // the door, from this side
-    // chair (the camera sits in it), crates, counting table with cash and a ledger
-    const wood = M(0x4a3020); box(0.5, 0.05, 0.5, wood, BX + 0.6, 0.48, BZ, g); [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]].forEach(([dx, dz]) => box(0.04, 0.48, 0.04, wood, BX + 0.6 + dx, 0.24, BZ + dz, g));
-    box(0.05, 0.55, 0.5, wood, BX + 0.83, 0.78, BZ, g);
-    [[ROOM.x + 0.7, -8.7, 0.8], [ROOM.x + 0.7, -8.7, 0.8 * 2], [ROOM.x + 1.6, -8.75, 0.8]].forEach(([x, z, y]) => box(0.75, 0.75, 0.75, M(0x7a5a32), x, y - 0.4, z, g));
-    box(1.4, 0.06, 0.8, M(0x3a2a1a), BX + 1.7, 0.85, BZ - 1.9, g); [[-0.62, -0.32], [0.62, -0.32], [-0.62, 0.32], [0.62, 0.32]].forEach(([dx, dz]) => box(0.05, 0.85, 0.05, M(0x2a1a10), BX + 1.7 + dx, 0.42, BZ - 1.9 + dz, g));
-    for (let i = 0; i < 6; i++) box(0.16, 0.05 + (i % 3) * 0.03, 0.08, M(0x4a7a3a), BX + 1.3 + (i % 3) * 0.22, 0.9 + (i % 3) * 0.015, BZ - 2.05 + Math.floor(i / 3) * 0.16, g, false);
-    box(0.3, 0.04, 0.22, M(0x6a1a1a), BX + 2.0, 0.9, BZ - 1.8, g, false);
-    // the bulb on a cord: a pivot at the ceiling so it can swing
-    const pivot = new THREE.Group(); pivot.position.set(BX - 0.2, H - 0.02, BZ); g.add(pivot);
-    cyl(0.006, 0.006, 0.75, M(0x111111), 0, -0.375, 0, 6, pivot, false);
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffe2a0 })); bulb.position.y = -0.8; pivot.add(bulb);
-    const light = new THREE.PointLight(0xffc880, 0, 9, 1.6); light.position.y = -0.85; light.userData.noDim = true; pivot.add(light);
-    // Sal and his bat: the bat continues the line of the right arm from the hand, so raising the arm raises the bat
-    const sal = makePreset('sal'); sal.group.position.set(BX - 0.6, 0, BZ); sal.group.rotation.y = -Math.PI / 2; g.add(sal.group);
+    const g = new THREE.Group(); scene.add(g);
+    const W = 5.6, D = 5.4, H = 3.0, X0 = ROOM.x + 0.06, X1 = ROOM.x + W, BX = (X0 + X1) / 2, BZ = -6.6, Z0 = BZ - D / 2, Z1 = BZ + D / 2;
+    const tiles = (rx, ry) => TX.canvasTex(256, 256, (c, w, h) => { // white subway tile, a little grimy toward the bottom
+      c.fillStyle = '#c4c9c0'; c.fillRect(0, 0, w, h);
+      for (let y = 0; y < 16; y++) for (let x = -1; x < 8; x++) { const ox = (y % 2) * 16; c.fillStyle = '#f2f4ee'; c.fillRect(x * 32 + ox + 1, y * 16 + 1, 30, 14); c.fillStyle = `rgba(90,80,40,${Math.random() * 0.06 + (y > 11 ? 0.06 : 0)})`; c.fillRect(x * 32 + ox + 1, y * 16 + 1, 30, 14); }
+    }, { repeat: [rx, ry] }).t;
+    const wallM = (w) => MT(tiles(w / 1.6, H / 1.6), { roughness: 0.35 }), pl = (mat, w, h, x, y, z, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat); m.position.set(x, y, z); m.rotation.y = ry; m.receiveShadow = true; g.add(m); return m; };
+    pl(wallM(W), W, H, BX, H / 2, Z0, 0); pl(wallM(W), W, H, BX, H / 2, Z1, Math.PI); pl(wallM(D), D, H, X1, H / 2, BZ, -Math.PI / 2);
+    { const side = (BZ - DOOR.w / 2) - Z0; pl(wallM(side), side, H, X0, H / 2, Z0 + side / 2, Math.PI / 2); pl(wallM(side), side, H, X0, H / 2, Z1 - side / 2, Math.PI / 2); pl(wallM(DOOR.w), DOOR.w, H - DOOR.h, X0, DOOR.h + (H - DOOR.h) / 2, BZ, Math.PI / 2); }
+    const checker = TX.canvasTex(256, 256, (c, w, h) => { for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { c.fillStyle = (x + y) % 2 ? '#1d1d20' : '#d6d2c4'; c.fillRect(x * 32, y * 32, 32, 32); } for (let i = 0; i < 400; i++) { c.fillStyle = `rgba(70,55,20,${Math.random() * 0.12})`; c.fillRect(Math.random() * w, Math.random() * h, 3 + Math.random() * 9, 2 + Math.random() * 6); } }, { repeat: [W / 1.4, D / 1.4] }).t;
+    const fl = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.12, D), MT(checker, { roughness: 0.45 })); fl.rotation.x = -Math.PI / 2; fl.position.set(BX - 0.06, 0.002, BZ); fl.receiveShadow = true; g.add(fl);
+    const ce = new THREE.Mesh(new THREE.PlaneGeometry(W, D), M(0xc8c8c0)); ce.rotation.x = Math.PI / 2; ce.position.set(BX, H, BZ); g.add(ce);
+    const porc = M(0xf2f0ea, { roughness: 0.22 }), chrome = M(0xc8ccd0, { metalness: 0.9, roughness: 0.2 }), part = M(0x4f6272, { roughness: 0.45 }), dark = M(0x1a1a1a);
+    // urinals on the far wall
+    for (const x of [BX - 1.0, BX + 0.2]) { box(0.44, 0.66, 0.3, porc, x, 0.98, Z0 + 0.16, g); box(0.32, 0.46, 0.06, M(0xd8d6ce), x, 0.92, Z0 + 0.3, g, false); cyl(0.02, 0.02, 0.6, chrome, x, 1.62, Z0 + 0.06, 8, g, false); obstacles.push({ x, z: Z0 + 0.25, r: 0.35 }); }
+    box(0.04, 0.8, 0.4, part, BX - 0.4, 1.1, Z0 + 0.22, g); // privacy panel between them
+    // two stalls along the back wall: partitions, half-open doors, toilets
+    const SX = X1 - 1.55, sz = [Z0 + 0.65, Z0 + 1.95];
+    box(1.55, 1.85, 0.04, part, X1 - 0.78, 1.1, Z0 + 1.3, g); box(1.55, 1.85, 0.04, part, X1 - 0.78, 1.1, Z0 + 2.6, g);
+    sz.forEach((z, i) => {
+      box(0.36, 0.38, 0.5, porc, X1 - 0.38, 0.2, z, g); box(0.4, 0.05, 0.46, M(0x111111, { roughness: 0.4 }), X1 - 0.42, 0.42, z, g, false); box(0.18, 0.42, 0.46, porc, X1 - 0.1, 0.62, z, g);
+      const d = new THREE.Group(); d.position.set(SX, 0, z - 0.6); d.rotation.y = i ? -0.9 : -0.35; g.add(d); box(0.04, 1.6, 1.15, part, 0, 1.0, 0.575, d);
+      obstacles.push({ x: X1 - 0.75, z, r: 0.72 });
+    });
+    { const gr = TX.canvasTex(256, 128, (c, w, h) => { c.clearRect(0, 0, w, h); c.font = '700 26px "Segoe Print","Comic Sans MS",cursive'; c.fillStyle = '#111'; c.save(); c.rotate(-0.08); c.fillText('BET THE UNDER', 14, 46); c.restore(); c.fillStyle = '#a01818'; c.font = '700 22px "Segoe Print","Comic Sans MS",cursive'; c.fillText('sal was here', 60, 98); }).t;
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.4), new THREE.MeshStandardMaterial({ map: gr, transparent: true, roughness: 0.6 })); m.position.set(X1 - 0.8, 1.5, Z0 + 1.28); m.rotation.y = Math.PI; g.add(m); }
+    // sinks + mirror on the near wall
+    box(2.5, 0.08, 0.55, M(0x3a3a3c, { roughness: 0.3 }), BX - 0.3, 0.86, Z1 - 0.29, g); box(2.5, 0.8, 0.04, M(0x2a2a2c), BX - 0.3, 0.42, Z1 - 0.54, g);
+    for (const x of [BX - 0.95, BX + 0.35]) { cyl(0.2, 0.15, 0.1, porc, x, 0.86, Z1 - 0.28, 16, g, false); cyl(0.015, 0.015, 0.2, chrome, x, 1.0, Z1 - 0.08, 8, g, false); box(0.03, 0.03, 0.14, chrome, x, 1.1, Z1 - 0.14, g, false); }
+    pl(new THREE.MeshStandardMaterial({ color: 0x9fb0ba, metalness: 0.2, roughness: 0.15, emissive: 0x1a2228 }), 2.3, 0.9, BX - 0.3, 1.72, Z1 - 0.02, Math.PI); // no reflections in here: a dim, greenish mirror
+    box(0.3, 0.26, 0.2, chrome, X0 + 0.5, 1.3, Z1 - 0.1, g); // hand dryer
+    obstacles.push({ x: BX - 0.95, z: Z1 - 0.3, r: 0.45 }, { x: BX + 0.35, z: Z1 - 0.3, r: 0.45 });
+    cyl(0.2, 0.17, 0.32, M(0xe8c020, { roughness: 0.5 }), X1 - 0.35, 0.16, Z1 - 0.4, 12, g); obstacles.push({ x: X1 - 0.35, z: Z1 - 0.4, r: 0.3 }); // mop bucket
+    // flickering fluorescent tube
+    box(1.4, 0.06, 0.16, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xe8f0ff).multiplyScalar(1.6) }), BX, H - 0.05, BZ, g, false);
+    const light = new THREE.PointLight(0xdce8ff, 5, 7, 1.4); light.position.set(BX, H - 0.25, BZ); light.userData.noDim = true; g.add(light);
+    const pivot = new THREE.Group(); g.add(pivot); const bulb = null;
+    stations.push({ x: BX - 0.3, z: Z1 - 0.95, r: 1.0, text: 'E - Splash cold water on your face (sober up a little)', act: () => BK.send({ type: 'splash' }) });
+    // Sal and his bat (only in the kill scene): the bat continues the line of the right arm from the hand, so raising the arm raises the bat
+    const sal = makePreset('sal'); sal.group.position.set(BX - 0.6, 0, BZ); sal.group.rotation.y = -Math.PI / 2; sal.group.visible = false; g.add(sal.group);
     const bat = new THREE.Group(), batM = M(0xc89a5a, { roughness: 0.55 }); bat.position.set(0, -0.6, 0.02); sal.arms[1].add(bat);
     cyl(0.018, 0.022, 0.22, M(0x2a1a10), 0, -0.04, 0, 8, bat, false); cyl(0.022, 0.05, 0.78, batM, 0, -0.5, 0, 10, bat, false);
-    // name tags and bubbles draw on top of everything (depthTest off), so hide the bar's while we're in here
-    let hidden = null;
-    const show = (on) => {
-      if (on === g.visible) return; g.visible = on; light.intensity = on ? 2.4 : 0;
-      if (on) { hidden = []; scene.traverse((o) => { if (o.isSprite && o.material && o.material.depthTest === false && o.visible) { let in_ = false; for (let q = o; q; q = q.parent) if (q === g) in_ = true; if (!in_) { o.visible = false; hidden.push(o); } } }); }
+    // name tags and bubbles draw on top of everything (depthTest off), so hide the bar's while the kill scene plays in here
+    let hidden = null, on = false, flick = 0;
+    const show = (v) => {
+      if (v === on) return; on = v; sal.group.visible = v;
+      if (v) { hidden = []; scene.traverse((o) => { if (o.isSprite && o.material && o.material.depthTest === false && o.visible) { let in_ = false; for (let q = o; q; q = q.parent) if (q === g) in_ = true; if (!in_) { o.visible = false; hidden.push(o); } } }); }
       else if (hidden) { hidden.forEach((o) => (o.visible = true)); hidden = null; }
     };
-    return { group: g, sal, pivot, light, bulb, chair: { x: BX + 0.6, z: BZ }, show };
+    // walkable box (world.js clamps movement to it) and the door that swings open for anyone near it
+    const bounds = { x0: X0, x1: X1, z0: Z0, z1: Z1, dz0: BZ - DOOR.w / 2, dz1: BZ + DOOR.w / 2 };
+    const tick = (dt, t, nearDoor) => {
+      const bo = BK.S && BK.S.barEvent && BK.S.barEvent.kind === 'blackout'; // the blackout takes the restroom too
+      if (!on) { flick -= dt; light.intensity = bo ? 0.15 : flick > 0 ? 0.8 : 5; if (flick < -3 - Math.random() * 6) flick = 0.05 + Math.random() * 0.12; } // the tube buzzes and blinks now and then
+      const d = doors.back; if (d && !on && nearDoor !== null) { const tgt = (d.userData.base ?? (d.userData.base = d.rotation.y)) + (nearDoor ? -1.35 : 0); d.rotation.y += (tgt - d.rotation.y) * Math.min(1, dt * 6); }
+    };
+    return { group: g, sal, pivot, light, bulb, chair: { x: BX + 0.6, z: BZ }, show, bounds, tick };
   })();
   neonPlane('EXIT', '#ff3030', 0.9, 0.38, 5.0, 2.6, ROOM.z - 0.1, Math.PI, 70);
   // neon wall
   neonPlane('GOOD SPORTS', '#27e08a', 3.0, 0.7, -ROOM.x + 0.12, 3.5, -4.6, Math.PI / 2, 54); neonPlane('BAD DECISIONS', '#ff60b0', 3.2, 0.7, -ROOM.x + 0.12, 2.8, -4.6, Math.PI / 2, 50);
-  neonPlane('Ball Knowledge', '#a060ff', 3.4, 1.0, ROOM.x - 0.12, 3.8, -2.9, -Math.PI / 2, 60);
+  neonPlane('Cold Beer', '#a060ff', 3.0, 1.0, ROOM.x - 0.12, 3.8, -2.9, -Math.PI / 2, 64);
   [['LAGER', '#ff4040', 0.9, 0.5, -0.9], ['ALE', '#ffb030', 0.7, 0.5, 1.0], ['PILSNER', '#4da3ff', 1.1, 0.5, 4.1], ['STOUT', '#ff8030', 0.8, 0.5, 5.8]].forEach(([t, c, w, h, z]) => neonPlane(t, c, w, h, ROOM.x - 0.14, 3.35, z, -Math.PI / 2, 44));
   // chalkboard drinks menu
   const chalk = TX.canvasTex(512, 384, (g, w, h) => {
@@ -324,7 +365,7 @@ export function buildBar({ scene, BK, tv }) {
   if (!hasProp('backbar')) [1.22, 1.82, 2.42].forEach((y) => box(0.04, 0.02, 7.6, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc060).multiplyScalar(1.3) }), ROOM.x - 0.1, y - 0.02, 2.5, scene, false));
 
   // dust motes
-  const dustN = 260, dustPos = new Float32Array(dustN * 3);
+  const dustN = 130, dustPos = new Float32Array(dustN * 3);
   for (let i = 0; i < dustN; i++) { dustPos[i * 3] = (Math.random() - 0.5) * 23; dustPos[i * 3 + 1] = Math.random() * 4.5; dustPos[i * 3 + 2] = (Math.random() - 0.5) * 15; }
   const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
   scene.add(new THREE.Points(dg, new THREE.PointsMaterial({ color: 0xffe8c0, size: 0.03, transparent: true, opacity: 0.5, depthWrite: false })));
@@ -379,13 +420,41 @@ export function buildBar({ scene, BK, tv }) {
   npcs.forEach((n, i) => { if (!n.seated || !n.P.skinned) return;
     const couch = n.name === 'Couch guy', boss = n.name === 'Uncle Sal', sleep = n.mode === 'sleep';
     const stoolN = n.name === 'Regular'; life.add(n, { kind: couch ? 'lap' : 'table', table: stoolN ? 1.14 : 0.78, seat: stoolN ? 0.8 : boss ? 0.52 : couch ? 0.45 : BOOTH.seat, reach: stoolN ? 0.55 : boss ? 0.32 : 0.4, style: boss ? 'boss' : sleep ? 'sleep' : couch ? 'couch' : n.mode, glass: sleep ? null : boss ? 'tumbler' : n.mode === 'drink' || couch ? 'pint' : i % 2 ? 'bottle' : 'pint' }); });
-  BK.onScore = () => life.onScore();
+  BK.onScore = (good = true) => { if (good) life.onScore(); };
   npcs.forEach((n, i) => { if (!n.seated && ['Spectator', 'Patron', 'Watcher'].includes(n.name)) { n.wander = true; n.seed = 1000 + i * 17; n.phase = (i * 5.3) % SEG; n.wp = null; n.off = { x: 0, z: 0 }; } });
+
+  // ---------- Gina's kiss: someone went all in and hit. She walks over (around the furniture), leans in, and walks back ----------
+  const gina = npcs.find((n) => n.who === 'Gina'); let kissing = null;
+  const looseClear = (a, c) => { const n = Math.ceil(Math.hypot(c[0] - a[0], c[1] - a[1]) / 0.3); for (let i = 0; i <= n; i++) { const x = a[0] + (c[0] - a[0]) * i / n, z = a[1] + (c[1] - a[1]) * i / n; if (Math.hypot(x - a[0], z - a[1]) < 0.6 || Math.hypot(x - c[0], z - c[1]) < 0.6) continue; if (obstacles.some((o) => Math.hypot(x - o.x, z - o.z) < o.r + 0.2)) return false; } return true; };
+  const via = (a, c) => { if (looseClear(a, c)) return null; let best = null, bd = 1e9; for (const w of wps()) { const d = Math.hypot(w[0] - a[0], w[1] - a[1]) + Math.hypot(c[0] - w[0], c[1] - w[1]); if (d < bd && looseClear(a, w) && looseClear(w, c)) { bd = d; best = w; } } return best; };
+  const kiss = (target, onKiss) => { if (!gina || (kissing && kissing.phase !== 'back')) return; kissing = { target, onKiss, phase: 'go', t0: null, wp: undefined, plan: 0 }; };
+  function kissTick(n, t, dt) {
+    const K = kissing, g = n.P.group, at = [g.position.x, g.position.z]; if (K.t0 === null) K.t0 = t;
+    const tp = K.target(); if (!tp && K.phase !== 'back') { K.phase = 'back'; K.wp = undefined; }
+    let goal; if (K.phase === 'back') goal = [n.base.x, n.base.z]; else { const dx = at[0] - tp.x, dz = at[1] - tp.z, d = Math.hypot(dx, dz) || 1; goal = [tp.x + dx / d * 0.62, tp.z + dz / d * 0.62]; }
+    if (K.phase === 'kiss') { // face them, lean in
+      const u = t - K.at, face = Math.atan2(-(tp.x - at[0]), -(tp.z - at[1])); let d = face - g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); g.rotation.y += d * Math.min(1, dt * 8);
+      animate(n.P, 'idle', t); const lean = Math.min(1, u / 0.6) * (u > 2.0 ? Math.max(0, 1 - (u - 2.0) / 0.5) : 1); n.P.torso.rotation.x = 0.28 * lean; n.P.head.rotation.x = 0.12 * lean; if (n.P.skinUpdate) n.P.skinUpdate();
+      if (u > 0.7 && !K.smooched) { K.smooched = true; BK.sfx && BK.sfx('kiss', { pos: { x: at[0], y: 1.6, z: at[1] } }); n.bubble.set('💋'); n.until = t + 1.6; }
+      if (n.bubble.sprite.visible && t > n.until) n.bubble.set('');
+      if (u > 2.6) { K.phase = 'back'; K.wp = undefined; n.bubble.set(''); } return;
+    }
+    if (K.wp === undefined || t > K.plan) { K.wp = via(at, goal); K.plan = t + 1.0; }
+    const aim = K.wp || goal, dx = aim[0] - at[0], dz = aim[1] - at[1], dist = Math.hypot(dx, dz), sp = (K.phase === 'back' ? 1.6 : 2.3) * dt;
+    if (dist > 0.05) { g.position.x += dx / dist * Math.min(sp, dist); g.position.z += dz / dist * Math.min(sp, dist); const face = Math.atan2(-dx, -dz); let d = face - g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); g.rotation.y += d * Math.min(1, dt * 8); }
+    if (K.wp && dist < 0.25) { K.wp = null; K.plan = t + 1.0; }
+    n.P.moveSpeed = K.phase === 'back' ? 1.6 : 2.3; animate(n.P, 'walk', t);
+    const gd = Math.hypot(goal[0] - at[0], goal[1] - at[1]);
+    if (K.phase === 'go' && (gd < 0.12 || t - K.t0 > 14)) { K.phase = 'kiss'; K.at = t; K.onKiss && K.onKiss(); }
+    else if (K.phase === 'back' && gd < 0.08) { g.position.set(n.base.x, g.position.y, n.base.z); g.rotation.y = n.base.ry; kissing = null; }
+  }
+  const ginaHead = () => (gina ? headPos(gina.P) : null);
 
   function update(t, dt, me) {
     const ph = BK.S && BK.S.paper ? BK.S.paper.head : ''; if (ph !== paperHead) { paperHead = ph; drawPaper(ph); }
     let talking = npcs.filter((n) => n.bubble && n.bubble.sprite.visible).length;
     for (const n of npcs) {
+      if (n === gina && kissing) { kissTick(n, t, dt); continue; }
       const koNow = n.ko && n.ko > BK.now();
       if (n.dizzy) n.dizzy.update(dt, t, headPos(n.P), !!koNow); // stars orbit the head while out cold, then shrink away
       if (koNow || n._koOn) { // knocked out by a bottle: stars, slump (seated) or fall flat on the back (standing)
@@ -403,6 +472,7 @@ export function buildBar({ scene, BK, tv }) {
         let d = face - g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); g.rotation.y += d * Math.min(1, dt * 7);
         if (mv) { mode = 'walk'; n.P.moveSpeed = 1.2; }
       }
+      if (n.throwT && t < n.throwT && !n.life) mode = 'point'; // winding up to throw a bottle at someone
       if (n.life) { life.tick(n.life, t, dt, { me, cam: { x: me.x, y: me.sit ? me.sit.sit + 0.76 : 1.65, z: me.z }, npcs }); animate(n.P, 'seated', t); life.place(n.life); }
       else { animate(n.P, mode, t); if (n.seated) n.P.legs.forEach((l) => (l.rotation.x = 1.45)); }
       if (n.bubble) { // speech bubbles: only nearby NPCs in front of you, at most two at once, sized by distance so they never fill the screen
@@ -425,5 +495,5 @@ export function buildBar({ scene, BK, tv }) {
   }
   // scripted speech: say('Bartender' | 'Old Vinnie' | 'Uncle Sal', text) - by display name (n.who) or role name
   const say = (who, text, secs = 6) => { const n = npcs.find((x) => x.who === who) || npcs.find((x) => x.name === who); if (!n || !n.bubble) return null; if (n.bubble.sprite.visible && !n.forced) n.bubble.set(''); n.forced = { text, secs, shown: false }; return n; };
-  return { stations, obstacles, npcs, seats, update, wanderPos, life, bottleSpots, doors, say, backroom };
+  return { stations, obstacles, npcs, seats, update, wanderPos, life, bottleSpots, doors, say, backroom, kiss, ginaHead };
 }

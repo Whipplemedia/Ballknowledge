@@ -36,6 +36,11 @@ export function createBottles({ scene, camera, BK, me, obstacles, getAvatars, ge
       const vel = d.multiplyScalar(SPEED).add(new THREE.Vector3(0, 1.4, 0)); audio.sfx('whoosh');
       BK.send({ type: 'bottle', x: pos.x, y: pos.y, z: pos.z, vx: vel.x, vy: vel.y, vz: vel.z }); spawn(pos, vel, true); return true;
     },
+    // a bottle lobbed by the crowd at a target point (visual only; the server decides the knockout). Solves the arc to land on it.
+    lob(from, to, atMe) {
+      const T = Math.max(0.35, Math.min(0.85, from.distanceTo(to) / 11)), vel = to.clone().sub(from).multiplyScalar(1 / T); vel.y += 0.5 * G * T;
+      spawn(from, vel, false); st.flying[st.flying.length - 1].pelt = atMe; audio.sfx('whoosh', { pos: { x: from.x, y: from.y, z: from.z }, v: 0.6 });
+    },
     remote(m) { spawn(new THREE.Vector3(m.x, m.y, m.z), new THREE.Vector3(m.vx, m.vy, m.vz), false, m.from); audio.sfx('whoosh', { pos: { x: m.x, y: m.y, z: m.z } }); },
     update(dt0) {
       dt0 = Math.min(dt0, 0.25); const n = Math.max(1, Math.ceil(dt0 / (1 / 90))), dt = dt0 / n; for (let s = 0; s < n; s++) this.step(dt); this.fx(dt0);
@@ -53,6 +58,7 @@ export function createBottles({ scene, camera, BK, me, obstacles, getAvatars, ge
         const wall = b.p.y < 0.04 || b.p.y > ROOM.h - 0.1 || Math.abs(b.p.x) > ROOM.x - 0.12 || Math.abs(b.p.z) > ROOM.z - 0.12 || obstacles.some((o) => b.p.y < 1.25 && Math.hypot(b.p.x - o.x, b.p.z - o.z) < o.r * 0.75);
         if (hit || wall) {
           if (hit && b.owner) { if (hit.kind === 'player') BK.send({ type: 'bottleHit', kind: 'player', target: hit.id }); else if (hit.kind === 'npc') BK.send({ type: 'bottleHit', kind: 'npc', npc: hit.k, name: hit.name }); else if (hit.kind === 'goon') BK.send({ type: 'bottleHit', kind: 'goon', target: hit.id }); else if (hit.kind === 'brawler') BK.send({ type: 'bottleHit', kind: 'brawler', side: hit.side }); }
+          if (hit && hit.kind === 'me' && b.pelt) { audio.sfx('bonk', { v: 0.7 }); BK.onPeltHit && BK.onPeltHit(); }
           shatter(b.p); scene.remove(b.m); st.flying.splice(i, 1);
         }
       }

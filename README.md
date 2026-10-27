@@ -79,7 +79,7 @@ Second batch (Oct 2026), all game scores and home teams checked against web sear
 - Each hitman takes 3 bottle hits (4 on the last night of a campaign); 3 of them for crews up to 3, 4 for 4-5 players, 5 for 6. They move at 2.4 m/s (players walk 3.8, run 6.2), so you can get away.
 - A free hitman sidesteps 30% of bottles (`goonDodge`: a hop and "DODGED!"); one holding a player can't dodge. A downed hitman gets back up after 13 s with half his hits (`TUNE` in goons.js), so the crew still has to drop them all.
 - **Breaking free:** grabbed (by a hitman or a collector), mash Space: 10 presses inside 2.5 s (6 for collectors) and he lets go, stunned, and can't regrab you for 4 s; nobody else can grab you for 2.5 s. A meter shows your effort. Broke players see what to do instead of a dead Pay button.
-- **The back room:** if the timer runs out, the victim is dragged through the back door (6.5 s), then wakes in the back room (a real set behind the bar wall: concrete, a swinging bulb, a chair). Sal talks, raises a baseball bat, swings: white flash, you hit the floor, LIGHTS OUT, and the night ends. The rest of the crew watches the closed door and hears it. Kill scene is 12.5 s (`T.kill`).
+- **The men's room:** if the timer runs out, the victim is dragged through the restroom door past Sal's booth (6.5 s) and comes to on his knees on the restroom tiles. Sal talks, raises a baseball bat, swings: white flash, you hit the floor, LIGHTS OUT, and the night ends. The rest of the crew watches the RESTROOMS door and hears it. Kill scene is 12.5 s (`T.kill`).
 
 ## Seasons: real or made-up
 - The host picks **Real season** or **Made-up season** in the lobby (`{type:'setMode', mode}`).
@@ -117,6 +117,31 @@ The scene has ~1,400 meshes and ~12 lights. If the first couple of seconds avera
 - All character and prop GLBs are compressed with glTF-Transform (`gltf-transform webp --quality 88` then `gltf-transform meshopt --level medium`): ~18 MB → ~7.9 MB. They need the meshopt decoder (`public/vendor/addons/libs/meshopt_decoder.module.js`), wired up by `public/loading.js` (`gltfLoader()`); use it for any new GLB. Re-run the same two commands on new Meshy downloads before committing them.
 - `loading.js` also drives the loading bar (join screen, lobby, and an in-game "getting the bar ready" card if a game starts before the models finish).
 - The server serves static files with ETags (repeat visits get 304s) and caches gzip copies in memory (three.module.js 1.27 MB → 257 KB). First visit ≈ 7.8 MB on the wire instead of ≈ 20 MB.
+
+## Results board (no spoilers)
+- The right-hand TV is a **results board**: finished games, newest on top, plus the one on the air. It no longer lists the whole season.
+- The server hides every game that hasn't opened yet (`evSummary`: label "Game N", no teams, no OT flag), so neither the TVs nor the client can see future matchups or how long a series runs. Overtime only shows once a game is final.
+- The "BALL KNOWLEDGE" wall neons are gone: the bar is called **The Dugout**, and the right wall says "Cold Beer". The kiosk just says SPORTSBOOK. Dust motes are halved (130).
+
+## The restroom
+- A walkable men's room through the door past Sal's booth (`bar.js` → `backroom`, kept under that name): subway tile, checker floor, two urinals, two stalls with graffiti, sinks and a mirror, a mop bucket, and a fluorescent tube that blinks now and then. The door swings open for anyone who walks up to it.
+- The sink station splashes cold water on your face: -15 drunk, once per 20 s (`splash`).
+- It's open only while the bar is (`play` phase, no collectors in the bar). There's no hiding from collectors or hitmen in there: anyone inside when they show up is put back in the bar.
+- It's where Sal does the kill scene (see Hitmen).
+
+## The crowd
+- **Every score on the TV** gets a crowd reaction from your point of view: cheers if it helps your moneyline or spread, boos if it hurts it. An over bet cheers any score. With no bet, the room backs the home side (`rootsFor` in tv.js). There's a synthesized `boo` alongside `cheer`.
+- **Bet results:** the room roars when your bet cashes and boos when it dies.
+- **Lose $500 or more on one game** (the stakes of losing bets, `PELT_LOSS`): the seven nearest patrons pelt you with bottles for ~4 s, yelling ("BUM!", "YOU SUCK!"), each hit flashes red and jolts the camera, and the server knocks you out at the end (6 s KO). Everyone sees it. Server: `pelt()`. Client: `BK.onPelt` and `bottles.lob()`.
+
+## Gina
+- **Buy her a drink** at the end of the pool table ($20): she says "I have a boyfriend." (`ginaDrink`; voice line `gina_bf` is in the ElevenLabs script).
+- **Go all in and hit:** a bet placed with the MAX button (everything you have, $50+) is flagged `allIn`. If it wins, Gina walks over around the furniture, your camera turns to her, she leans in and kisses you: 💋, a smooch, and a "Gina kissed you" overlay. Other players see her walk over. Once per 12 s per room (`kiss()` / `bar.kiss`).
+
+## Pro Shop items (Meshy)
+- Every accessory is a Meshy 7.1 model: 38 text-to-3D items (head, face, hand, back), remeshed to 1-4k triangles, with textures shrunk to 512 px (`public/models/cos/<id>.glb`, ~8 MB in total, loaded only when someone wears one). Task ids are in `blender/meshy_cosmetics.json`.
+- `MESHY` in cosmetics.js sets how each one sits: rotation, target size, and an anchor (bottom, center, front for glasses, top for things held by the grip). `buildItem` shows the old primitive version until the model arrives, and keeps it if the model can't load. The Pro Shop stands and wall rack use the same models.
+- **Outfits (11 body items):** Meshy retextures of Bub's original model, generated with his UVs. Only the clothing is kept (torso and arm triangles, plus Bub's shirt-colored pixels). Bare skin is mapped back to Bub's skin tone, then everything is baked onto his texture (`public/models/cos/<id>.jpg`, ~210 KB each). Wearing one swaps the player's body texture (`setOutfit` in people.js), keeping their own skin and hair colors. Characters that aren't Bub (like the Pro Shop clerk) still get the primitive version.
 
 ## The phone (bet results)
 - Every settled game buzzes your phone. The server stores one line per bet in `p.results[idx].lines` (`{mk, label, won, stake, net}`, or `void: true` when the league catches a fix). The client diffs `S.me.results` against what it has already buzzed for, so a page refresh or a new night never replays old results. There is no settle toast any more; the phone replaces it.

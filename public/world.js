@@ -72,6 +72,45 @@ BK.onKo = (m) => {
   else if (m.id) { const a = avatars.get(m.id); if (a) { a.ko = until; audio.sfx('bonk', { pos: { x: a.P.group.position.x, y: 1.5, z: a.P.group.position.z } }); } }
   else if (m.npc !== undefined) { const n = bar.npcs[m.npc]; if (n) { n.ko = until; audio.sfx('bonk', { pos: { x: n.P.group.position.x, y: 1.5, z: n.P.group.position.z } }); audio.sfx('groan', { delay: 0.25, pos: { x: n.P.group.position.x, y: 1.5, z: n.P.group.position.z } }); } }
 };
+// ---------- the crowd turns on a big loser: the nearest patrons lob bottles at them until the server knocks them out ----------
+const pelts = [], PELT_LINES = ['BUM!', 'YOU SUCK!', 'Get outta here!', 'That was MY money too!', 'Learn the game!', 'Booooo!'];
+const posOf = (id) => { if (id === (BK.S && BK.S.you)) return new THREE.Vector3(me.x, EYE - 0.2, me.z); const a = avatars.get(id); return a ? new THREE.Vector3(a.P.group.position.x, 1.45, a.P.group.position.z) : null; };
+BK.onPelt = (m) => {
+  const mine = m.id === (BK.S && BK.S.you), at = posOf(m.id); if (!at) return;
+  const throwers = bar.npcs.filter((n) => !['Uncle Sal', 'Bartender', 'Dealer', 'Clerk'].includes(n.name) && n.who !== 'Gina' && !(n.ko > BK.now())).sort((a, b) => a.P.group.position.distanceTo(at) - b.P.group.position.distanceTo(at)).slice(0, 7);
+  pelts.push({ id: m.id, end: performance.now() + Math.max(600, m.until - BK.now()), next: performance.now() + 350, k: 0, throwers });
+  audio.sfx('boo', { v: 1 }); if (mine) { if (me.sit) BK.stand(); BK.toast && BK.toast('🍾 You lost $500+ on one game. The whole bar is throwing bottles at you!', 'err'); }
+};
+function updatePelts(t) {
+  const now = performance.now();
+  for (let i = pelts.length - 1; i >= 0; i--) {
+    const pl = pelts[i], at = posOf(pl.id); if (now > pl.end || !at || !pl.throwers.length) { pelts.splice(i, 1); continue; }
+    if (now < pl.next) continue; pl.next = now + 240 + Math.random() * 220;
+    const n = pl.throwers[pl.k++ % pl.throwers.length], g = n.P.group.position, from = new THREE.Vector3(g.x, g.y + (n.seated ? 1.2 : 1.6), g.z), dir = at.clone().sub(from).setY(0).normalize();
+    from.addScaledVector(dir, 0.6); at.x += (Math.random() - 0.5) * 0.15; at.z += (Math.random() - 0.5) * 0.15;
+    bottles.lob(from, at, pl.id === (BK.S && BK.S.you)); n.throwT = t + 0.45;
+    if (Math.random() < 0.3 && n.bubble && !n.forced) n.forced = { text: PELT_LINES[Math.floor(Math.random() * PELT_LINES.length)], secs: 1.8, shown: false };
+  }
+}
+const hitFlash = document.createElement('div'); hitFlash.id = 'hitflash'; document.body.appendChild(hitFlash);
+BK.onPeltHit = () => { me.punch = 1; hitFlash.classList.remove('on'); void hitFlash.offsetWidth; hitFlash.classList.add('on'); };
+// ---------- Gina: a drink gets you "I have a boyfriend"; going all in and hitting gets you a kiss ----------
+BK.onNpcSay = (m) => { const n = bar.say(m.who, m.text, m.secs || 4); if (n && m.vo && BK.vo) BK.vo.play(m.vo, { x: n.P.group.position.x, y: 1.6, z: n.P.group.position.z }); if (m.by === (BK.S && BK.S.you)) audio.sfx('coin'); };
+const kissFx = document.createElement('div'); kissFx.id = 'kissfx'; document.body.appendChild(kissFx);
+BK.onKiss = (m) => {
+  const mine = m.id === (BK.S && BK.S.you);
+  bar.kiss(() => posOf(m.id), () => {
+    if (!mine) return;
+    me.kissUntil = performance.now() + 2600; // the camera turns to her and holds
+    kissFx.innerHTML = '<div class="kf-lips">💋</div><div class="kf-txt">Gina kissed you.</div><div class="kf-sub">Her boyfriend is going to hear about this.</div>'; kissFx.classList.remove('on'); void kissFx.offsetWidth; kissFx.classList.add('on');
+    setTimeout(() => kissFx.classList.remove('on'), 6500);
+  });
+};
+function kissLook(dt) {
+  if (!(me.kissUntil > performance.now())) return false; const h = bar.ginaHead(); if (!h) return false;
+  const dx = h.x - me.x, dz = h.z - me.z, want = Math.atan2(-dx, -dz), wp = Math.atan2(h.y - EYE, Math.hypot(dx, dz)); let d = want - me.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+  me.yaw += d * Math.min(1, dt * 6); me.pitch += (wp - me.pitch) * Math.min(1, dt * 6); return true;
+}
 addEventListener('keydown', (e) => { if (e.code === 'KeyF' && !e.repeat && active() && !/INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '')) bottles.throw(); });
 addEventListener('contextmenu', (e) => { if (document.pointerLockElement === canvas) { e.preventDefault(); bottles.throw(); } });
 
@@ -188,7 +227,20 @@ canvas.addEventListener('mousedown', (e) => {
 });
 
 // ---------- movement ----------
+// the bar, plus the restroom through the door past Sal's booth (open while the bar is: no hiding in there from collectors or hitmen)
+const bathOpen = () => !!(BK.S && BK.S.phase === 'play' && !BK.S.shake);
+function clampToRooms() {
+  const B = bar.backroom.bounds, lane = me.z > B.dz0 + 0.28 && me.z < B.dz1 - 0.28, inside = me.x > ROOM.x + 0.2;
+  if ((inside || (lane && me.x > ROOM.x - 0.62)) && bathOpen()) {
+    if (inside) { me.x = Math.max(B.x0 + 0.32, Math.min(B.x1 - 0.32, me.x)); me.z = Math.max(B.z0 + 0.32, Math.min(B.z1 - 0.32, me.z)); }
+    else me.z = Math.max(B.dz0 + 0.28, Math.min(B.dz1 - 0.28, me.z)); // in the doorway
+    return;
+  }
+  if (me.x > ROOM.x - 0.6 && (inside || lane)) { me.x = ROOM.x - 0.9; me.z = -6.6; } // the restroom closed with you in it: you're shown out
+  me.x = Math.max(-ROOM.x + 0.6, Math.min(ROOM.x - 0.6, me.x)); me.z = Math.max(-ROOM.z + 0.6, Math.min(ROOM.z - 0.6, me.z));
+}
 function move(dt, t, drunkAmt) {
+  if (kissLook(dt)) return;
   if (BK.ui.open || games.active() || me.sit || koNow() || heldBy() || draggedBy() || (BK.S && BK.S.cine && BK.now() < BK.S.cine.until)) return;
   const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
   const sp = keys.ShiftLeft ? 6.2 : 3.8, sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
@@ -197,7 +249,7 @@ function move(dt, t, drunkAmt) {
   dx = (dx / len) * sp * dt * (moving ? 1 : 0); dz = (dz / len) * sp * dt * (moving ? 1 : 0);
   if (drunkAmt > 0.25) { const drift = Math.sin(t * 1.3) * drunkAmt * 1.4 * dt * (moving ? 1 : 0.3); dx += cos * drift; dz += -sin * drift; }
   me.x += dx; me.z += dz;
-  me.x = Math.max(-ROOM.x + 0.6, Math.min(ROOM.x - 0.6, me.x)); me.z = Math.max(-ROOM.z + 0.6, Math.min(ROOM.z - 0.6, me.z));
+  clampToRooms();
   for (const o of obstacles) { const ex = me.x - o.x, ez = me.z - o.z, d = Math.hypot(ex, ez), min = o.r + 0.3; if (d < min && d > 0) { me.x = o.x + (ex / d) * min; me.z = o.z + (ez / d) * min; } }
 }
 // which seat a remote player is on (they only send position + seat height); cached until they move off it
@@ -271,7 +323,7 @@ function frame(now) {
   // ---- audio frame: listener, footsteps, bar-event cues, voice
   audio.update(dt, camera); audioUI.show(active()); voice.update(dt, avatars);
   grabDrops(); for (const o of drops.values()) o.g.rotation.y += dt * 0.6;
-  bottles.update(dt); bottles.updateSpots(dt); { const left = koNow() ? (me.koUntil - BK.now()) / 1000 : 0; myDizzy.update(dt, t, null, left > 0); bottles.setKo(left); if (!left && me.koUntil) { me.koUntil = 0; audio.sfx('boing'); } if (left) { camera.position.y = 0.32; camera.rotation.z = 1.25; camera.rotation.x = 0.4; } }
+  updatePelts(t); bottles.update(dt); bottles.updateSpots(dt); { const left = koNow() ? (me.koUntil - BK.now()) / 1000 : 0; myDizzy.update(dt, t, null, left > 0); bottles.setKo(left); if (!left && me.koUntil) { me.koUntil = 0; audio.sfx('boing'); } if (left) { camera.position.y = 0.32; camera.rotation.z = 1.25; camera.rotation.x = 0.4; } }
   { const h = heldBy(), o = h && goons.get(h); // grabbed: you're turned to face him and shaken about
     if (o) { const g = o.P.group.position, want = Math.atan2(-(g.x - me.x), -(g.z - me.z)); let d = want - me.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); me.yaw += d * Math.min(1, dt * 6); me.pitch += (-0.22 - me.pitch) * Math.min(1, dt * 4); camera.rotation.set(me.pitch + Math.sin(t * 13) * 0.02, me.yaw + Math.sin(t * 9) * 0.03, Math.sin(t * 7) * 0.05); } }
   if (me.punch) { me.punch = Math.max(0, me.punch - dt * 6); camera.position.y -= me.punch * 0.04; camera.rotation.z += me.punch * 0.03; }
@@ -295,6 +347,8 @@ function frame(now) {
     const tgt = blackout ? (Math.random() < 0.06 ? 0.5 : 0.05) : flick ? (Math.random() < 0.35 ? 0.45 : 0.95) : 1; for (const [l, base] of lightList) l.intensity += (base * tgt - l.intensity) * Math.min(1, dt * 9); party.intensity += ((happy ? 26 : 0) - party.intensity) * Math.min(1, dt * 4); party.color.setHSL((t * 0.25) % 1, 1, 0.55); }
   brawlers.forEach((b, k) => { const g = b.P.group, sway = Math.sin(t * 3 + k) * 0.35; g.position.x = b.x + sway * (k ? -1 : 1) * 0.6; g.position.z = -2.2 + Math.sin(t * 2.3 + k * 2) * 0.35; animate(b.P, 'fight', t + k, 1); });
   roulette.update(dt); bar.update(t, dt, me); tv.draw(BK.S, now);
+  { const c = BK.S && BK.S.cine, killOn = !!(c && c.kind === 'kill' && BK.now() < c.until + 200), dn = (x, z) => Math.hypot(x - ROOM.x, z + 6.6) < 1.8; // restroom door: opens for anyone near it (the kill scene drives it itself)
+    const near = bathOpen() && (dn(me.x, me.z) || [...avatars.values()].some((a) => dn(a.P.group.position.x, a.P.group.position.z))); bar.backroom.tick(dt, t, killOn ? null : near); }
   for (const a of avatars.values()) {
     const g = a.P.group, k = Math.min(1, dt * 10); g.position.x += (a.tx - g.position.x) * k; g.position.z += (a.tz - g.position.z) * k;
     const dgo = goons.drag[a.id] && goons.get(goons.drag[a.id]), grabbed = goons.held[a.id] || dgo;

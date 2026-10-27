@@ -41,6 +41,9 @@ function connect(msg) {
     else if (m.type === 'goonDodge') window.BK.onGoonDodge && window.BK.onGoonDodge(m);
     else if (m.type === 'ko') window.BK.onKo && window.BK.onKo(m);
     else if (m.type === 'spin') window.BK.onSpin && window.BK.onSpin(m);
+    else if (m.type === 'pelt') window.BK.onPelt && window.BK.onPelt(m);
+    else if (m.type === 'kiss') window.BK.onKiss && window.BK.onKiss(m);
+    else if (m.type === 'npcSay') window.BK.onNpcSay && window.BK.onNpcSay(m);
     else if (m.type === 'error') {
       if (m.stale) { sess = null; saveSess(); }
       err = m.stale && (S || ui.rejoining) ? 'That game ended while you were away.' : m.text; ui.reconnecting = ui.rejoining = false;
@@ -275,7 +278,9 @@ function phoneBuzz(idx) {
   if (phone.mode !== 'open') { phone.mode = 'peek'; phone.peekUntil = Date.now() + (won.length ? 7000 : 5000); }
   const el = phoneEl(); el.classList.remove('buzz'); void el.offsetWidth; el.classList.add('buzz');
   sfx('vibrate'); setTimeout(() => sfx('vibrate'), 700);
-  if (won.length) betSplash(ev, won, r);
+  // the whole bar reacts: a roar when your bet cashes, boos when it dies
+  if (won.length) { betSplash(ev, won, r); sfx('cheer', { v: 1 }); window.BK.onScore && window.BK.onScore(true); }
+  else if (!r.voided) setTimeout(() => sfx('boo', { v: 0.9 }), 300);
 }
 // the "you can't miss it" moment: giant BET HIT across the screen, green edge flash, cash raining down
 function betSplash(ev, won, r) {
@@ -434,7 +439,7 @@ function bookView() {
   if (!S.cur) {
     const next = S.events.find((e) => e.status === 'upcoming');
     return `<div class="card col"><div class="big">No game is open right now</div>
-      <div class="muted">${next ? `Next up: <b>${esc(next.label)}</b> - ${esc(next.a)} vs ${esc(next.b)}. Opens in <b>${mmss(next.openAt - now())}</b>.` : 'All games have closed. Watch the highlights on the TV and wait for the finals.'}</div>
+      <div class="muted">${next ? `Next up: <b>${esc(next.label)}</b> - the matchup is revealed when betting opens. Opens in <b>${mmss(next.openAt - now())}</b>.` : 'All games have closed. Watch the highlights on the TV and wait for the finals.'}</div>
       <div class="muted">Tip: grab a drink at the bar. Drunk confidence is real... until you have one too many.</div></div>`;
   }
   const cur = S.cur, ev = S.events[cur.idx], mk = cur.mk, h = cur.hint, A = cur.intel.a, B = cur.intel.b;
@@ -500,7 +505,7 @@ function betsView() {
     const r = S.me.results[e.idx], bets = S.me.bets[e.idx] || {};
     const st = e.status === 'final' ? `<span class="chip fin">FINAL ${e.result.sa}-${e.result.sb}</span>` : e.status === 'airing' ? `<span class="chip airing">📺 ON TV ${mmss(e.resolveAt - now())}</span>` : e.status === 'open' ? '<span class="chip open">● OPEN</span>' : `<span class="chip upcoming">opens ${mmss(e.openAt - now())}</span>`;
     return `<div class="side"><div class="row" style="justify-content:space-between"><b>${e.idx + 1}. ${esc(e.label)}${e.final ? ' 🏆' : ''}</b>${st}</div>
-      <div class="muted">${esc(e.a)} vs ${esc(e.b)}</div>
+      <div class="muted">${e.hidden ? 'Matchup revealed when betting opens' : `${esc(e.a)} vs ${esc(e.b)}`}</div>
       ${Object.keys(bets).length ? `<div class="muted">${Object.entries(bets).map(([m, b]) => `${m === 'ml' ? 'ML' : m} ${$$(b.stake)}`).join(' · ')}</div>` : ''}
       ${r ? `<div class="${r.delta >= 0 ? 'ok' : 'bad'}">${r.delta >= 0 ? '+' : ''}${$$(r.delta)}</div>${r.notes.map((n) => `<div class="muted">${esc(n)}</div>`).join('')}` : ''}</div>`;
   }).join('')}</div>`;

@@ -33,7 +33,7 @@ function buildShirtMask(mesh, N) { // UV-space mask of every triangle except tho
   const dd = c.getImageData(0, 0, N, N).data, out = new Uint8Array(N * N); for (let i = 0; i < N * N; i++) out[i] = dd[i * 4] > 128 ? 1 : 0; return out;
 }
 function recolorTexture(srcTex, { shirt, skin, hair }, shirtMask) {
-  const key = [shirt, skin, hair, shirtMask ? 1 : 0].join('|'); if (RECOLOR_CACHE.has(key)) return RECOLOR_CACHE.get(key);
+  const key = [srcTex.uuid, shirt, skin, hair, shirtMask ? 1 : 0].join('|'); if (RECOLOR_CACHE.has(key)) return RECOLOR_CACHE.get(key);
   const N = 1024, cv = document.createElement('canvas'); cv.width = cv.height = N; const cx = cv.getContext('2d', { willReadFrequently: true });
   cx.drawImage(srcTex.image, 0, 0, N, N); const im = cx.getImageData(0, 0, N, N), d = im.data;
   const T = (c) => (c == null ? null : [((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255]);
@@ -195,6 +195,7 @@ function fromSkinned(src, name, over) {
     const vary = over.shirt ?? over.skin;
     if (vary != null) { const tc = new THREE.Color(0xffffff).lerp(new THREE.Color(vary), 0.16); const cl = new Map(); rig.traverse((o) => { if (!o.isMesh) return; if (!cl.has(o.material)) { const m = o.material.clone(); m.color.multiply(tc); cl.set(o.material, m); } o.material = cl.get(o.material); }); }
   }
+  P.modelName = name; P.skinMesh = skinned; // Pro Shop outfits repaint Bub's texture (setOutfit)
   if (over.scale) outer.scale.setScalar(over.scale);
   P.bobBase = inner.position.y; P.clipW = 0; P.clipT = 0; P.clipName = 'walk';
   P.skinUpdate();
@@ -363,6 +364,13 @@ export const PRESETS = {
 };
 const PATRON_BASES = ['jock', 'knowItAll', 'gambler', 'chill', 'dieHard', 'rookie'];
 const SHIRTS = [0x2e5aa8, 0xa83232, 0x2f8f5a, 0xc8a02a, 0x7a3fa0, 0xd0702a, 0x2a8a9a, 0x5a5a62];
+// Pro Shop outfits (Meshy retextures of Bub, baked to Bub's UV layout): swap the body texture, keeping this player's skin and hair colors. null puts their own shirt back.
+export const canWearOutfit = (P) => !!(P && P.skinMesh && P.modelName === 'bub');
+export function setOutfit(P, tex) {
+  if (!canWearOutfit(P)) return false; const mesh = P.skinMesh;
+  if (!P._ownMat) { mesh.material = mesh.material.clone(); P._ownMat = true; P._baseMap = mesh.material.map; }
+  const S = P.spec || {}; mesh.material.map = tex ? recolorTexture(tex, { skin: S.skin, hair: S.hair, shirt: null }, null) : P._baseMap; mesh.material.needsUpdate = true; return true;
+}
 export function makePreset(name, over = {}) { return fromModel(name, over) || makePerson({ ...PRESETS[name], ...over }); }
 const HUES = [0, 40, 90, 150, 200, 250, 300, 330, 20, 120], CROWD_SKINS = [0xf6d2b8, 0xe0a478, 0xa8704a, 0x7a5033, 0xf2c09a, 0xc58c5c];
 export function randomPatron(i = 0) {

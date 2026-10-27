@@ -1,0 +1,194 @@
+{
+  "_note": "Meshy tasks behind public/models/cos/*.glb (Pro Shop items). Accessories: text-to-3d preview (latest = 7.1, remeshed) then refine. Outfits: retexture of the Bub gen task with original UVs; only the base color is used, composited onto the clothing region at runtime.",
+  "acc": {
+    "bucket_hat": {
+      "pre": "01a17b17-9c9a-72f6-bcdc-47053a598bb5",
+      "ref": "01a17b1c-4642-7261-9c2f-179af3a7248e"
+    },
+    "sweatband": {
+      "pre": "01a17b17-a76f-70b7-b282-cb9aae4a4a06",
+      "ref": "01a17b1c-4ce7-760a-9319-5e57505db5cd"
+    },
+    "party_hat": {
+      "pre": "01a17b17-aebc-770b-9c9e-c24712ca489e",
+      "ref": "01a17b1c-5395-76ac-9e92-5c709f83824a"
+    },
+    "chef_hat": {
+      "pre": "01a17b17-c512-7609-af0e-4104eda747bf",
+      "ref": "01a17b1c-5bef-7662-bbf5-c923d907a2df"
+    },
+    "bat_helmet": {
+      "pre": "01a17b17-cb98-7401-8b61-4829fb7f3b5f",
+      "ref": "01a17b1c-65a2-77dd-a47f-6cfa70dde6d7"
+    },
+    "hockey_helmet": {
+      "pre": "01a17b17-d420-72a0-89a0-d3d3840f93f1",
+      "ref": "01a17b1c-6c5e-76d3-b6bb-37094cf4535c"
+    },
+    "cowboy": {
+      "pre": "01a17b17-db73-7123-9358-2fc4682b09cc",
+      "ref": "01a17b1c-73d4-7217-9f3f-28019d90582c"
+    },
+    "tophat": {
+      "pre": "01a17b17-e327-7382-b026-91eb98895931",
+      "ref": "01a17b1c-7b29-7019-adfb-8a5637744856"
+    },
+    "propeller": {
+      "pre": "01a17b18-3c31-70c5-8de1-11e9613966d1",
+      "ref": "01a17b1c-8295-723d-873a-a179208befcb"
+    },
+    "helmet_fb": {
+      "pre": "01a17b18-439f-73e6-aa6b-d5c683f942be",
+      "ref": "01a17b1c-89f5-74aa-8934-c02817e5dfe5"
+    },
+    "viking": {
+      "pre": "01a17b18-4ad7-77c8-9184-5285a2e5b22e",
+      "ref": "01a17b1c-e4e8-72c7-84c8-e69734de2748"
+    },
+    "wizard": {
+      "pre": "01a17b18-52a1-734d-85c5-89af266eb43a",
+      "ref": "01a17b1c-ed47-7032-9a62-491665fb2e0f"
+    },
+    "sombrero": {
+      "pre": "01a17b18-59a7-71c2-a828-05b6586a1df1",
+      "ref": "01a17b1c-f46b-73c5-b1ea-385bc6d1b845"
+    },
+    "crown": {
+      "pre": "01a17b18-61cc-741f-b140-274279227905",
+      "ref": "01a17b1c-fcb3-72db-9b73-362b77168d0f"
+    },
+    "halo": {
+      "pre": "01a17b18-694e-7418-b5c8-eba2bd21c074",
+      "ref": "01a17b1d-041a-745d-b9fa-914005ca08b2"
+    },
+    "clown_nose": {
+      "pre": "01a17b18-7094-74ca-93c3-3145700edbdf",
+      "ref": "01a17b1d-111c-750c-a03c-2fc20ea8cf54"
+    },
+    "aviators": {
+      "pre": "01a17b18-c819-74d4-932d-24bc4bb52faa",
+      "ref": "01a17b1d-1c52-7032-9bcd-e03575da4210"
+    },
+    "ski_goggles": {
+      "pre": "01a17b18-ced6-71d0-9a97-66f8131d0a51",
+      "ref": "01a17b1d-24ff-75ab-b6b6-e1f34c5d933a"
+    },
+    "handlebar": {
+      "pre": "01a17b18-d6d8-7663-a41e-01fe4aeba32f",
+      "ref": "01a17b1d-2c7b-73bc-9f69-6b4f974b130a"
+    },
+    "neon_shades": {
+      "pre": "01a17b18-dd6b-71eb-a7f8-bdf59dacf7ea",
+      "ref": "01a17b1d-33b0-71cc-8820-ed1af1e81f8b"
+    },
+    "monocle": {
+      "pre": "01a17b18-e60e-715f-8562-6bd8e5b83511",
+      "ref": "01a17b1d-8cec-7658-81ec-d46937dabdc6"
+    },
+    "groucho": {
+      "pre": "01a17b18-eeb9-7557-b592-ede920c6ba8d",
+      "ref": "01a17b1d-9385-7514-9cee-5ba36f6e4d92"
+    },
+    "golf_club": {
+      "pre": "01a17b18-f599-77c7-9c2f-c5d6b2442263",
+      "ref": "01a17b1d-9aaf-75d1-aab7-4f5973dde495"
+    },
+    "bat": {
+      "pre": "01a17b18-fe0b-764e-bf3a-ef255424513f",
+      "ref": "01a17b1d-a273-7696-a815-b9edc3839113"
+    },
+    "hockey_stick": {
+      "pre": "01a17b19-4d00-7687-aabb-7cb50aab4ce7",
+      "ref": "01a17b1d-a9b8-7555-bb71-face93056387"
+    },
+    "foam_finger": {
+      "pre": "01a17b19-54ba-7169-b95e-afa743537eb4",
+      "ref": "01a17b1d-b06a-739b-84ca-cb7775a0a9ad"
+    },
+    "racket": {
+      "pre": "01a17b19-5d24-77d2-b5fe-d49b2a31fd98",
+      "ref": "01a17b1d-b774-759b-b84f-dd98a6388520"
+    },
+    "megaphone": {
+      "pre": "01a17b19-67cd-7500-b1c2-3c98ffaf5c26",
+      "ref": "01a17b1d-bfec-70fc-943e-b6516fb1b7cc"
+    },
+    "bowling_pin": {
+      "pre": "01a17b19-6f4d-7463-84ca-8c5fa54cc8bf",
+      "ref": "01a17b1d-c7d4-777c-b2ba-691bedd630bc"
+    },
+    "trophy": {
+      "pre": "01a17b19-7719-75dc-9ee3-4ae512d03c4a",
+      "ref": "01a17b1d-cef4-7567-8162-ac6b2d471148"
+    },
+    "stein": {
+      "pre": "01a17b19-7f4d-77a4-a2a1-d9f1fa123be6",
+      "ref": "01a17b1e-22a9-7100-89f3-4162321b7947"
+    },
+    "golden_club": {
+      "pre_v1_rejected": "01a17b19-d1fc-7618-8d73-505c67bc181c",
+      "ref_v1_rejected": "01a17b1e-2a8c-77e7-80ce-41d299c99f61",
+      "pre": "01a17b34-41ba-7285-a712-6ceab2b4e48d",
+      "ref": "01a17b42-48be-7661-a77e-d0f919fbe5cc"
+    },
+    "cape": {
+      "pre": "01a17b19-d90f-756c-823c-2324445b2945",
+      "ref": "01a17b1e-3190-71e4-bdcf-171c7e546383"
+    },
+    "golf_bag": {
+      "pre": "01a17b19-e058-7727-8cf3-d98dce377bd9",
+      "ref": "01a17b1e-38cd-71b2-a160-2f8d8a1cc9e5"
+    },
+    "banner": {
+      "pre": "01a17b19-ea2f-726f-bf5f-3bc3608f1800",
+      "ref": "01a17b1e-40ef-768f-975f-c3e80a4146f2"
+    },
+    "jetpack": {
+      "pre": "01a17b19-f0e8-777c-afa6-0e778054338d",
+      "ref": "01a17b1e-4852-7025-bbc0-2d93b00c2841"
+    },
+    "angel_wings": {
+      "pre": "01a17b19-f7ee-7485-b150-40bed0af680b",
+      "ref": "01a17b1e-4f19-7121-afea-a4222270827b"
+    },
+    "dragon_wings": {
+      "pre": "01a17b1a-01a3-72e0-b4b7-8d47906baea9",
+      "ref": "01a17b1e-5613-7780-b8ea-71816955ca2a"
+    }
+  },
+  "outfits": {
+    "jersey_bb": {
+      "retex": "01a17b1a-3c68-74ab-abb9-0b5704f43b07"
+    },
+    "jersey_fb": {
+      "retex": "01a17b1f-3260-744c-b81b-e4aa3e215ea7"
+    },
+    "jersey_hockey": {
+      "retex": "01a17b1f-39cb-7147-ac03-d6e564e9c221"
+    },
+    "jersey_base": {
+      "retex": "01a17b1f-4202-7588-90db-68019212a2e5"
+    },
+    "ref_shirt": {
+      "retex": "01a17b1f-49a0-72f5-9cd3-0c474cb02d8d"
+    },
+    "hawaiian": {
+      "retex": "01a17b1f-50ad-7122-9107-5726c8427c79"
+    },
+    "letterman": {
+      "retex": "01a17b1f-8b8d-7281-b632-08328f6a9d85"
+    },
+    "lucky_vest": {
+      "retex": "01a17b1f-91ca-76b7-bcf8-68c7cb8b7225"
+    },
+    "tux": {
+      "retex": "01a17b1f-99b0-726b-bd89-8762eec6402e"
+    },
+    "tracksuit": {
+      "retex": "01a17b1f-a1d4-750b-8ab0-69f3c4403579"
+    },
+    "robe": {
+      "retex": "01a17b1f-a88a-7507-bf2e-cacac1c5925e"
+    }
+  }
+}
