@@ -64,6 +64,7 @@ function rootsFor(S, ev, side) {
   if (b.total) return b.total.pick === 'over';
   return !!ev.n || side === 'a';
 }
+const LOGO = typeof Image !== 'undefined' ? Object.assign(new Image(), { src: 'logo.webp' }) : null; // the title screen on the big TV
 export function createTV(BK) {
   const mk = (w, h) => canvasTex(w, h, (g) => { g.fillStyle = '#071024'; g.fillRect(0, 0, w, h); });
   const C = mk(1024, 576), L = mk(640, 360), R = mk(640, 360), K = mk(512, 610), AMB = [mk(512, 288), mk(512, 288), mk(512, 288)];
@@ -152,7 +153,8 @@ export function createTV(BK) {
       if (this.blackout) { if (ts - last < 120) return; last = ts; const nz = (o, label) => { const { g, c } = o, W = c.width, H = c.height; g.fillStyle = '#0c0c10'; g.fillRect(0, 0, W, H); for (let i = 0; i < 220; i++) { g.fillStyle = `rgba(255,255,255,${Math.random() * 0.45})`; g.fillRect(Math.random() * W, Math.random() * H, 8 + Math.random() * 70, 2 + Math.random() * 3); } if (label) fit(g, 'NO SIGNAL', W / 2, H / 2, W - 40, '900 56px system-ui', '#8f9bc7'); upd(o); }; nz(C, true); nz(L, false); nz(R, false); AMB.forEach((o) => nz(o, false)); return; }
       if (!S || !S.events) { // title / lobby: idle splash
         if (ts - last < 190) return; last = ts; const sec = ts / 1000, { g, c } = C; drawScene(g, c.width, c.height, 'football', sec, '#2a5aa8', '#b02a2a', 3); g.fillStyle = '#000a'; g.fillRect(0, 0, c.width, c.height);
-        fit(g, 'BALL KNOWLEDGE', c.width / 2, 240, c.width - 60, '900 76px system-ui', '#27e08a'); fit(g, 'Waiting for kickoff...', c.width / 2, 320, c.width - 60, '700 36px system-ui', '#ffc83d'); upd(C);
+        if (LOGO.complete && LOGO.naturalWidth) { const w = c.width * 0.62, h = w * LOGO.naturalHeight / LOGO.naturalWidth; g.drawImage(LOGO, (c.width - w) / 2, 250 - h * 0.62, w, h); } else fit(g, 'BALL KNOWLEDGE', c.width / 2, 240, c.width - 60, '900 76px system-ui', '#27e08a');
+        fit(g, 'Waiting for kickoff...', c.width / 2, 250 + c.width * 0.62 * 0.48 * 0.38 + 30, c.width - 60, '700 36px system-ui', '#ffc83d'); upd(C);
         AMB.forEach((o, k) => { drawScene(o.g, o.c.width, o.c.height, ['football', 'basketball', 'hockey'][k % 3], sec + k * 11, '#2a5aa8', '#b02a2a', k); upd(o); });
         { const l = L; bg(l.g, l.c.width, l.c.height, '#0e2a22', '#04100c'); fit(l.g, 'TONIGHT', l.c.width / 2, 120, l.c.width, '900 56px system-ui', '#27e08a'); fit(l.g, 'A mystery season', l.c.width / 2, 200, l.c.width - 30, '700 34px system-ui', '#ffc83d'); fit(l.g, 'Real or made-up', l.c.width / 2, 250, l.c.width - 30, '700 30px system-ui', '#e8ecff'); upd(l); }
         { const r = R; bg(r.g, r.c.width, r.c.height, '#1a1030', '#07040f'); fit(r.g, 'RESULTS', r.c.width / 2, 40, r.c.width, '900 34px system-ui', '#ff60e0'); fit(r.g, 'No games final yet', r.c.width / 2, r.c.height / 2, r.c.width - 40, '700 26px system-ui', '#566'); upd(r); }

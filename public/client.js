@@ -169,7 +169,7 @@ function loadBar(cls = '') {
 }
 function joinView() {
   return `<div class="center"><div class="card col" style="width:min(420px,100%)">
-    <div class="logo">BALL<br><span>KNOWLEDGE</span><i class="ball"></i></div>
+    <img class="logo-img" src="logo.webp" alt="Ball Knowledge">
     <div class="tag">Pick a sport. We pick the season. Know your ball - or find another way to win.</div>
     ${ui.rejoining ? `<div class="muted">Rejoining room <b>${esc(sess.code)}</b>...</div>` : ''}${err ? `<div class="bad">${esc(err)}</div>` : ''}
     <input id="name" placeholder="Your name" maxlength="16">
@@ -198,7 +198,7 @@ function campLobby() {
 }
 function lobbyView() {
   return `<div class="wrap"><div class="card col">
-    <div class="top"><div class="logo sm">BALL <span>KNOWLEDGE</span><i class="ball"></i></div><div class="pill">Room <b>${S.code}</b></div></div>
+    <div class="top"><img class="logo-img sm" src="logo.webp" alt="Ball Knowledge"><div class="pill">Room <b>${S.code}</b></div></div>
     <div class="muted">Share the room code. Up to 6 players, co-op. ${S.camp && S.camp.night > 1 ? 'Your cash carries over from last night' : 'You each start with $2,000'} - and you each owe Uncle Sal <b>${$$(S.nextTab)}</b>${S.camp && S.camp.night > 1 ? ' plus whatever is left over' : ''}, due at closing time. A full playoff run of <b>about 10 games</b> is waiting - one new game opens for betting every couple of minutes.</div>
     ${loadBar()}
     ${campLobby()}

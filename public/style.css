@@ -401,3 +401,6 @@ body.cine #app .hud,body.cine #prompt,body.cine #cross,body.cine #toasts,body.ci
 #kissfx .kf-txt{font-size:clamp(28px,4vw,46px);font-weight:900;color:#ff7ab0;text-shadow:0 3px 14px #000}
 #kissfx .kf-sub{font-size:15px;color:#fff;text-shadow:0 2px 8px #000;margin-top:4px}
 @keyframes kissin{0%{opacity:0}6%{opacity:1}80%{opacity:1}100%{opacity:0}}
+/* the logo (public/logo.webp): join screen and lobby header */
+.logo-img{display:block;width:min(360px,100%);height:auto;margin:0 auto 4px;filter:drop-shadow(0 6px 18px #000a)}
+.logo-img.sm{width:150px;margin:0}
