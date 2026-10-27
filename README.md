@@ -158,7 +158,18 @@ The scene has ~1,400 meshes and ~12 lights. If the first couple of seconds avera
 - **Where you can walk** is a list of boxes (`SPACES` in world.js): the bar, the restroom, the street, the lot and the casino, joined by doorway lanes. Movement slides along whichever axis stays inside. Bottles shatter at the edge of every space (`BK.spaceAt`).
 - Everything outside the bar is open only while the bar is (play phase, no collectors). When collectors or hitmen show up, anyone outside is put back inside, so there's no hiding.
 - Both doors open for anyone walking up to them, unless a cutscene is driving them.
-- **Art drop-in:** everything out here is a stand-in made from boxes and canvas textures for now. Reference art listed in `public/art/manifest.json` (as `public/art/<name>.webp`) replaces those textures: skyline, facade_brick, facade_greystone, bar_exterior, gas_station_store, sidewalk. Outside surfaces glow faintly with their own texture (`lit()`), so the street reads at night without dozens of lights.
+- **Art:** 16 Meshy image-to-3D models made from the ChatGPT reference images (task ids in `blender/meshy_world.json`, files in `public/models/props/`).
+  - Restroom: urinal, toilet, stalls, sink_vanity, mop_bucket, wet_floor_sign.
+  - Street and gas station: el_track, street_lamp, hydrant, mailbox, newsbox, dumpster, sedan, gas_pump, slot_machine, store_counter.
+  - They load after the bar is ready (`lazyProp` / `place` in props.js). Primitive stand-ins show until each one arrives.
+  - The slot cabinets keep a live reel canvas over their own screen.
+- **Flat art** in `public/art/`, listed in `manifest.json`:
+  - the bar's storefront, with the real beer-brand neons painted over as COLD BEER / ON TAP, plus a brick tile for the rest of that wall;
+  - the store front (cropped to the building, on a 5.56 m false front with the doorway where the art's glass doors are);
+  - two walk-up facades, mirrored and tinted so the block varies;
+  - the skyline, faded into the sky;
+  - the restroom tiles, with mirrored repeat to hide seams.
+  - Outside surfaces glow faintly with their own texture (`lit()`), so the street reads at night without dozens of lights.
 
 ## Type
 - **Bungee:** titles, big buttons (`.cta`), promo graphics, TV headlines, slot symbols and splashes.

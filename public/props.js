@@ -39,3 +39,14 @@ export function prop(name, { w = null, h = null, d = null, rotY = 0, rotX = 0, a
   if (shadow) g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return g;
 }
+
+// Props that aren't in view when the bar opens (the restroom, the street, the gas station) load after it: lazyProp() resolves when the
+// model is in, then prop() works for it as for any other. place() puts a fitted copy in the scene once it arrives.
+const LAZY = {};
+export function lazyProp(name) {
+  if (!LAZY[name]) LAZY[name] = SRC[name] ? Promise.resolve(true) : (typeof location !== 'undefined' && !/[?&]props=0/.test(location.search) ? gltfLoader().loadAsync('models/props/' + name + '.glb').then((g) => { SRC[name] = g.scene; return true; }).catch(() => false) : Promise.resolve(false));
+  return LAZY[name];
+}
+export function place(parent, name, opts, x, y, z, then) {
+  return lazyProp(name).then((ok) => { if (!ok) return null; const g = prop(name, opts); g.position.set(x, y, z); parent.add(g); if (then) then(g); return g; });
+}

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import * as TX from './textures.js';
-import { hasProp, prop } from './props.js';
+import { hasProp, prop, place } from './props.js';
 import { makePreset, makePerson, randomPatron, animate } from './people.js';
 import { buildItem, applyCosmetics } from './cosmetics.js';
 import { createSeatedLife } from './seated.js';
@@ -298,26 +298,42 @@ export function buildBar({ scene, BK, tv }) {
     const fl = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.12, D), MT(checker, { roughness: 0.45 })); fl.rotation.x = -Math.PI / 2; fl.position.set(BX - 0.06, 0.002, BZ); fl.receiveShadow = true; g.add(fl);
     const ce = new THREE.Mesh(new THREE.PlaneGeometry(W, D), M(0xc8c8c0)); ce.rotation.x = Math.PI / 2; ce.position.set(BX, H, BZ); g.add(ce);
     const porc = M(0xf2f0ea, { roughness: 0.22 }), chrome = M(0xc8ccd0, { metalness: 0.9, roughness: 0.2 }), part = M(0x4f6272, { roughness: 0.45 }), dark = M(0x1a1a1a);
-    // urinals on the far wall
-    for (const x of [BX - 1.0, BX + 0.2]) { box(0.44, 0.66, 0.3, porc, x, 0.98, Z0 + 0.16, g); box(0.32, 0.46, 0.06, M(0xd8d6ce), x, 0.92, Z0 + 0.3, g, false); cyl(0.02, 0.02, 0.6, chrome, x, 1.62, Z0 + 0.06, 8, g, false); obstacles.push({ x, z: Z0 + 0.25, r: 0.35 }); }
+    // fixtures: Meshy models from the reference images (props urinal, stalls, toilet, sink_vanity, mop_bucket, wet_floor_sign, loaded after the bar opens);
+    // the primitive stand-ins below show until each one arrives (and stay if it can't load)
+    const swap = (stand, name, opts, x, y, z) => place(g, name, opts, x, y, z, () => { stand.visible = false; });
+    const urG = new THREE.Group(); g.add(urG);
+    for (const x of [BX - 1.0, BX + 0.2]) { box(0.44, 0.66, 0.3, porc, x, 0.98, Z0 + 0.16, urG); box(0.32, 0.46, 0.06, M(0xd8d6ce), x, 0.92, Z0 + 0.3, urG, false); cyl(0.02, 0.02, 0.6, chrome, x, 1.62, Z0 + 0.06, 8, urG, false); obstacles.push({ x, z: Z0 + 0.25, r: 0.35 });
+      place(g, 'urinal', { h: 1.3 }, x, 0.3, Z0 + 0.3, () => { urG.visible = false; }); }
     box(0.04, 0.8, 0.4, part, BX - 0.4, 1.1, Z0 + 0.22, g); // privacy panel between them
-    // two stalls along the back wall: partitions, half-open doors, toilets
-    const SX = X1 - 1.55, sz = [Z0 + 0.65, Z0 + 1.95];
-    box(1.55, 1.85, 0.04, part, X1 - 0.78, 1.1, Z0 + 1.3, g); box(1.55, 1.85, 0.04, part, X1 - 0.78, 1.1, Z0 + 2.6, g);
+    // two stalls along the back wall (doors facing the room), a toilet in each
+    const SX = X1 - 1.55, sz = [Z0 + 0.65, Z0 + 1.95], stG = new THREE.Group(); g.add(stG);
+    box(1.55, 1.85, 0.04, part, X1 - 0.78, 1.1, Z0 + 1.3, stG); box(1.55, 1.85, 0.04, part, X1 - 0.78, 1.1, Z0 + 2.6, stG);
     sz.forEach((z, i) => {
-      box(0.36, 0.38, 0.5, porc, X1 - 0.38, 0.2, z, g); box(0.4, 0.05, 0.46, M(0x111111, { roughness: 0.4 }), X1 - 0.42, 0.42, z, g, false); box(0.18, 0.42, 0.46, porc, X1 - 0.1, 0.62, z, g);
-      const d = new THREE.Group(); d.position.set(SX, 0, z - 0.6); d.rotation.y = i ? -0.9 : -0.35; g.add(d); box(0.04, 1.6, 1.15, part, 0, 1.0, 0.575, d);
+      const tG = new THREE.Group(); g.add(tG);
+      box(0.36, 0.38, 0.5, porc, X1 - 0.38, 0.2, z, tG); box(0.4, 0.05, 0.46, M(0x111111, { roughness: 0.4 }), X1 - 0.42, 0.42, z, tG, false); box(0.18, 0.42, 0.46, porc, X1 - 0.1, 0.62, z, tG);
+      swap(tG, 'toilet', { h: 0.95, rotY: -Math.PI / 2 }, X1 - 0.45, 0, z);
+      const d = new THREE.Group(); d.position.set(SX, 0, z - 0.6); d.rotation.y = i ? -0.9 : -0.35; stG.add(d); box(0.04, 1.6, 1.15, part, 0, 1.0, 0.575, d);
       obstacles.push({ x: X1 - 0.75, z, r: 0.72 });
     });
     { const gr = TX.canvasTex(256, 128, (c, w, h) => { c.clearRect(0, 0, w, h); c.font = '700 26px "Segoe Print","Comic Sans MS",cursive'; c.fillStyle = '#111'; c.save(); c.rotate(-0.08); c.fillText('BET THE UNDER', 14, 46); c.restore(); c.fillStyle = '#a01818'; c.font = '700 22px "Segoe Print","Comic Sans MS",cursive'; c.fillText('sal was here', 60, 98); }).t;
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.4), new THREE.MeshStandardMaterial({ map: gr, transparent: true, roughness: 0.6 })); m.position.set(X1 - 0.8, 1.5, Z0 + 1.28); m.rotation.y = Math.PI; g.add(m); }
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.4), new THREE.MeshStandardMaterial({ map: gr, transparent: true, roughness: 0.6 })); m.position.set(X1 - 0.8, 1.5, Z0 + 1.28); m.rotation.y = Math.PI; stG.add(m); }
+    swap(stG, 'stalls', { w: 1.6, h: 2.0, d: 2.6, rotY: -Math.PI / 2 }, X1 - 0.82, 0, Z0 + 1.32);
     // sinks + mirror on the near wall
-    box(2.5, 0.08, 0.55, M(0x3a3a3c, { roughness: 0.3 }), BX - 0.3, 0.86, Z1 - 0.29, g); box(2.5, 0.8, 0.04, M(0x2a2a2c), BX - 0.3, 0.42, Z1 - 0.54, g);
-    for (const x of [BX - 0.95, BX + 0.35]) { cyl(0.2, 0.15, 0.1, porc, x, 0.86, Z1 - 0.28, 16, g, false); cyl(0.015, 0.015, 0.2, chrome, x, 1.0, Z1 - 0.08, 8, g, false); box(0.03, 0.03, 0.14, chrome, x, 1.1, Z1 - 0.14, g, false); }
+    const skG = new THREE.Group(); g.add(skG);
+    box(2.5, 0.08, 0.55, M(0x3a3a3c, { roughness: 0.3 }), BX - 0.3, 0.86, Z1 - 0.29, skG); box(2.5, 0.8, 0.04, M(0x2a2a2c), BX - 0.3, 0.42, Z1 - 0.54, skG);
+    for (const x of [BX - 0.95, BX + 0.35]) { cyl(0.2, 0.15, 0.1, porc, x, 0.86, Z1 - 0.28, 16, skG, false); cyl(0.015, 0.015, 0.2, chrome, x, 1.0, Z1 - 0.08, 8, skG, false); box(0.03, 0.03, 0.14, chrome, x, 1.1, Z1 - 0.14, skG, false); }
+    swap(skG, 'sink_vanity', { w: 2.4, h: 1.15, d: 0.62, rotY: Math.PI }, BX - 0.3, 0, Z1 - 0.33);
     pl(new THREE.MeshStandardMaterial({ color: 0x9fb0ba, metalness: 0.2, roughness: 0.15, emissive: 0x1a2228 }), 2.3, 0.9, BX - 0.3, 1.72, Z1 - 0.02, Math.PI); // no reflections in here: a dim, greenish mirror
     box(0.3, 0.26, 0.2, chrome, X0 + 0.5, 1.3, Z1 - 0.1, g); // hand dryer
     obstacles.push({ x: BX - 0.95, z: Z1 - 0.3, r: 0.45 }, { x: BX + 0.35, z: Z1 - 0.3, r: 0.45 });
-    cyl(0.2, 0.17, 0.32, M(0xe8c020, { roughness: 0.5 }), X1 - 0.35, 0.16, Z1 - 0.4, 12, g); obstacles.push({ x: X1 - 0.35, z: Z1 - 0.4, r: 0.3 }); // mop bucket
+    const mbG = new THREE.Group(); g.add(mbG); cyl(0.2, 0.17, 0.32, M(0xe8c020, { roughness: 0.5 }), X1 - 0.35, 0.16, Z1 - 0.4, 12, mbG); obstacles.push({ x: X1 - 0.4, z: Z1 - 0.45, r: 0.35 }); // mop bucket
+    swap(mbG, 'mop_bucket', { h: 1.3, rotY: -2.4 }, X1 - 0.42, 0, Z1 - 0.45);
+    place(g, 'wet_floor_sign', { h: 0.64, rotY: -Math.PI / 2 + 0.5 }, BX - 1.3, 0, BZ + 0.75); obstacles.push({ x: BX - 1.3, z: BZ + 0.75, r: 0.3 });
+    // tile art (art/tile_wall, art/tile_floor): mirrored repeat hides the seams
+    { const mats = []; g.traverse((o) => { if (o.isMesh && o.material && o.material.map && o.geometry.type === 'PlaneGeometry' && o.material.map.wrapS === THREE.RepeatWrapping) mats.push(o); });
+      fetch('art/manifest.json').then((r) => (r.ok ? r.json() : { files: [] })).then((mf) => { const have = new Set(mf.files || []);
+        for (const [name, pick, size] of [['tile_wall', (o) => o.rotation.x === 0, 1.0], ['tile_floor', (o) => o.rotation.x < -1, 1.8]]) { if (!have.has(name)) continue;
+          new THREE.TextureLoader().load(`art/${name}.webp`, (t) => { t.colorSpace = THREE.SRGBColorSpace; for (const o of mats.filter(pick)) { const w = o.geometry.parameters.width, h = o.geometry.parameters.height, c = t.clone(); c.wrapS = c.wrapT = THREE.MirroredRepeatWrapping; c.repeat.set(w / size, h / size); c.needsUpdate = true; o.material.map = c; o.material.color.set(0xffffff); o.material.needsUpdate = true; } }); } }).catch(() => {}); }
     // flickering fluorescent tube
     box(1.4, 0.06, 0.16, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xe8f0ff).multiplyScalar(1.6) }), BX, H - 0.05, BZ, g, false);
     const light = new THREE.PointLight(0xdce8ff, 5, 7, 1.4); light.position.set(BX, H - 0.25, BZ); light.userData.noDim = true; g.add(light);

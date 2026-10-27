@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import * as TX from './textures.js';
+import { place } from './props.js';
 import { makePreset, randomPatron } from './people.js';
 import { audio } from './audio.js';
 
@@ -11,7 +12,7 @@ export const OUT = {
   door: { x: 5, w: 1.24, h: 2.34 },                 // the bar's front door, in the z = 8 wall
   street: { z0: 12, z1: 22 },                        // curb to curb (sidewalks either side)
   lot: { x0: 12, x1: 36, z0: 22, z1: 46 },
-  casino: { x0: 18, x1: 30, z0: 36, z1: 44, h: 4.2, door: { x: 24, w: 1.4, h: 2.4 } },
+  casino: { x0: 18, x1: 30, z0: 36, z1: 44, h: 4.2, fh: 5.56, door: { x: 24.07, w: 2.5, h: 3.0 } }, // fh: the false front (art/gas_station_store is 2.16:1); the door sits where the art's glass doors are
   roulette: { x: 21.6, z: 39.4 },                   // table centre (roulette.js lays itself out around it)
   dealer: { x: 21.5, z: 37.95 },
 };
@@ -81,23 +82,25 @@ export function createOutside({ scene, BK, stations, obstacles, bar, ROOM }) {
     g.fillStyle = '#2a2a2a'; g.fillRect(0, h - 200, w, 14);
     g.fillStyle = R() < 0.5 ? '#c84a2a' : '#2a6a9a'; g.fillRect(w * 0.2, h - 236, w * 0.6, 30); g.fillStyle = '#fff'; g.font = '400 20px Bungee, "Arial Black", system-ui'; g.textAlign = 'center'; g.fillText(['PAWN', 'LIQUORS', 'TAQUERIA', 'BARBER', 'CELL REPAIR', 'LAUNDROMAT'][seed % 6], w / 2, h - 214);
   }).t;
-  const facade = (w, h, x, z, ry, kind, seed, artName) => { const mat = lit(MT(facadeTex(kind, seed), { roughness: 0.95 }), 0.42); if (artName) art(mat, artName); return plane(w, h, mat, x, h / 2, z, ry); };
-  // the bar's own outside: dark brick with THE DUGOUT neon over the door, glowing windows, a doorway cut through
-  { const tex = TX.canvasTex(1024, 256, (g, w, h) => { g.fillStyle = '#2a1a16'; g.fillRect(0, 0, w, h); const R = rnd(11); for (let y = 0; y < h; y += 6) for (let x = -(y / 6 % 2) * 9; x < w; x += 18) { g.fillStyle = R() < 0.5 ? '#3a2420' : '#2e1c18'; g.fillRect(x + 1, y + 1, 16, 4); }
-      for (const cx of [380, 520]) { g.fillStyle = '#111'; g.fillRect(cx - 52, 110, 104, 84); g.fillStyle = '#7a4a1a'; g.fillRect(cx - 46, 116, 92, 72); g.fillStyle = 'rgba(80,140,255,0.35)'; g.fillRect(cx - 30, 126, 40, 30); } }).t;
-    const mat = lit(MT(tex, { roughness: 0.95 }), 0.45); art(mat, 'bar_exterior');
-    const W = ROOM.x * 2, H = 6.2, a = -ROOM.x, b = ROOM.x, d0 = DOOR.x - DOOR.w / 2, d1 = DOOR.x + DOOR.w / 2;
-    const piece = (x0, x1, y0, y1) => { const m = plane(x1 - x0, y1 - y0, mat, (x0 + x1) / 2, (y0 + y1) / 2, Z0, 0); const u0 = (x0 - a) / W, u1 = (x1 - a) / W, v0 = y0 / H, v1 = y1 / H, uv = m.geometry.attributes.uv; uv.setXY(0, u0, v1); uv.setXY(1, u1, v1); uv.setXY(2, u0, v0); uv.setXY(3, u1, v0); uv.needsUpdate = true; };
-    piece(a, d0, 0, H); piece(d1, b, 0, H); piece(d0, d1, DOOR.h, H);
-    const jam = M(0x2a170b); box(0.1, DOOR.h, 0.32, jam, d0 - 0.05, DOOR.h / 2, ROOM.z + 0.15); box(0.1, DOOR.h, 0.32, jam, d1 + 0.05, DOOR.h / 2, ROOM.z + 0.15); box(DOOR.w + 0.2, 0.1, 0.32, jam, DOOR.x, DOOR.h + 0.05, ROOM.z + 0.15);
-    const n = TX.neon('THE DUGOUT', '#27e08a', { w: 512, h: 128, size: 76 }).t; plane(4.4, 1.1, new THREE.MeshBasicMaterial({ map: n, transparent: true, depthWrite: false, toneMapped: false }), DOOR.x - 3.2, 3.6, Z0 + 0.05, 0);
-    const b2 = TX.neon('COLD BEER', '#ff4a8a', { w: 512, h: 128, size: 70 }).t; plane(1.8, 0.45, new THREE.MeshBasicMaterial({ map: b2, transparent: true, depthWrite: false, toneMapped: false }), -6, 2.2, Z0 + 0.05, 0);
-    box(1.6, 0.08, 0.6, M(0x1a1a1a), DOOR.x, DOOR.h + 0.25, Z0 + 0.3); // little awning over the door
-    // block neighbours either side of the bar
-    facade(12, 10, 18, Z0, 0, 'red', 1); facade(12, 11, 30, Z0, 0, 'grey', 2); facade(12, 9, -18, Z0, 0, 'tan', 3); facade(12, 10.5, -30, Z0, 0, 'red', 4);
+  const TINTS = [0xffffff, 0xf0e2d8, 0xdcd8e8, 0xe8e8d8];
+  const facade = (w, h, x, z, ry, kind, seed, artName) => { const mat = lit(MT(facadeTex(kind, seed), { roughness: 0.95, color: TINTS[seed % 4] }), 0.42); if (artName) art(mat, artName); const m = plane(w, h, mat, x, h / 2, z, ry);
+    if (seed % 2) { const uv = m.geometry.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setX(k, 1 - uv.getX(k)); uv.needsUpdate = true; } return m; }; // every other one mirrored, and tinted, so two photos make a varied block
+  // the bar's own outside: the storefront art (art/bar_exterior) around the door, brick (art/bar_brick, tiled) for the rest of the wall, a doorway cut through
+  { const brick = lit(MT(TX.canvasTex(256, 128, (g, w, h) => { g.fillStyle = '#2a1a16'; g.fillRect(0, 0, w, h); const R = rnd(11); for (let y = 0; y < h; y += 8) for (let x = -(y / 8 % 2) * 12; x < w; x += 24) { g.fillStyle = R() < 0.5 ? '#3a2420' : '#2e1c18'; g.fillRect(x + 1, y + 1, 22, 6); } }, { repeat: [1, 1] }).t, { roughness: 0.95 }), 0.4); art(brick, 'bar_brick', [1, 1]);
+    const front = lit(MT(TX.canvasTex(512, 340, (g, w, h) => { g.fillStyle = '#16301e'; g.fillRect(0, 0, w, h); g.fillStyle = '#0c1a10'; g.fillRect(60, 70, w - 120, 60); g.font = '400 44px Bungee, "Arial Black", system-ui'; g.textAlign = 'center'; g.fillStyle = '#3dff7e'; g.fillText('THE DUGOUT', w / 2, 118); for (const cx of [110, 400]) { g.fillStyle = '#7a4a1a'; g.fillRect(cx - 80, 170, 160, 110); } g.fillStyle = '#4a2a14'; g.fillRect(w / 2 - 30, 180, 60, 160); }).t, { roughness: 0.9 }), 0.55); art(front, 'bar_exterior');
+    const H = 6.2, a = -ROOM.x, b = ROOM.x, d0 = DOOR.x - DOOR.w / 2, d1 = DOOR.x + DOOR.w / 2, TW = 2.6, TH = 1.04; // one brick tile, metres
+    const SF = { x0: DOOR.x - 3.8, x1: DOOR.x + 3.8, y0: -0.38, y1: 4.69 }; // where the storefront art sits (its painted door lines up with the real one)
+    const piece = (mat, x0, x1, y0, y1, uvOf) => { const m = plane(x1 - x0, y1 - y0, mat, (x0 + x1) / 2, (y0 + y1) / 2, Z0, 0), uv = m.geometry.attributes.uv; [[x0, y1], [x1, y1], [x0, y0], [x1, y0]].forEach(([x, y], k) => uv.setXY(k, ...uvOf(x, y))); uv.needsUpdate = true; };
+    const bUV = (x, y) => [x / TW, y / TH], fUV = (x, y) => [(x - SF.x0) / (SF.x1 - SF.x0), (y - SF.y0) / (SF.y1 - SF.y0)];
+    piece(brick, a, SF.x0, 0, H, bUV); piece(brick, SF.x1, b, 0, H, bUV); piece(brick, SF.x0, SF.x1, SF.y1, H, bUV);
+    piece(front, SF.x0, d0, 0, SF.y1, fUV); piece(front, d1, SF.x1, 0, SF.y1, fUV); piece(front, d0, d1, DOOR.h, SF.y1, fUV);
+    const jam = M(0x1e2e22); box(0.1, DOOR.h, 0.32, jam, d0 - 0.05, DOOR.h / 2, ROOM.z + 0.15); box(0.1, DOOR.h, 0.32, jam, d1 + 0.05, DOOR.h / 2, ROOM.z + 0.15); box(DOOR.w + 0.2, 0.1, 0.32, jam, DOOR.x, DOOR.h + 0.05, ROOM.z + 0.15);
+    { const l = new THREE.PointLight(0xffd9a0, 10, 7, 1.6); l.position.set(DOOR.x, 4.6, Z0 + 0.8); l.userData.noDim = true; scene.add(l); } // the sign's gooseneck lamps
+    // the rest of the block either side of the bar: walk-ups (art/facade_brick, art/facade_greystone)
+    [-32, -24, -16, 16, 24, 32].forEach((x, k) => facade(8, 12, x, Z0, 0, k % 2 ? 'grey' : 'red', k + 1, k % 2 ? 'facade_greystone' : 'facade_brick'));
   }
   // across the street (left of the lot), the lot's side walls, and the block past it
-  [[-30, 'grey', 5, 11], [-18, 'red', 6, 10], [-6, 'tan', 7, 9.5], [6, 'red', 8, 10.5], [42, 'tan', 9, 10], [54, 'grey', 10, 11]].forEach(([x, k, s, h]) => facade(12, h, x, ST.z1 + 4, Math.PI, k, s, k === 'grey' ? 'facade_greystone' : 'facade_brick'));
+  [-32, -24, -16, -8, 0, 8, 40, 48, 56].forEach((x, k) => facade(8, 12, x, ST.z1 + 4, Math.PI, k % 3 === 1 ? 'grey' : 'red', k + 7, k % 3 === 1 ? 'facade_greystone' : 'facade_brick'));
   { const side = lit(MT(facadeTex('red', 12), { roughness: 0.95 }), 0.35); plane(LOT.z1 - ST.z1 - 4, 10.5, side, LOT.x0, 5.25, (ST.z1 + 4 + LOT.z1) / 2, Math.PI / 2); const s2 = lit(MT(facadeTex('tan', 13), { roughness: 0.95 }), 0.35); plane(LOT.z1 - ST.z1 - 4, 10, s2, LOT.x1, 5, (ST.z1 + 4 + LOT.z1) / 2, -Math.PI / 2);
     plane(LOT.x1 - LOT.x0, 3, M(0x3a3632), (LOT.x0 + LOT.x1) / 2, 1.5, LOT.z1, Math.PI); } // back fence of the lot
 
@@ -116,28 +119,22 @@ export function createOutside({ scene, BK, stations, obstacles, bar, ROOM }) {
   }
 
   // ---------- the L: green steel trestle over the street, and a train every minute and a half ----------
-  const L = { z: (ST.z0 + ST.z1) / 2, y: 6.6 }, green = M(0x2c4636, { roughness: 0.7, metalness: 0.2 });
-  for (let x = -76; x <= 80; x += 10) for (const z of [ST.z0 + 0.5, ST.z1 - 0.5]) { box(0.45, L.y, 0.45, green, x, L.y / 2, z); obstacles.push({ x, z, r: 0.35 }); }
-  for (const z of [ST.z0 + 0.5, ST.z1 - 0.5, L.z - 2, L.z + 2]) box(160, 0.7, 0.35, green, 0, L.y + 0.2, z);
-  for (let x = -76; x <= 80; x += 5) box(0.3, 0.4, ST.z1 - ST.z0 - 1, green, x, L.y - 0.1, L.z);
-  box(160, 0.15, ST.z1 - ST.z0 - 0.6, M(0x1e1e1e), 0, L.y + 0.6, L.z); for (const dz of [-2.8, -1.6, 1.6, 2.8]) box(160, 0.12, 0.12, M(0x8a8a8a, { metalness: 0.8, roughness: 0.3 }), 0, L.y + 0.74, L.z + dz);
+  const L = { z: (ST.z0 + ST.z1) / 2, y: 7.3 }, SEC = 12.5; // the trestle model (prop el_track): 7.6 m tall sections, end to end down the middle of the street
+  for (let x = -75; x <= 81; x += SEC) { place(scene, 'el_track', { h: 7.6 }, x, 0, L.z); for (const dx of [-3.75, 3.75]) for (const dz of [-1.35, 1.35]) obstacles.push({ x: x + dx, z: L.z + dz, r: 0.4 }); }
   const train = new THREE.Group(); scene.add(train); { const body = M(0xb8bcc4, { metalness: 0.6, roughness: 0.35 }), win = glow(0xffe0a0, 1.4), stripe = glow(0x2a6ad8, 0.9);
     for (let k = 0; k < 4; k++) { const x = k * 15; box(14.4, 3.2, 3, body, x, 0, 0, train); for (const s of [-1, 1]) { box(12.6, 0.8, 0.02, win, x, 0.5, s * 1.51, train); box(14.4, 0.2, 0.02, stripe, x, -0.6, s * 1.51, train); } } }
-  train.position.set(-200, L.y + 2.4, L.z - 2.2); let rumble = null;
+  train.position.set(-200, L.y + 1.75, L.z); let rumble = null;
 
-  // ---------- street furniture (A7-A13 art replaces these) ----------
-  const pole = M(0x2f3a34, { metalness: 0.4, roughness: 0.5 });
-  const lamp = (x, z, face) => { cyl(0.09, 0.12, 7, pole, x, 3.5, z); box(0.1, 0.1, 1.6, pole, x, 7, z + face * 0.8); box(0.5, 0.18, 0.8, M(0x3a3a3a), x, 6.95, z + face * 1.5); box(0.4, 0.04, 0.6, glow(0xffd9a0, 2.4), x, 6.85, z + face * 1.5); obstacles.push({ x, z, r: 0.25 }); };
+  // ---------- street furniture (Meshy models from the reference images) ----------
+  const lamp = (x, z, dir) => { place(scene, 'street_lamp', { h: 7.2, rotY: -dir * Math.PI / 2 }, x, 0, z + dir * 1.45); box(0.42, 0.04, 0.26, glow(0xffd9a0, 2.6), x, 6.72, z + dir * 2.95); obstacles.push({ x, z, r: 0.25 }); }; // dir: +1 the arm reaches over the street toward +z
   [-28, -12, 12, 28].forEach((x) => lamp(x, ST.z0 - 0.6, 1)); [-20, -4, 44].forEach((x) => lamp(x, ST.z1 + 0.6, -1));
-  for (const [x, z] of [[-12, ST.z0 - 0.5], [12, ST.z0 - 0.5], [-4, ST.z1 + 0.5]]) { const l = new THREE.PointLight(0xffc888, 40, 22, 1.4); l.position.set(x, 6.3, z + 1.5); l.userData.noDim = true; scene.add(l); }
-  const hyd = (x, z) => { cyl(0.16, 0.18, 0.7, M(0xe8e0c8), x, 0.35, z); cyl(0.19, 0.19, 0.14, M(0xc0202a), x, 0.74, z); obstacles.push({ x, z, r: 0.3 }); }; hyd(-2.5, ST.z0 - 0.5); hyd(16, ST.z1 + 0.6);
-  const mail = (x, z) => { box(0.55, 1.0, 0.5, M(0x1d4aa0), x, 0.5, z); const t = cyl(0.275, 0.275, 0.5, M(0x1d4aa0), x, 1.0, z, 16); t.rotation.z = Math.PI / 2; obstacles.push({ x, z, r: 0.4 }); }; mail(9.5, ST.z0 - 0.7);
-  const news = (x, z) => { box(0.5, 0.9, 0.45, M(0xa02a22), x, 0.75, z); box(0.36, 0.25, 0.02, glow(0xe8e0c8, 0.6), x, 1.0, z - 0.24); obstacles.push({ x, z, r: 0.35 }); }; news(1.5, ST.z0 - 0.6);
-  { box(2.0, 1.3, 1.4, M(0x1f4a2a, { roughness: 0.6 }), 14.5, 0.65, ROOM.z + 1.0); box(2.0, 0.06, 1.45, M(0x111111), 14.5, 1.33, ROOM.z + 1.0); obstacles.push({ x: 14.0, z: ROOM.z + 1, r: 0.8 }, { x: 15.0, z: ROOM.z + 1, r: 0.8 }); } // dumpster by the neighbour
-  const car = (x, z, col, ry) => { const g = new THREE.Group(); g.position.set(x, -0.08, z); g.rotation.y = ry; scene.add(g); const c = M(col, { roughness: 0.35, metalness: 0.4 }); box(4.6, 0.75, 1.8, c, 0, 0.6, 0, g); box(2.4, 0.6, 1.6, c, -0.2, 1.25, 0, g); box(2.3, 0.5, 1.62, M(0x1a2230, { roughness: 0.1, metalness: 0.6 }), -0.2, 1.25, 0, g);
-    for (const [wx, wz] of [[1.4, 0.85], [1.4, -0.85], [-1.4, 0.85], [-1.4, -0.85]]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.24, 14), M(0x111111)); w.rotation.x = Math.PI / 2; w.position.set(wx, 0.34, wz); g.add(w); }
-    obstacles.push({ x: x - 1.4 * Math.cos(ry), z, r: 1.1 }, { x: x + 1.4 * Math.cos(ry), z, r: 1.1 }); };
-  car(-8, ST.z0 + 1.2, 0x5a1a22, 0); car(24, ST.z1 - 1.2, 0x2a3a4a, Math.PI);
+  for (const [x, z] of [[-12, ST.z0 + 2.3], [12, ST.z0 + 2.3], [-4, ST.z1 - 2.3]]) { const l = new THREE.PointLight(0xffc888, 40, 22, 1.4); l.position.set(x, 6.3, z); l.userData.noDim = true; scene.add(l); }
+  const thing = (name, h, x, z, ry, r) => { place(scene, name, { h, rotY: ry }, x, 0, z); obstacles.push({ x, z, r }); };
+  thing('hydrant', 0.8, -2.5, ST.z0 - 0.5, 0.4, 0.3); thing('hydrant', 0.8, 16, ST.z1 + 0.6, 2.6, 0.3);
+  thing('mailbox', 1.25, 9.5, ST.z0 - 0.7, Math.PI, 0.4); thing('newsbox', 1.15, 1.5, ST.z0 - 0.6, Math.PI, 0.35);
+  place(scene, 'dumpster', { h: 1.6 }, 14.5, 0, ROOM.z + 1.15); obstacles.push({ x: 14.0, z: ROOM.z + 1.1, r: 0.8 }, { x: 15.0, z: ROOM.z + 1.1, r: 0.8 });
+  const car = (x, z, ry) => { place(scene, 'sedan', { h: 1.45, rotY: ry }, x, -0.08, z); obstacles.push({ x: x - 1.4, z, r: 1.05 }, { x: x + 1.4, z, r: 1.05 }); };
+  car(-8, ST.z0 + 1.25, 0); car(24, ST.z1 - 1.25, Math.PI);
 
   // ---------- the gas station: canopy over two pump islands, the store at the back of the lot ----------
   const cz = 30.2, canopy = { x0: 16, x1: 32, z0: 27, z1: 33.4, y: 4.8 };
@@ -147,13 +144,7 @@ export function createOutside({ scene, BK, stations, obstacles, bar, ROOM }) {
   for (let x = canopy.x0 + 1.5; x < canopy.x1; x += 3) box(1.6, 0.03, 0.9, glow(0xf4f8ff, 2), x, canopy.y - 0.31, cz);
   { const l = new THREE.PointLight(0xeef4ff, 40, 16, 1.4); l.position.set((canopy.x0 + canopy.x1) / 2, canopy.y - 0.6, cz); l.userData.noDim = true; scene.add(l); }
   for (const x of [19.5, 28.5]) { box(0.35, canopy.y, 0.35, M(0xd8d8d8), x, canopy.y / 2, cz); obstacles.push({ x, z: cz, r: 0.3 }); }
-  const pumps = [];
-  for (const x of [22, 26]) {
-    box(3.4, 0.22, 1.1, M(0x9a9a96), x, 0.11, cz, scene); for (const dx of [-1.6, 1.6]) { cyl(0.09, 0.09, 1.0, M(0xe8c020), x + dx, 0.5, cz, 10); }
-    const p = new THREE.Group(); p.position.set(x, 0.22, cz); scene.add(p); pumps.push(p);
-    box(0.9, 1.8, 0.55, M(0xd8202a, { roughness: 0.5 }), 0, 0.9, 0, p); box(0.92, 0.5, 0.57, M(0xf0f0f0), 0, 1.55, 0, p); for (const s of [-1, 1]) box(0.5, 0.25, 0.01, glow(0x40ff80, 0.9), 0, 1.55, s * 0.29, p);
-    obstacles.push({ x: x - 1.0, z: cz, r: 0.75 }, { x, z: cz, r: 0.75 }, { x: x + 1.0, z: cz, r: 0.75 });
-  }
+  for (const x of [22, 26]) { place(scene, 'gas_pump', { h: 2.1 }, x, 0, cz); obstacles.push({ x: x - 0.8, z: cz, r: 0.7 }, { x, z: cz, r: 0.7 }, { x: x + 0.8, z: cz, r: 0.7 }); }
   stations.push({ x: 22, z: cz - 1.4, r: 1.3, text: 'Pump 1 · cash inside', act: () => BK.toast && BK.toast('Pay inside. The slots are in there too.', 'info') });
 
   // ---------- the store / casino ----------
@@ -161,13 +152,12 @@ export function createOutside({ scene, BK, stations, obstacles, bar, ROOM }) {
     for (const [x0, x1] of [[60, 430], [600, 970]]) { g.fillStyle = '#1a2a3a'; g.fillRect(x0, 120, x1 - x0, 190); g.fillStyle = 'rgba(255,240,200,0.55)'; g.fillRect(x0 + 6, 126, x1 - x0 - 12, 178); g.fillStyle = '#ffd24a'; g.fillRect(x0 + 30, 150, 90, 120); g.fillStyle = '#2a8ae8'; g.fillRect(x0 + 140, 160, 80, 100); }
     g.font = '400 54px Bungee, "Arial Black", system-ui'; g.fillStyle = '#ff3050'; g.shadowColor = '#ff3050'; g.shadowBlur = 24; g.fillText('SLOTS', 790, 230); }).t, { roughness: 0.9 });
   lit(ext, 0.55); art(ext, 'gas_station_store');
-  { const W = CA.x1 - CA.x0, a = CA.x0, d0 = CA.door.x - CA.door.w / 2, d1 = CA.door.x + CA.door.w / 2, Zf = CA.z0 - 0.06, H = CA.h;
-    const piece = (x0, x1, y0, y1) => { const m = plane(x1 - x0, y1 - y0, ext, (x0 + x1) / 2, (y0 + y1) / 2, Zf, Math.PI); const u0 = 1 - (x1 - a) / W, u1 = 1 - (x0 - a) / W, uv = m.geometry.attributes.uv; /* turned PI: the plane's left edge is the piece's world-right edge */ uv.setXY(0, u0, y1 / H); uv.setXY(1, u1, y1 / H); uv.setXY(2, u0, y0 / H); uv.setXY(3, u1, y0 / H); uv.needsUpdate = true; };
-    piece(a, d0, 0, H); piece(d1, CA.x1, 0, H); piece(d0, d1, CA.door.h, H);
+  { const W = CA.x1 - CA.x0, a = CA.x0, d0 = CA.door.x - CA.door.w / 2, d1 = CA.door.x + CA.door.w / 2, Zf = CA.z0 - 0.06, H = CA.h, FH = CA.fh;
+    const piece = (x0, x1, y0, y1) => { const m = plane(x1 - x0, y1 - y0, ext, (x0 + x1) / 2, (y0 + y1) / 2, Zf, Math.PI); const u0 = 1 - (x1 - a) / W, u1 = 1 - (x0 - a) / W, uv = m.geometry.attributes.uv; /* turned PI: the plane's left edge is the piece's world-right edge */ uv.setXY(0, u0, y1 / FH); uv.setXY(1, u1, y1 / FH); uv.setXY(2, u0, y0 / FH); uv.setXY(3, u1, y0 / FH); uv.needsUpdate = true; };
+    piece(a, d0, 0, FH); piece(d1, CA.x1, 0, FH); piece(d0, d1, CA.door.h, FH);
     const brick = lit(MT(facadeTex('tan', 14), { roughness: 0.95 }), 0.35); plane(CA.z1 - CA.z0, H, brick, CA.x0 - 0.06, H / 2, (CA.z0 + CA.z1) / 2, -Math.PI / 2); plane(CA.z1 - CA.z0, H, brick, CA.x1 + 0.06, H / 2, (CA.z0 + CA.z1) / 2, Math.PI / 2); plane(W, H, brick, (CA.x0 + CA.x1) / 2, H / 2, CA.z1 + 0.06, 0);
-    box(W + 0.4, 0.3, CA.z1 - CA.z0 + 0.4, M(0x6a6a66), (CA.x0 + CA.x1) / 2, H + 0.15, (CA.z0 + CA.z1) / 2); // roof slab
+    box(W + 0.4, 0.3, CA.z1 - CA.z0 + 0.2, M(0x6a6a66), (CA.x0 + CA.x1) / 2, H + 0.15, (CA.z0 + CA.z1) / 2 + 0.1); // roof slab (behind the false front)
     const fr = M(0x9a9aa0, { metalness: 0.7, roughness: 0.3 }); box(0.08, CA.door.h, 0.2, fr, d0, CA.door.h / 2, CA.z0); box(0.08, CA.door.h, 0.2, fr, d1, CA.door.h / 2, CA.z0); box(CA.door.w, 0.08, 0.2, fr, CA.door.x, CA.door.h, CA.z0);
-    const n = TX.neon('OPEN 24 HRS', '#ff3050', { w: 512, h: 128, size: 62 }).t; plane(1.6, 0.4, new THREE.MeshBasicMaterial({ map: n, transparent: true, depthWrite: false, toneMapped: false }), d1 + 1.4, 2.0, Zf - 0.03, Math.PI);
     // inside: linoleum, drop ceiling with light panels, painted walls
     const lino = TX.canvasTex(256, 256, (g, w, h) => { for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { g.fillStyle = (x + y) % 2 ? '#c8c2b0' : '#8a9aa8'; g.fillRect(x * 32, y * 32, 32, 32); } const R = rnd(31); for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(40,30,20,${R() * 0.1})`; g.fillRect(R() * w, R() * h, 3, 2); } }, { repeat: [W / 1.6, (CA.z1 - CA.z0) / 1.6] }).t;
     flat(W, CA.z1 - CA.z0, MT(lino, { roughness: 0.4 }), (CA.x0 + CA.x1) / 2, 0.012, (CA.z0 + CA.z1) / 2);
@@ -180,21 +170,15 @@ export function createOutside({ scene, BK, stations, obstacles, bar, ROOM }) {
     const sl = TX.neon('SLOTS', '#ffd24a', { w: 512, h: 128, size: 80 }).t; plane(2.2, 0.55, new THREE.MeshBasicMaterial({ map: sl, transparent: true, depthWrite: false, toneMapped: false }), 23.5, 3.5, CA.z1 - 0.05, Math.PI);
   }
   // checkout counter along the right wall, and the clerk behind it
-  { const cx = CA.x1 - 1.6, cz0 = CA.z0 + 1.0; box(0.7, 1.0, 2.8, M(0x8a6a4a, { roughness: 0.5 }), cx, 0.5, cz0 + 1.4); box(0.8, 0.06, 2.9, M(0xd8d0c0, { roughness: 0.3 }), cx, 1.03, cz0 + 1.4); box(0.35, 0.3, 0.4, M(0x2a2a2e), cx, 1.21, cz0 + 0.6); // register
-    box(0.5, 1.6, 2.6, M(0x5a4a3a), CA.x1 - 0.3, 0.8, cz0 + 1.4); for (let k = 0; k < 4; k++) box(0.42, 0.04, 2.5, M(0x8a7a6a), CA.x1 - 0.3, 0.6 + k * 0.35, cz0 + 1.4);
-    obstacles.push({ x: cx, z: cz0 + 0.6, r: 0.55 }, { x: cx, z: cz0 + 1.6, r: 0.55 }, { x: cx, z: cz0 + 2.4, r: 0.55 });
-    const clerk = bar.spawn(makePreset('rookie', { beard: 'stubble', outfit: 'tee', shirt: 0xc8102e, hat: { color: 0xc8102e, backwards: false } }), CA.x1 - 0.95, cz0 + 1.4, Math.PI / 2, 'idle', ['Pump number?', 'Slots are in the back.', 'No, the lotto machine is broken.', 'You buying something?'], 'Gas clerk');
+  { const cz0 = CA.z0 + 1.0; place(scene, 'store_counter', { d: 2.8, rotY: -Math.PI / 2 }, CA.x1 - 0.85, 0, cz0 + 1.4); // counter facing the room, cigarette shelves against the wall
+    obstacles.push({ x: CA.x1 - 1.2, z: cz0 + 0.5, r: 0.55 }, { x: CA.x1 - 1.2, z: cz0 + 1.4, r: 0.55 }, { x: CA.x1 - 1.2, z: cz0 + 2.3, r: 0.55 });
+    const clerk = bar.spawn(makePreset('rookie', { beard: 'stubble', outfit: 'tee', shirt: 0xc8102e, hat: { color: 0xc8102e, backwards: false } }), CA.x1 - 0.62, cz0 + 1.4, Math.PI / 2, 'idle', ['Pump number?', 'Slots are in the back.', 'No, the lotto machine is broken.', 'You buying something?'], 'Gas clerk');
     clerk.who = 'Gas clerk'; }
   // slot machines along the back wall (A15 art replaces the cabinet); each screen is a canvas the spin animates for everyone
   const machines = OUT.slots.map(({ i, x, z }) => {
     const g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g); // front (screen, buttons) faces -z: the room
-    const cab = M(0x15151a, { roughness: 0.35, metalness: 0.3 }), chrome = M(0xc8ccd4, { metalness: 0.9, roughness: 0.2 });
-    box(0.78, 1.0, 0.62, cab, 0, 0.5, 0, g); box(0.8, 0.04, 0.64, chrome, 0, 1.0, 0, g); box(0.78, 0.9, 0.4, cab, 0, 1.45, 0.1, g);
-    const deck = box(0.74, 0.08, 0.32, M(0x2a2a30), 0, 1.02, -0.22, g); deck.rotation.x = -0.25;
-    const btn = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.03, 16), glow(0xff3040, 1.4)); btn.position.set(0.22, 1.06, -0.24); g.add(btn);
-    const scr = TX.canvasTex(384, 192, () => {}); const sm = new THREE.MeshBasicMaterial({ map: scr.t, toneMapped: false }); const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.64, 0.32), sm); screen.position.set(0, 1.45, -0.105); screen.rotation.y = Math.PI; g.add(screen);
-    const top = TX.canvasTex(256, 96, (c, w, h) => { const gr = c.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, '#5a10a0'); gr.addColorStop(1, '#c81050'); c.fillStyle = gr; c.fillRect(0, 0, w, h); c.font = '400 44px Bungee, "Arial Black", system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#ffd24a'; c.shadowColor = '#ffd24a'; c.shadowBlur = 12; c.fillText('LUCKY 7', w / 2, h / 2 + 2); }).t;
-    const tp = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.3, 0.42), [cab, cab, cab, cab, new THREE.MeshBasicMaterial({ map: top, toneMapped: false }), new THREE.MeshBasicMaterial({ map: top, toneMapped: false })]); tp.position.set(0, 2.06, 0.1); g.add(tp);
+    const chrome = M(0xc8ccd4, { metalness: 0.9, roughness: 0.2 }); place(g, 'slot_machine', { h: 1.95, rotY: Math.PI }, 0, 0, 0); // the cabinet (prop slot_machine), facing the room
+    const scr = TX.canvasTex(384, 192, () => {}); const sm = new THREE.MeshBasicMaterial({ map: scr.t, toneMapped: false }); const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.47, 0.3), sm); screen.position.set(0, 1.31, -0.27); screen.rotation.y = Math.PI; g.add(screen); // the live reels over the cabinet's own window
     const stool = new THREE.Group(); stool.position.set(x, 0, z - 0.85); scene.add(stool); { const s = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.08, 16), M(0x8a1a24, { roughness: 0.5 })); s.position.y = 0.66; stool.add(s); const p = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.64, 8), chrome); p.position.y = 0.32; stool.add(p); }
     obstacles.push({ x, z: z + 0.05, r: 0.5 });
     const m = { i, x, z, g, scr, reels: SLOT_SYMS.slice(0, 3).map((_, k) => SLOT_SYMS[(i + k * 2) % SLOT_SYMS.length]), spin: null, lastDraw: 0 };
@@ -231,7 +215,7 @@ export function createOutside({ scene, BK, stations, obstacles, bar, ROOM }) {
     const slot = Math.floor(now / 7000); if (slot !== lastAuto) { lastAuto = slot; const R = rnd(slot), k = [...busyMachines][slot % 2]; const reels = [0, 1, 2].map(() => SLOT_SYMS[Math.floor(R() * 6)]); onSlot({ m: k, reels, win: reels[0] === reels[1] && reels[1] === reels[2] ? 50 : 0 }); }
     // the L train: every 90 s by the shared clock, alternating direction
     const cyc = now / 1000 % 90, dir = Math.floor(now / 90000) % 2 ? -1 : 1, run = cyc < 14;
-    train.visible = run; if (run) { const x = dir > 0 ? -150 + cyc * 22 : 150 - cyc * 22; train.position.x = x - (dir > 0 ? 45 : 0); train.position.z = L.z + (dir > 0 ? -2.2 : 2.2);
+    train.visible = run; if (run) { const x = dir > 0 ? -150 + cyc * 22 : 150 - cyc * 22; train.position.x = x - (dir > 0 ? 45 : 0); train.position.z = L.z;
       if (!rumble && audio.loop) rumble = audio.loop('bowlRoll', { pos: { x, y: L.y, z: L.z }, g: 0.9, ref: 8, roll: 0.6 }); if (rumble && rumble.setPos) rumble.setPos({ x: train.position.x + 22, y: L.y, z: L.z }); }
     else if (rumble) { rumble.stop(); rumble = null; }
   }
