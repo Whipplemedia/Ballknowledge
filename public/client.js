@@ -84,7 +84,7 @@ function menuView() {
       <div class="muted" style="font-size:12px">${q === 'auto' ? 'Drops to Low by itself if the first seconds run slowly.' : q === 'low' ? 'No shadows or glow, lower resolution.' : 'Shadows, glow and full resolution.'}</div></div>
     <div class="msec"><div class="title">Screen</div>${tog('compact', 'Compact HUD (H)')}${tog('bubbles', 'NPC speech bubbles')}</div>
     <div class="row"><button onclick="closeMenu(false);window.BK.audioUI&&window.BK.audioUI.open()">🔊 Sound &amp; voice</button><button onclick="ui.menuKeys=!ui.menuKeys;render()">⌨ ${ui.menuKeys ? 'Hide' : 'Show'} all controls</button></div>
-    ${ui.menuKeys ? `<div class="keys">${[['WASD', 'Move'], ['Shift', 'Run'], ['Space', 'Jump'], ['Mouse', 'Look'], ['E', 'Interact / sit / stand'], ['F or right-click', 'Throw a bottle'], ['1-9', 'Pop-up buttons'], ['Tab', 'Free the mouse'], ['C', 'Crew & wire money'], ['H', 'Compact / full HUD'], ['V', 'Push-to-talk'], ['M', 'Mute mic'], ['O', 'Sound & voice'], ['Esc', 'This menu']].map(([k, d]) => `<div><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</div>` : ''}
+    ${ui.menuKeys ? `<div class="keys">${[['WASD', 'Move'], ['Shift', 'Run'], ['Space', 'Jump'], ['Mouse', 'Look'], ['E', 'Interact / sit / stand'], ['Click (or F)', 'Throw a bottle (when holding one)'], ['Space (mashed)', 'Break free when grabbed'], ['1-9', 'Pop-up buttons'], ['Tab', 'Free the mouse'], ['C', 'Crew & wire money'], ['H', 'Compact / full HUD'], ['V', 'Push-to-talk'], ['M', 'Mute mic'], ['O', 'Sound & voice'], ['Esc', 'This menu']].map(([k, d]) => `<div><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</div>` : ''}
     <div class="row"><span class="muted">Room <b>${S.code}</b></span>${save.tutDone ? `<button class="ghost" onclick="napkinReset()">↺ Guide me again next first night</button>` : ''}<button class="ghost red-t" style="margin-left:auto" onclick="leaveGame()">Leave game</button></div>
   </div></div>`;
 }
@@ -287,15 +287,21 @@ function gameView() {
     <button class="ghost" style="flex:0 0 auto" onclick="closePanel()">✕</button></div>${body}</div></div>` : ''}`;
 }
 const grabbed = () => !!(window.BK.goons && window.BK.goons.held[S.you]);
+// mash-Space meter while a goon has you (the server decides when you're free; this just shows the effort)
+function struggleMeter(need) {
+  const live = performance.now() - (window.BK.struggleAt || 0) < 2500, n = live ? Math.min(need, window.BK.struggle || 0) : 0; if (!live) window.BK.struggle = 0;
+  return `<div class="strug"><b>MASH SPACE</b><div class="sbar"><i style="width:${Math.round((n / need) * 100)}%"></i></div></div>`;
+}
 function huntBanner() {
   const me = S.me, held = grabbed(), gs = S.hunt.goons || [], up = gs.filter((g) => !g.down).length;
   const pips = gs.map((g) => `<span class="gpip ${g.down ? 'down' : ''}">${g.down ? '💫' : '🕴️'}${'<i></i>'.repeat(Math.max(0, g.hp))}${'<i class="x"></i>'.repeat(Math.max(0, g.max - g.hp))}</span>`).join('');
   return `<div class="card hunt col ${held ? 'held' : ''}" style="margin-bottom:12px">
     <div class="big">${held ? '🫱 A hitman has you!' : '🔫 The hitmen are here'} <span class="pill time" id="huntt"></span></div>
-    <div class="muted">${held ? `<b class="bad">He's shaking the money out of you.</b> Crew: bottle him now - he can't dodge while he's holding you.` : me.remaining > 0 ? `<b class="bad">They want ${$$(me.remaining)} from YOU.</b> Pay it, get wired cash, or escape: the crew has to drop <b>every</b> hitman with bottles.` : 'You are clear - help your crew. Only bottles hurt them (F / right-click).'}</div>
+    ${held ? struggleMeter(10) : ''}
+    <div class="muted">${held ? `<b class="bad">He's shaking the money out of you.</b> Mash <b>SPACE</b> to wrench free, then run - he's slower than you. Crew: bottle him now, he can't dodge while he's holding someone.` : me.remaining > 0 ? `<b class="bad">They want ${$$(me.remaining)} from YOU.</b> Pay it, get wired cash, or escape: the crew has to drop <b>every</b> hitman with bottles.` : 'You are clear - help your crew. Only bottles hurt them - grab some and click to throw.'}</div>
     <div class="gpips">${pips}</div>
     <div class="muted">${up} of ${gs.length} standing. Each needs ${gs[0] ? gs[0].max : 3} bottle hits. They sidestep throws when they're free, and a downed one gets back up after ~10s - drop them all at once.</div>
-    ${me.remaining > 0 ? `<div class="row"><button class="gold" onclick="send({type:'pay'})" ${me.money <= 0 ? 'disabled' : ''}>Pay what I can (${$$(Math.min(me.money, me.remaining))})</button></div>` : ''}</div>`;
+    ${me.remaining > 0 ? (me.money > 0 ? `<div class="row"><button class="gold" onclick="send({type:'pay'})">Pay what I can (${$$(Math.min(me.money, me.remaining))})</button></div>` : `<div class="muted"><b class="bad">You're broke - nothing to pay with.</b> Ask the crew to wire you cash (C), keep away from them, and let the crew bottle them down.</div>`) : ''}</div>`;
 }
 
 // ---------- sportsbook ----------
@@ -440,7 +446,7 @@ const NAPKIN = [
   { id: 'vinnie', text: 'Buy Old Vinnie a drink for a tip', where: 'Old man on the stool by the taps', who: 'Old Vinnie', line: 'Psst. Kid. Buy an old man a drink and I\'ll tell you who wins.', vo: 'vin_hello' },
   { id: 'drink', text: 'Have a drink - find your buzz', where: 'Bartender, behind the counter', who: 'Bartender', line: 'A little buzz helps the gut. Too much and it lies to you.', vo: 'bt_drink' },
   { id: 'job', text: 'Ask the bartender for a side job', where: 'Bartender: "Ask for a job"', who: 'Bartender', line: 'Short on cash? I always have work. Come ask me.', vo: 'bt_job' },
-  { id: 'bottle', text: 'Throw Sal\'s collector out with bottles', where: 'E grabs bottles off any table, F throws', who: 'Uncle Sal', line: 'Just a friendly reminder, kid. Let\'s see what you do.', vo: 'sal_reminder' },
+  { id: 'bottle', text: 'Throw Sal\'s collector out with bottles', where: 'E grabs bottles off any table, click throws', who: 'Uncle Sal', line: 'Just a friendly reminder, kid. Let\'s see what you do.', vo: 'sal_reminder' },
   { id: 'sal', text: 'Check your tab with Uncle Sal', where: 'Red corner booth, back right', who: 'Uncle Sal', line: 'Come here. Let\'s talk about what you owe me.', vo: 'sal_tab' },
 ];
 const tut = () => (save.tutProg = save.tutProg || {});
@@ -595,7 +601,7 @@ function eventBanner() {
   const be = S.barEvent; if (!be) return '';
   const base = `<div class="hud-event ${be.kind}"><div class="et">${esc(be.title)} <span class="pill time">${mmss(be.until - now())}</span></div><div>${esc(be.text)}</div>`;
   if (be.kind === 'fight') {
-    const hits = be.hits ? `<div class="muted">🍾 Bottles thrown: ${esc(be.red)} ${be.hits.red} · ${esc(be.blue)} ${be.hits.blue} - every hit tips the fight against him</div>` : '<div class="muted">Throw bottles at a fighter (F) to tip the fight against him.</div>';
+    const hits = be.hits ? `<div class="muted">🍾 Bottles thrown: ${esc(be.red)} ${be.hits.red} · ${esc(be.blue)} ${be.hits.blue} - every hit tips the fight against him</div>` : '<div class="muted">Throw bottles at a fighter (click) to tip the fight against him.</div>';
     if (be.mine) return base + `<div class="muted">You bet ${$$(be.mine.stake)} on ${esc(be.mine.side === 'red' ? be.red : be.blue)}.</div>${hits}</div>`;
     if (now() < be.betUntil) { const st = ui.fightStake; return base + `<div class="row"><button class="red" onclick="fightBet('red')">🔴 ${esc(be.red)} · ${$$(st)}</button><button class="blue" onclick="fightBet('blue')">🔵 ${esc(be.blue)} · ${$$(st)}</button><button class="ghost fit" onclick="fightStakeNext()">Stake ${$$(st)} ▸</button></div>${hits}</div>`; }
   }
@@ -604,7 +610,7 @@ function eventBanner() {
 function shakeBanner() {
   const sh = S.shake; if (!sh) return '';
   const pct = Math.max(0, (sh.hp / Math.max(1, sh.maxHp)) * 100), held = grabbed();
-  return `<div class="card hunt col ${held ? 'held' : ''}"><div class="big">${held ? '🫳 A collector is going through your pockets' : "💼 Sal's collectors"} <span class="pill time" id="shaket"></span></div>
+  return `<div class="card hunt col ${held ? 'held' : ''}"><div class="big">${held ? '🫳 A collector is going through your pockets' : "💼 Sal's collectors"} <span class="pill time" id="shaket"></span></div>${held ? struggleMeter(6) : ''}
     <div class="muted">The crew missed the quota. They want <b class="bad">${$$(sh.tax - sh.paid)}</b> more and they'll pat everyone down to get it. Chip in, or throw them out: punch them up close, or bottle them.</div>
     <div class="hp"><div style="width:${pct}%"></div></div>
     <div class="row"><button class="gold" onclick="send({type:'shakePay',amount:100})">Pay $100</button><button class="gold" onclick="send({type:'shakePay',amount:500})">Pay $500</button></div></div>`;

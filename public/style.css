@@ -347,3 +347,7 @@ body.cine #app .hud,body.cine #prompt,body.cine #cross,body.cine #toasts,body.ci
 .nk-i.done{color:#7a8a6a;text-decoration:line-through;text-decoration-color:#b0302a99}
 .nk-i.cur{color:#1a1408;font-weight:700}
 .nk-i.dim{color:#9a8a70;font-style:italic}
+.strug{display:flex;align-items:center;gap:10px;margin:4px 0}.strug b{color:#ffd04a;letter-spacing:.08em;animation:pulse .6s infinite alternate}
+.strug .sbar{flex:1;height:12px;background:#0008;border:1px solid #ffd04a88;border-radius:6px;overflow:hidden}.strug .sbar i{display:block;height:100%;background:linear-gradient(90deg,#ff9b3d,#ffd04a);transition:width .1s}
+@keyframes pulse{from{opacity:.6}to{opacity:1}}
+#cineflash{position:fixed;inset:0;background:#fff;opacity:0;z-index:40;pointer-events:none}

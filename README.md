@@ -75,9 +75,11 @@ Second batch (Oct 2026), all game scores and home teams checked against web sear
 - `public/vo.js` plays clips that exist and silently skips the rest: Sal's opening per night, collectors/hitmen arriving, the kill scene, guide call-outs, the bartender/Sal/Vinnie greetings, job thanks, and the announcer when a game goes on air or final.
 
 ## Hitmen: bottles only
-- Fists bounce off hitmen. Each takes 4 bottle hits (5 on the last night of a campaign); 3 of them for crews up to 3, 4 for 4-5 players, 5 for 6.
-- A hitman who is free sidesteps 45% of bottles (`goonDodge`, shown as a hop and "DODGED!"); one busy holding a player can't dodge.
-- A downed hitman gets back up after 10 s with 75% of his hits (`TUNE` in goons.js), so the crew has to drop them all at once. Tuned with a fast-forward simulation of crews throwing every 1.5 s at 55% accuracy.
+- Click throws a bottle when you're holding one (F / right-click still work); otherwise click punches. Fists bounce off hitmen.
+- Each hitman takes 3 bottle hits (4 on the last night of a campaign); 3 of them for crews up to 3, 4 for 4-5 players, 5 for 6. They move at 2.4 m/s (players walk 3.8, run 6.2), so you can get away.
+- A free hitman sidesteps 30% of bottles (`goonDodge`: a hop and "DODGED!"); one holding a player can't dodge. A downed hitman gets back up after 13 s with half his hits (`TUNE` in goons.js), so the crew still has to drop them all.
+- **Breaking free:** grabbed (by a hitman or a collector), mash Space: 10 presses inside 2.5 s (6 for collectors) and he lets go, stunned, and can't regrab you for 4 s; nobody else can grab you for 2.5 s. A meter shows your effort. Broke players see what to do instead of a dead Pay button.
+- **The back room:** if the timer runs out, the victim is dragged through the back door (6.5 s), then wakes in the back room (a real set behind the bar wall: concrete, a swinging bulb, a chair). Sal talks, raises a baseball bat, swings: white flash, you hit the floor, LIGHTS OUT, and the night ends. The rest of the crew watches the closed door and hears it. Kill scene is 12.5 s (`T.kill`).
 
 ## Seasons: real or made-up
 - The host picks **Real season** or **Made-up season** in the lobby (`{type:'setMode', mode}`).

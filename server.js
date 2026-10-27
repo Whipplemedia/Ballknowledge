@@ -430,7 +430,7 @@ function settle(room) {
   if (!hunted.length) return finish(room);
   room.phase = 'hunt';
   // the way out is bottles: each hitman takes HUNT_HITS clean bottle hits (they dodge, and get back up unless all are down at once)
-  const crew = room.players.size, n = crew <= 3 ? 3 : crew <= 5 ? 4 : 5, hits = room.finale ? 5 : 4; /* bigger crews face more hitmen; on the last night each takes one more hit */
+  const crew = room.players.size, n = crew <= 3 ? 3 : crew <= 5 ? 4 : 5, hits = room.finale ? 4 : 3; /* bigger crews face more hitmen; on the last night each takes one more hit */
   const fightAt = goons.spawn(room, 'hunt', n, n * hits, { names: hunted.map((p) => p.name), amount: Math.round(total), hp: hits });
   room.huntEnd = fightAt + dur(HUNT_MS);
   feed(room, `🔫 ${n} hitmen are here for ${hunted.map((p) => p.name).join(', ')}. Pay up - or drop them all with bottles and get out.`);
@@ -831,6 +831,7 @@ function handle(room, p, m) {
       for (const q of room.players.values()) if (q !== p) send(q, { type: 'pos', id: p.id, x: p.x, z: p.z, ry, sit, jy, p: lp });
       break;
     }
+    case 'struggle': if (goons.struggle(room, p)) broadcast(room); break;
     case 'attack': { // a punch at a named goon; the server checks reach
       if (!room.goons || Date.now() - p.lastHit < 140) break; p.lastHit = Date.now();
       if (goons.hit(room, p, String(m.g || ''), 1, false)) broadcast(room); break;

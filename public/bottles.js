@@ -1,4 +1,4 @@
-// Throwable bottles. Grab at the bar, F / right-click throws. Glass shatters on anything; a bottle that hits a player or NPC knocks
+// Throwable bottles. Grab at the bar; click (or F / right-click) throws. Glass shatters on anything; a bottle that hits a player or NPC knocks
 // them out for 5s. Flight is simulated on every client from the thrower's {pos, vel}; only the thrower reports hits (server validates).
 import * as THREE from 'three';
 import { audio } from './audio.js';
@@ -18,7 +18,7 @@ export function createBottles({ scene, camera, BK, me, obstacles, getAvatars, ge
   const hand = make(); hand.position.set(0.26, -0.27, -0.62); hand.rotation.set(0.35, 0, -0.25); hand.scale.setScalar(0.8); hand.visible = false; camera.add(hand);
   const hud = document.createElement('div'); hud.id = 'bottlehud'; hud.className = 'hidden'; document.body.appendChild(hud);
   const ko = document.createElement('div'); ko.id = 'kooverlay'; ko.className = 'hidden'; document.body.appendChild(ko);
-  const paint = () => { hand.visible = st.held > 0; hud.classList.toggle('hidden', st.held <= 0); hud.textContent = `🍾 ×${st.held}  ·  F or right-click to throw`; };
+  const paint = () => { hand.visible = st.held > 0; hud.classList.toggle('hidden', st.held <= 0); hud.textContent = `🍾 ×${st.held}  ·  click to throw`; };
 
   const shatter = (p) => {
     audio.sfx('glassBreak', { pos: { x: p.x, y: p.y, z: p.z }, ref: 3 });
@@ -29,7 +29,7 @@ export function createBottles({ scene, camera, BK, me, obstacles, getAvatars, ge
 
   const api = {
     get held() { return st.held; }, get flying() { return st.flying; },
-    grab() { st.held = Math.max(st.held, 3); audio.sfx('bottle'); BK.toast && BK.toast('Grabbed bottles - F or right-click to throw', 'info'); paint(); },
+    grab() { st.held = Math.max(st.held, 3); audio.sfx('bottle'); BK.toast && BK.toast('Grabbed bottles - click to throw', 'info'); paint(); },
     throw() {
       if (st.held <= 0 || busy() || (BK.S && !['play', 'hunt'].includes(BK.S.phase))) return false; st.held--; paint();
       const d = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion), pos = camera.getWorldPosition(new THREE.Vector3()).add(d.clone().multiplyScalar(0.45)); pos.y -= 0.12;
@@ -47,7 +47,7 @@ export function createBottles({ scene, camera, BK, me, obstacles, getAvatars, ge
         for (const [id, a] of getAvatars()) { if (id === b.id) continue; const g = a.P.group.position, lying = a.ko && a.ko > BK.now(); const lo = g.y + (lying ? -0.1 : 0.1), hi = g.y + (lying ? 0.5 : 1.95);
           if (b.p.y > lo && b.p.y < hi && Math.hypot(b.p.x - g.x, b.p.z - g.z) < (lying ? 0.7 : 0.42)) { hit = { kind: 'player', id }; break; } }
         if (!hit) for (const o of getBrawlers()) { const g = o.P.group.position; if (b.p.y > 0.1 && b.p.y < 2.0 && Math.hypot(b.p.x - g.x, b.p.z - g.z) < 0.5) { hit = { kind: 'brawler', side: o.side }; break; } }
-        if (!hit) for (const o of getGoons()) { const g = o.P.group.position; if (o.state !== 'down' && b.p.y > 0.1 && b.p.y < 2.0 && Math.hypot(b.p.x - g.x, b.p.z - g.z) < 0.5) { hit = { kind: 'goon', id: o.id }; break; } } // Sal's muscle: stun + damage
+        if (!hit) for (const o of getGoons()) { const g = o.P.group.position; if (o.state !== 'down' && b.p.y > 0.1 && b.p.y < 2.1 && Math.hypot(b.p.x - g.x, b.p.z - g.z) < 0.62) { hit = { kind: 'goon', id: o.id }; break; } } // Sal's muscle: stun + damage
         if (!hit) getNpcs().forEach((n, k) => { if (hit) return; const g = n.P.group.position, lying = n.ko && n.ko > BK.now(); if (b.p.y > g.y + 0.1 && b.p.y < g.y + 1.95 && Math.hypot(b.p.x - g.x, b.p.z - g.z) < (lying ? 0.5 : 0.42)) hit = { kind: 'npc', k, name: n.who || n.name }; });
         if (!hit && !b.owner && !(me.sit) && Math.hypot(b.p.x - me.x, b.p.z - me.z) < 0.34 && b.p.y < 1.9) hit = { kind: 'me' };
         const wall = b.p.y < 0.04 || b.p.y > ROOM.h - 0.1 || Math.abs(b.p.x) > ROOM.x - 0.12 || Math.abs(b.p.z) > ROOM.z - 0.12 || obstacles.some((o) => b.p.y < 1.25 && Math.hypot(b.p.x - o.x, b.p.z - o.z) < o.r * 0.75);
@@ -74,7 +74,7 @@ export function createBottles({ scene, camera, BK, me, obstacles, getAvatars, ge
   BK.onBottleGot = () => { st.held = Math.min(MAX, st.held + 1); audio.sfx('bottle'); paint(); };
   api.addSpots = (list, stations) => list.forEach(([x, y, z, r], i) => {
     const m = make(mats[(i * 7) % 3]); m.scale.setScalar(0.92); m.position.set(x, y + 0.092, z); m.rotation.y = i * 1.7; m.traverse((o) => { if (o.isMesh) o.castShadow = true; }); scene.add(m);
-    const S = { x, z, r, text: 'E - Grab bottle (throw with F / right-click)', on: () => free(i), act: () => take(i), bottle: i };
+    const S = { x, z, r, text: 'E - Grab bottle (click to throw)', on: () => free(i), act: () => take(i), bottle: i };
     spots.push({ i, x, y: y + 0.12, z, r, m, S, pop: 1 }); stations.push(S);
   });
   // the spot whose bottle the crosshair points at (within reach): beats plain proximity, so a bottle on a booth table wins over the seat beside it

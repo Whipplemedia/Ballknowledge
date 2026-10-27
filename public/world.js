@@ -94,6 +94,7 @@ addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (me.sit && (e.code === 'KeyE' || e.code === 'Space' || ['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code))) { BK.stand(); return; }
   if (koNow()) return;
+  if (heldBy() && e.code === 'Space') { if (!e.repeat) struggle(); return; } // grabbed: mash Space to wrench free
   if (e.code === 'Space' && !e.repeat && !games.active() && !me.sit && !(me.jy > 0)) { me.vy = 4.2; audio.sfx('step', { v: 0.5 }); }
   if (e.code === 'KeyE') { if (games.active()) games.leave(); else { const s = nearest(); if (s) s.act(); } }
   if (e.code === 'KeyC') { games.leave(); BK.openPanel('crew'); }
@@ -148,7 +149,7 @@ function syncDrops() {
 function grabDrops() { for (const [id, o] of drops) if (Math.hypot(o.x - me.x, o.z - me.z) < 1.1 && performance.now() - o.asked > 800) { o.asked = performance.now(); BK.send({ type: 'pickup', id }); } }
 // ---------- Sal's muscle: hitmen + collectors are simulated on the server (goons.js) and streamed here ----------
 const goons = createGoonsView({ scene, BK, audio }); BK.goons = goons;
-const cine = createCine({ camera, BK, doors: bar.doors, goons, audio });
+const cine = createCine({ camera, BK, doors: bar.doors, goons, audio, backroom: bar.backroom });
 let wasHeld = null;
 // guided first night: a regular calls out to you (bubble + voice line when the clip exists)
 BK.guideSay = (who, text, vo) => { const n = bar.say(who, text, 7); if (n) { const g = n.P.group.position; BK.vo.play(vo, { x: g.x, y: 1.6, z: g.z }); } };
@@ -167,14 +168,17 @@ function syncBrawlers() {
   if (!on && brawlers.length) { brawlers.forEach((b) => scene.remove(b.P.group)); brawlers.length = 0; }
 }
 // lights: remember base intensities so blackouts can dim everything
-const lightList = []; scene.traverse((o) => { if (o.isLight) lightList.push([o, o.intensity]); });
+const lightList = []; scene.traverse((o) => { if (o.isLight && !o.userData.noDim) lightList.push([o, o.intensity]); });
 const party = new THREE.PointLight(0xff40d0, 0, 14, 2); party.position.set(0, 3.6, 1); scene.add(party);
 const ray = new THREE.Raycaster();
-canvas.addEventListener('mousedown', () => {
+// grabbed by one of Sal's men: every Space press is a wrench; the server counts them and lets you go when you've fought enough
+function struggle() { BK.send({ type: 'struggle' }); me.punch = 0.6; audio.sfx('punch', { v: 0.35 }); BK.struggle = (BK.struggle || 0) + 1; BK.struggleAt = performance.now(); window.render && window.render(); }
+canvas.addEventListener('mousedown', (e) => {
   if (document.pointerLockElement !== canvas) { if (active() && !BK.ui.open) canvas.requestPointerLock(); return; }
-  if (koNow()) return;
+  if (e.button !== 0 || koNow()) return;
   if (games.active()) return games.down();
   const S = BK.S;
+  if (bottles.held > 0 && bottles.throw()) return; // left click throws when you're holding bottles
   if (goons.active()) { // punch: whatever goon is under the crosshair, if he's within reach
     ray.setFromCamera({ x: 0, y: 0 }, camera);
     const hit = ray.intersectObjects(goons.list().map((o) => o.P.group), true)[0], id = hit && hit.object.userData.goonId, o = id && goons.get(id);
@@ -273,6 +277,7 @@ function frame(now) {
   if (me.punch) { me.punch = Math.max(0, me.punch - dt * 6); camera.position.y -= me.punch * 0.04; camera.rotation.z += me.punch * 0.03; }
   const cineOn = !!cine.update(dt, BK.S && BK.S.you); if (cineOn) cross.style.display = 'none';
   { const c = BK.S && BK.S.cine, sal = bar.npcs.find((n) => n.name === 'Uncle Sal'); // Sal talks through the opening scene
+    if (sal) sal.P.group.visible = !(cineOn && c && c.kind === 'kill'); // he's in the back room with the bat
     if (sal && sal.life) { const talk = cineOn && c && c.kind === 'opening'; if (talk) { sal.life.act = 'talk'; sal.life.actT = 1; sal.life.dur = 99; sal.life.gaze.target = { local: { y: 0, p: 0.05 } }; sal.life.gaze.next = 2; } else if (sal.life.dur === 99) { sal.life.act = null; sal.life.dur = 1; } } }
   { const mvd = Math.hypot(me.x - (me._lx ?? me.x), me.z - (me._lz ?? me.z)); me._lx = me.x; me._lz = me.z;
     if (!me.sit && !games.active() && mvd < 1.2) { me._step = (me._step || 0) + mvd; if (me._step > (keys.ShiftLeft ? 0.95 : 0.7)) { me._step = 0; audio.sfx('step', { v: keys.ShiftLeft ? 0.9 : 0.6 }); } } }

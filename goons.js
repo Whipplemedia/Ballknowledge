@@ -9,11 +9,11 @@ const RX = OBS.room.x, RZ = OBS.room.z;
 const FRONT = { x: 5.0, z: RZ - 0.4 }, FRONT_OUT = { x: 5.0, z: RZ + 1.2 };   // front door (z = +8 wall)
 const BACK = { x: RX - 0.5, z: -6.6 }, BACK_OUT = { x: RX + 1.2, z: -6.6 };    // back-room door behind Sal's corner (x = +12 wall)
 const STEP_MS = 100;
-const T = { huntIntro: 7000, shakeIntro: 4500, beaten: 6000, kill: 8500, leave: 4500, grabTake: 2000, patDown: 2600, stun: 2500, regrab: 3000 };
+const T = { huntIntro: 7000, shakeIntro: 4500, beaten: 6000, kill: 12500, leave: 4500, grabTake: 2000, patDown: 2600, stun: 2500, regrab: 3000 };
 // hitmen only go down to bottles: fists bounce off, a free-moving hitman sidesteps some throws (one that is busy holding
 // someone can't), and a downed one gets back up after TUNE.getUp unless the crew drops them all at the same time
-const TUNE = { dodge: 0.45, getUp: 10000, regain: 0.75 }; // tuned with a fast-forward sim: ~1 in 4 for a lone thrower, hard but doable for a crew // regain: share of his hits a hitman gets back when he stands up
-const SPEED = { enter: 1.7, hitman: 3.1, collector: 2.5, leave: 2.2, drag: 1.5 };
+const TUNE = { dodge: 0.3, getUp: 13000, regain: 0.5, breakFree: 10, regrab: 4000 }; // playtest: the first tuning was near-impossible. breakFree = Space presses within 2.5s to wrench loose // regain: share of his hits a hitman gets back when he stands up
+const SPEED = { enter: 1.7, hitman: 2.4, collector: 2.2, leave: 2.2, drag: 1.5 }; // players walk 3.8 and run 6.2: you can get away
 
 // ---- navigation: a 0.4 m grid of free cells (furniture circles + walls blocked, door corridors open), BFS distance fields
 const CELL = 0.4, GW = Math.ceil((RX * 2 + 4) / CELL), GH = Math.ceil((RZ * 2 + 4) / CELL), OX = -RX - 2, OZ = -RZ - 2;
@@ -97,7 +97,7 @@ module.exports = function createGoons({ feed, toast, broadcast, plist, money, se
     if (!stun && dist(p, g) > 2.6) return false;
     const now = Date.now();
     if (G.kind === 'hunt') {
-      if (!stun) { if (now - (p.fistMsg || 0) > 4000) { p.fistMsg = now; toast(p, 'Your fist bounces off him. Only bottles will drop a hitman (F / right-click).', 'err'); } return false; }
+      if (!stun) { if (now - (p.fistMsg || 0) > 4000) { p.fistMsg = now; toast(p, 'Your fist bounces off him. Only bottles will drop a hitman - grab some and click to throw.', 'err'); } return false; }
       if ((g.state === 'chase' || g.state === 'idle') && Math.random() < TUNE.dodge) { /* he saw it coming */
         g.dodge = now; toast(p, 'He sidestepped it! Hit him while he\'s busy grabbing someone.', 'err');
         for (const q of room.players.values()) send(q, { type: 'goonDodge', id: g.id, by: p.id }); return true;
@@ -109,6 +109,16 @@ module.exports = function createGoons({ feed, toast, broadcast, plist, money, se
     if (g.hp <= 0) { g.hp = 0; release(room, g); g.state = 'down'; g.until = G.kind === 'hunt' ? now + TUNE.getUp : 0; const up = G.list.filter(alive).length; feed(room, `👊 ${p.name} dropped one of Sal's ${G.kind === 'hunt' ? 'hitmen' : 'collectors'}${G.kind === 'hunt' && up ? ` - ${up} still standing. Drop them all before he gets up!` : '.'}`); }
     if (G.list.every((o) => !alive(o))) outro(room, 'beaten');
     return true;
+  }
+
+  // the held player mashes Space: enough presses inside 2.5s and he lets go (stunned for a beat, can't regrab for TUNE.regrab)
+  function struggle(room, p) {
+    const G = room.goons, now = Date.now(); if (!G || G.phase !== 'fight' || !p.heldBy || now - (p.strLast || 0) < 60) return false;
+    const g = G.list.find((o) => o.id === p.heldBy); if (!g) return false;
+    p.strLast = now; if (now - (p.strT || 0) > 2500) p.strN = 0; if (!p.strN) p.strT = now; p.strN = (p.strN || 0) + 1;
+    if (p.strN < (G.kind === 'hunt' ? TUNE.breakFree : 6)) return false;
+    p.strN = 0; release(room, g); g.state = 'stun'; g.until = now + 1200; g.cool = now + TUNE.regrab; p.slippery = now + 2500; // nobody else can grab you for a moment
+    toast(p, 'You wrenched free - RUN!', 'win'); feed(room, `💪 ${p.name} broke free from a ${G.kind === 'hunt' ? 'hitman' : 'collector'}!`); return true;
   }
 
   function outro(room, kind, victims = []) {
@@ -145,7 +155,7 @@ module.exports = function createGoons({ feed, toast, broadcast, plist, money, se
         if (g.state === 'chase') {
           const D = fieldFor(room, 'p' + p.id, p.x, p.z);
           if (dist(g, p) > 1.05) stepToward(g, D, p.x, p.z, G.kind === 'hunt' ? SPEED.hitman : SPEED.collector, dt);
-          else if (now >= g.cool && !p.heldBy && !(p.koUntil > now && G.kind !== 'hunt')) { g.state = 'grab'; p.heldBy = g.id; g.until = now + (G.kind === 'hunt' ? T.grabTake : T.patDown); g.ry = Math.atan2(-(p.x - g.x), -(p.z - g.z)); toast(p, G.kind === 'hunt' ? 'A hitman has you! Crew: hit him or throw a bottle - or pay up.' : 'A collector is going through your pockets...', 'mob'); }
+          else if (now >= g.cool && !p.heldBy && !(p.slippery > now) && !(p.koUntil > now && G.kind !== 'hunt')) { g.state = 'grab'; p.heldBy = g.id; g.until = now + (G.kind === 'hunt' ? T.grabTake : T.patDown); g.ry = Math.atan2(-(p.x - g.x), -(p.z - g.z)); toast(p, G.kind === 'hunt' ? 'A hitman has you! Mash SPACE to break free - crew, bottle him now.' : 'A collector is going through your pockets... mash SPACE to shake him off.', 'mob'); }
           else g.ry = Math.atan2(-(p.x - g.x), -(p.z - g.z));
         } else if (g.state === 'grab') {
           g.ry = Math.atan2(-(p.x - g.x), -(p.z - g.z));
@@ -180,7 +190,7 @@ module.exports = function createGoons({ feed, toast, broadcast, plist, money, se
     for (const p of room.players.values()) send(p, msg);
   }
 
-  return { spawn, resume, stop, hit, outro, hpLeft: (room) => (room.goons ? room.goons.list.reduce((a, g) => a + g.hp, 0) : 0), hpMax: (room) => (room.goons ? room.goons.list.reduce((a, g) => a + g.maxHp, 0) : 0) };
+  return { spawn, resume, stop, hit, struggle, outro, hpLeft: (room) => (room.goons ? room.goons.list.reduce((a, g) => a + g.hp, 0) : 0), hpMax: (room) => (room.goons ? room.goons.list.reduce((a, g) => a + g.maxHp, 0) : 0) };
 };
 module.exports.DOORS = { FRONT, BACK };
 module.exports.TUNE = TUNE;

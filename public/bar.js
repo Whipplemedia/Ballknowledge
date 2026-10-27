@@ -267,6 +267,39 @@ export function buildBar({ scene, BK, tv }) {
   box(1.2, 2.3, 0.1, doorM, 0.6, 1.15, 0, doors.front); box(0.7, 1.0, 0.04, glassM, 0.6, 1.55, -0.06, doors.front, false);
   box(1.2, 2.3, 0.1, M(0x2a1a10), 0.6, 1.15, 0, doors.back); box(0.18, 0.18, 0.04, M(0xc8a24a, { metalness: 0.8, roughness: 0.3 }), 1.05, 1.1, 0.07, doors.back, false);
   neonPlane('BACK ROOM', '#ff3030', 1.2, 0.34, ROOM.x - 0.1, 2.6, -6.6, -Math.PI / 2, 60);
+  // ---------- the back room (behind the back door, x > ROOM.x): only seen in the kill cutscene ----------
+  // concrete, one bare bulb on a cord, a chair in the middle, crates, Sal's counting table. A second Sal waits here with a bat.
+  const backroom = (() => {
+    const g = new THREE.Group(); g.visible = false; scene.add(g);
+    const BX = ROOM.x + 2.85, BZ = -6.6, W = 5.6, D = 5.4, H = 3.0;
+    const shell = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), [MT(TX.brick([2, 1]).t, { color: 0x6a5a50, side: THREE.BackSide }), MT(TX.brick([2, 1]).t, { color: 0x6a5a50, side: THREE.BackSide }), M(0x1a1714, { side: THREE.BackSide }), M(0x3a3632, { side: THREE.BackSide, roughness: 0.95 }), MT(TX.brick([2, 1]).t, { color: 0x6a5a50, side: THREE.BackSide }), MT(TX.brick([2, 1]).t, { color: 0x6a5a50, side: THREE.BackSide })]);
+    shell.position.set(BX, H / 2, BZ); shell.receiveShadow = true; g.add(shell);
+    box(0.06, 2.3, 1.2, M(0x2a1a10), ROOM.x + 0.1, 1.15, BZ, g, false); box(0.08, 0.1, 1.36, M(0x1a120c), ROOM.x + 0.1, 2.33, BZ, g, false); // the door, from this side
+    // chair (the camera sits in it), crates, counting table with cash and a ledger
+    const wood = M(0x4a3020); box(0.5, 0.05, 0.5, wood, BX + 0.6, 0.48, BZ, g); [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]].forEach(([dx, dz]) => box(0.04, 0.48, 0.04, wood, BX + 0.6 + dx, 0.24, BZ + dz, g));
+    box(0.05, 0.55, 0.5, wood, BX + 0.83, 0.78, BZ, g);
+    [[ROOM.x + 0.7, -8.7, 0.8], [ROOM.x + 0.7, -8.7, 0.8 * 2], [ROOM.x + 1.6, -8.75, 0.8]].forEach(([x, z, y]) => box(0.75, 0.75, 0.75, M(0x7a5a32), x, y - 0.4, z, g));
+    box(1.4, 0.06, 0.8, M(0x3a2a1a), BX + 1.7, 0.85, BZ - 1.9, g); [[-0.62, -0.32], [0.62, -0.32], [-0.62, 0.32], [0.62, 0.32]].forEach(([dx, dz]) => box(0.05, 0.85, 0.05, M(0x2a1a10), BX + 1.7 + dx, 0.42, BZ - 1.9 + dz, g));
+    for (let i = 0; i < 6; i++) box(0.16, 0.05 + (i % 3) * 0.03, 0.08, M(0x4a7a3a), BX + 1.3 + (i % 3) * 0.22, 0.9 + (i % 3) * 0.015, BZ - 2.05 + Math.floor(i / 3) * 0.16, g, false);
+    box(0.3, 0.04, 0.22, M(0x6a1a1a), BX + 2.0, 0.9, BZ - 1.8, g, false);
+    // the bulb on a cord: a pivot at the ceiling so it can swing
+    const pivot = new THREE.Group(); pivot.position.set(BX - 0.2, H - 0.02, BZ); g.add(pivot);
+    cyl(0.006, 0.006, 0.75, M(0x111111), 0, -0.375, 0, 6, pivot, false);
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffe2a0 })); bulb.position.y = -0.8; pivot.add(bulb);
+    const light = new THREE.PointLight(0xffc880, 0, 9, 1.6); light.position.y = -0.85; light.userData.noDim = true; pivot.add(light);
+    // Sal and his bat: the bat continues the line of the right arm from the hand, so raising the arm raises the bat
+    const sal = makePreset('sal'); sal.group.position.set(BX - 0.6, 0, BZ); sal.group.rotation.y = -Math.PI / 2; g.add(sal.group);
+    const bat = new THREE.Group(), batM = M(0xc89a5a, { roughness: 0.55 }); bat.position.set(0, -0.6, 0.02); sal.arms[1].add(bat);
+    cyl(0.018, 0.022, 0.22, M(0x2a1a10), 0, -0.04, 0, 8, bat, false); cyl(0.022, 0.05, 0.78, batM, 0, -0.5, 0, 10, bat, false);
+    // name tags and bubbles draw on top of everything (depthTest off), so hide the bar's while we're in here
+    let hidden = null;
+    const show = (on) => {
+      if (on === g.visible) return; g.visible = on; light.intensity = on ? 2.4 : 0;
+      if (on) { hidden = []; scene.traverse((o) => { if (o.isSprite && o.material && o.material.depthTest === false && o.visible) { let in_ = false; for (let q = o; q; q = q.parent) if (q === g) in_ = true; if (!in_) { o.visible = false; hidden.push(o); } } }); }
+      else if (hidden) { hidden.forEach((o) => (o.visible = true)); hidden = null; }
+    };
+    return { group: g, sal, pivot, light, bulb, chair: { x: BX + 0.6, z: BZ }, show };
+  })();
   neonPlane('EXIT', '#ff3030', 0.9, 0.38, 5.0, 2.6, ROOM.z - 0.1, Math.PI, 70);
   // neon wall
   neonPlane('GOOD SPORTS', '#27e08a', 3.0, 0.7, -ROOM.x + 0.12, 3.5, -4.6, Math.PI / 2, 54); neonPlane('BAD DECISIONS', '#ff60b0', 3.2, 0.7, -ROOM.x + 0.12, 2.8, -4.6, Math.PI / 2, 50);
@@ -310,7 +343,7 @@ export function buildBar({ scene, BK, tv }) {
   [-3.5, -0.5, 2.5].forEach((bx) => bottleSpots.push([bx + 0.32, BOOTH.table + 0.022, ROOM.z - 1.8, 1.9]));
   [-1.2, 1.6, 4.0].forEach((z) => bottleSpots.push([9.72, 1.13, z, 1.45]));
   bottleSpots.push([9.95, 0.78, -6.2, 1.5], [-7.55, 1.065, 6.55, 1.75]);
-  stations.push({ x: 8.45, z: 5.4, r: 1.1, text: 'E - Grab bottles (throw with F / right-click)', act: () => BK.bottles && BK.bottles.grab() });
+  stations.push({ x: 8.45, z: 5.4, r: 1.1, text: 'E - Grab bottles (click to throw)', act: () => BK.bottles && BK.bottles.grab() });
   // jukebox: E cycles through the songs (4 procedural tracks), long-press not needed
   stations.push({ x: -10.9, z: 6.3, r: 1.25, text: 'E - Jukebox (next song)', act: () => { const n = BK.audio && BK.audio.music.next(); BK.sfx && BK.sfx('click'); if (n) BK.toast('🎵 ' + n, 'info'); } });
   // ---------- seats the player can take (E). hip = where the pelvis goes, yaw = facing (same convention as me.yaw), sit = seat-top height ----------
@@ -392,5 +425,5 @@ export function buildBar({ scene, BK, tv }) {
   }
   // scripted speech: say('Bartender' | 'Old Vinnie' | 'Uncle Sal', text) - by display name (n.who) or role name
   const say = (who, text, secs = 6) => { const n = npcs.find((x) => x.who === who) || npcs.find((x) => x.name === who); if (!n || !n.bubble) return null; if (n.bubble.sprite.visible && !n.forced) n.bubble.set(''); n.forced = { text, secs, shown: false }; return n; };
-  return { stations, obstacles, npcs, seats, update, wanderPos, life, bottleSpots, doors, say };
+  return { stations, obstacles, npcs, seats, update, wanderPos, life, bottleSpots, doors, say, backroom };
 }
