@@ -15,6 +15,7 @@ import { createBottles } from './bottles.js';
 import { label } from './textures.js';
 import { makeDizzy, headPos } from './dizzy.js';
 import { createGoonsView } from './goonsview.js';
+import { createBumView } from './bumview.js';
 import { createCine } from './cine.js';
 import { createVO } from './vo.js';
 import { CATALOG, BY_ID, RARITY, SLOTS, rollCrate, createPreview, applyCosmetics, tickCosmetics } from './cosmetics.js';
@@ -65,7 +66,7 @@ const sfxAt = (n, x, z, y = 1.2, o = {}) => audio.sfx(n, { pos: { x, y, z }, ...
 BK.sfxAt = sfxAt;
 // ---------- bottles + knockouts ----------
 const koNow = () => !!(me.koUntil && BK.now() < me.koUntil);
-const bottles = createBottles({ scene, camera, BK, me, obstacles, getAvatars: () => avatars, getNpcs: () => bar.npcs, getGoons: () => goons.list(), getBrawlers: () => brawlers.map((b) => ({ P: b.P, side: b.i ? 'blue' : 'red' })), ROOM, busy: () => games.active() || BK.ui.open || BK.ui.shop || koNow() });
+const bottles = createBottles({ scene, camera, BK, me, obstacles, getAvatars: () => avatars, getNpcs: () => bar.npcs, getGoons: () => [...goons.list(), ...bumView.list()], getBrawlers: () => brawlers.map((b) => ({ P: b.P, side: b.i ? 'blue' : 'red' })), ROOM, busy: () => games.active() || BK.ui.open || BK.ui.shop || koNow() });
 BK.bottles = bottles; BK.onBottle = (m) => bottles.remote(m); bottles.addSpots(bar.bottleSpots, stations);
 // small or see-through static things (bottles, chips, glasses, little decor) don't need to cast shadows: fewer objects in the shadow pass
 { const _s = new THREE.Vector3(); scene.updateMatrixWorld(true);
@@ -193,7 +194,8 @@ function syncDrops() {
 function grabDrops() { for (const [id, o] of drops) if (Math.hypot(o.x - me.x, o.z - me.z) < 1.1 && performance.now() - o.asked > 800) { o.asked = performance.now(); BK.send({ type: 'pickup', id }); } }
 // ---------- Sal's muscle: hitmen + collectors are simulated on the server (goons.js) and streamed here ----------
 const goons = createGoonsView({ scene, BK, audio }); BK.goons = goons;
-const cine = createCine({ camera, BK, doors: bar.doors, goons, audio, backroom: bar.backroom });
+const bumView = createBumView({ scene, audio }); BK.onBum = (m) => bumView.onMsg(m); // the pickpocket (server bum.js)
+const cine = createCine({ camera, BK, doors: bar.doors, goons, audio, backroom: bar.backroom, owner: bar.owner, dev: bar.dev });
 let wasHeld = null;
 // guided first night: a regular calls out to you (bubble + voice line when the clip exists)
 BK.guideSay = (who, text, vo) => { const n = bar.say(who, text, 7); if (n) { const g = n.P.group.position; BK.vo.play(vo, { x: g.x, y: 1.6, z: g.z }); } };
@@ -223,9 +225,9 @@ canvas.addEventListener('mousedown', (e) => {
   if (games.active()) return games.down();
   const S = BK.S;
   if (bottles.held > 0 && bottles.throw()) return; // left click throws when you're holding bottles
-  if (goons.active()) { // punch: whatever goon is under the crosshair, if he's within reach
+  if (goons.active() || bumView.list().length) { // punch: whatever goon (or the bum) is under the crosshair, if he's within reach
     ray.setFromCamera({ x: 0, y: 0 }, camera);
-    const hit = ray.intersectObjects(goons.list().map((o) => o.P.group), true)[0], id = hit && hit.object.userData.goonId, o = id && goons.get(id);
+    const hit = ray.intersectObjects([...goons.list(), ...bumView.list()].map((o) => o.P.group), true)[0], id = hit && hit.object.userData.goonId, o = id && (goons.get(id) || bumView.get(id));
     if (o && hit.distance < 2.8 && o.state !== 'down') { BK.send({ type: 'attack', g: id }); audio.sfx('punch', { pos: { x: o.P.group.position.x, y: 1.3, z: o.P.group.position.z } }); me.punch = 1; }
     else audio.sfx('whoosh', { v: 0.4 });
   }
@@ -346,7 +348,7 @@ function frame(now) {
   camera.rotation.set(me.pitch + off.p + Math.sin(t * 0.7) * drunkAmt * 0.03, me.yaw + off.y + Math.sin(t * 0.5) * drunkAmt * 0.05, Math.sin(t * 0.9) * drunkAmt * 0.07);
   { const f = (BK.settings && BK.settings.fov) || 72; if (Math.abs(camera.fov - f) > 0.01) { camera.fov = f; camera.updateProjectionMatrix(); } }
   games.update(dt); games.rig(camera);
-  { const cOn = !!(BK.S && BK.S.cine && BK.now() < BK.S.cine.until), gOn = games.active() || cOn; for (const n of bar.npcs) { const g = n.P.group, hide = gOn && Math.hypot(g.position.x - camera.position.x, g.position.z - camera.position.z) < (cOn ? 2.6 : 1.1) && !n.seated; if (g.visible === hide) g.visible = !hide; } }
+  { const cOn = !!(BK.S && BK.S.cine && BK.now() < BK.S.cine.until), gOn = games.active() || cOn; for (const n of bar.npcs) { if (n.cine) continue; /* cine.js shows/hides the developer */ const g = n.P.group, hide = gOn && !(cOn && /^(opening|checkIn|verdict)$/.test(BK.S.cine.kind)) && Math.hypot(g.position.x - camera.position.x, g.position.z - camera.position.z) < (cOn ? 2.6 : 1.1) && !n.seated; /* the story's scenes frame their own close-ups */ if (g.visible === hide) g.visible = !hide; } }
   // ---- audio frame: listener, footsteps, bar-event cues, voice
   audio.update(dt, camera); audioUI.show(active()); voice.update(dt, avatars);
   grabDrops(); for (const o of drops.values()) o.g.rotation.y += dt * 0.6;
@@ -413,6 +415,7 @@ function frame(now) {
     if (a.life) { a.life.act = null; if (a.life.glass) a.life.glass.visible = false; }
     animate(a.P, a.sit ? 'sit' : a.drunk >= 40 && sp < 0.4 ? 'stagger' : sp > 0.5 ? 'walk' : 'idle', t, Math.min(1.4, sp / 3.5)); tickCosmetics(a.P, t);
   }
+  bumView.update(dt, t);
   goons.update(dt, t, BK.S && BK.S.cine && BK.now() < BK.S.cine.until ? BK.S.cine.kind : null);
   const st = nearest();
   if (st && !cineOn && !BK.ui.open && !BK.ui.shop && !BK.ui.menu && !me.sit && !games.active()) { promptEl.textContent = st.text; promptEl.classList.remove('hidden'); } else promptEl.classList.add('hidden');

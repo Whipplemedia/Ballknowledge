@@ -5,15 +5,15 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { jerseyTex, floralTex, buttonShirtTex } from './textures.js';
 
 // ---- authored Blender characters (blender/*.py -> public/models/*.glb). Procedural makePerson() below is the fallback. ----
-const AI_NAMES = ['bub', 'bartender', 'sal', 'hitman', 'jock', 'knowItAll', 'gambler', 'chill', 'dieHard', 'rookie', 'gina', 'vinnie', 'ray', 'steve'];
-const AI_HEIGHT = { bub: 1.88, bartender: 1.72, sal: 1.8, hitman: 1.95, jock: 1.9, knowItAll: 1.85, gambler: 1.8, chill: 1.86, dieHard: 1.84, rookie: 1.8, gina: 1.7, vinnie: 1.74, ray: 1.9, steve: 1.82 };
+const AI_NAMES = ['bub', 'bartender', 'sal', 'hitman', 'jock', 'knowItAll', 'gambler', 'chill', 'dieHard', 'rookie', 'gina', 'vinnie', 'ray', 'steve', 'owner', 'bum', 'exec']; // owner / bum / exec: the save-the-bar story (public/story.json names them)
+const AI_HEIGHT = { bub: 1.88, bartender: 1.72, sal: 1.8, hitman: 1.95, jock: 1.9, knowItAll: 1.85, gambler: 1.8, chill: 1.86, dieHard: 1.84, rookie: 1.8, gina: 1.7, vinnie: 1.74, ray: 1.9, steve: 1.82, owner: 1.78, bum: 1.82, exec: 1.86 };
 const MODEL_NAMES = AI_NAMES.map((n) => n + '_ai');
 const MODELS = {};
 if (typeof location !== 'undefined' && !/[?&]models=0/.test(location.search)) {
   const loader = gltfLoader();
   await Promise.all(MODEL_NAMES.map((n) => loader.loadAsync('models/' + n + '.glb').then((g) => { MODELS[n] = g.scene; }).catch(() => {})));
 }
-const TINTED_SHIRT = { jock: 0, knowItAll: 0, dieHard: 0, gambler: 0, sal: 0, hitman: 0, bartender: 0 }; // shirts with baked prints/suits keep their colors
+const TINTED_SHIRT = { jock: 0, knowItAll: 0, dieHard: 0, gambler: 0, sal: 0, hitman: 0, bartender: 0, owner: 0, bum: 0, exec: 0 }; // shirts with baked prints/suits keep their colors
 const MODEL_OK = new Set(['skin', 'shirt', 'pants', 'hair', 'hat', 'backpack', 'glasses', 'stache', 'scale', 'hairStyle', 'shorts', 'mouth', 'look', 'number']);
 const ROLE_K = { skin2: 0.9, shirt2: 0.92, hat2: 0.78 };
 
@@ -360,6 +360,9 @@ export const PRESETS = {
   vinnie: { skin: SK.light, hair: 0x9a9a9a, hairStyle: 'short', outfit: 'hoodie', shirt: 0x1f6f6a, pants: 0x1f6f6a, stache: true, mouth: 'flat' },
   ray: { skin: SK.brown, hair: 0x1a1210, hairStyle: 'short', beard: 'full', outfit: 'jersey', shirt: 0x1f6a34, number: '33', pants: 0x1f6a34, mouth: 'grin' },
   steve: { skin: SK.light, hair: 0x7a5a32, hairStyle: 'messy', beard: 'stubble', outfit: 'tee', shirt: 0x8a3a3a, pants: 0x5a6a8a, fat: true, mouth: 'open' },
+  owner: { skin: SK.tan, hair: 0x4a2c1a, hairStyle: 'short', stache: true, outfit: 'button', shirt: 0x7a2a30, pants: 0x2a3348, fat: true, mouth: 'smile' },
+  bum: { skin: SK.light, hair: 0x4a3020, hairStyle: 'messy', hat: { color: 0x3a3a3c, style: 'beanie' }, beard: 'full', outfit: 'hoodie', shirt: 0x5a5a30, pants: 0x3a3632, mouth: 'grin' },
+  exec: { skin: SK.light, hair: 0x7a5a3a, hairStyle: 'slick', outfit: 'suit', shirt: 0x1e2a50, pants: 0x1e2a50, mouth: 'smile' },
   hitman: { skin: SK.light, hair: 0x0a0a0a, hairStyle: 'short', hat: { color: 0x0c0c0e, style: 'fedora' }, outfit: 'suit', shirt: 0x0e0e12, pants: 0x0e0e12, sunglasses: true, mouth: 'flat', scale: 1.06 },
 };
 const PATRON_BASES = ['jock', 'knowItAll', 'gambler', 'chill', 'dieHard', 'rookie'];

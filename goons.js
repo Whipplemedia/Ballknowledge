@@ -1,4 +1,4 @@
-// Sal's muscle: server-authoritative hitmen (end-of-night hunt) and collectors (mid-season shakedown).
+// Sal's muscle: server-authoritative hitmen (end-of-night hunt, for unpaid loans) and collectors (mid-night installments from whoever owes Sal).
 // Everyone sees the same goons: positions, targets, grabs and knockdowns are simulated here at 10 Hz and streamed
 // to clients as {type:'goons'}; the arrival / ending cutscenes are timed by room.cine (clients film them).
 const fs = require('fs');
@@ -83,8 +83,9 @@ module.exports = function createGoons({ feed, toast, broadcast, plist, money, se
   const debtors = (room) => plist(room).filter((p) => p.remaining > 0 && !p.dead);
   function pickTarget(room, g) {
     const G = room.goons, taken = new Map(); for (const o of G.list) if (o !== g && o.target && alive(o)) taken.set(o.target, (taken.get(o.target) || 0) + 1);
-    let pool = G.kind === 'hunt' ? debtors(room) : plist(room).filter((p) => p.money > 0 && !(G.patted || {})[p.id]);
-    if (G.kind !== 'hunt' && !pool.length) { G.patted = {}; pool = plist(room).filter((p) => p.money > 0); }
+    const owes = (p) => p.debt > 0 && !p.dead && p.money > 0; // collectors only shake down the people who owe Sal
+    let pool = G.kind === 'hunt' ? debtors(room) : plist(room).filter((p) => owes(p) && !(G.patted || {})[p.id]);
+    if (G.kind !== 'hunt' && !pool.length) { G.patted = {}; pool = plist(room).filter(owes); }
     pool = pool.filter((p) => p.connected !== false || G.kind === 'hunt');
     pool.sort((a, b) => (taken.get(a.id) || 0) - (taken.get(b.id) || 0) || dist(g, a) - dist(g, b));
     return pool[0] ? pool[0].id : null;
@@ -149,7 +150,7 @@ module.exports = function createGoons({ feed, toast, broadcast, plist, money, se
         }
         if (g.state === 'stun') { if (now >= g.until) g.state = 'chase'; else continue; }
         let p = g.target && room.players.get(g.target);
-        const done = !p || (G.kind === 'hunt' ? p.remaining <= 0 || p.dead : p.money <= 0 || (G.patted || {})[p.id]);
+        const done = !p || (G.kind === 'hunt' ? p.remaining <= 0 || p.dead : p.money <= 0 || p.debt <= 0 || (G.patted || {})[p.id]);
         if (done) { if (p && p.heldBy === g.id) p.heldBy = null; g.target = pickTarget(room, g); g.state = g.target ? 'chase' : 'idle'; p = g.target && room.players.get(g.target); }
         if (!p) continue;
         if (g.state === 'chase') {
@@ -167,8 +168,8 @@ module.exports = function createGoons({ feed, toast, broadcast, plist, money, se
               else if (take <= 0) g.until = now + 1e9; // broke: they just hold on until the crew saves you or time runs out
               else g.until = now + T.grabTake;
             } else { // collectors pat you down once, take your share of the tax, move on
-              const sh = room.shake, left = sh ? sh.tax - sh.paid : 0, share = Math.ceil(left / Math.max(1, plist(room).length));
-              const take = Math.min(p.money, share); if (take > 0 && sh) { p.money -= take; sh.paid += take; toast(p, `The collectors took ${money(take)} from you.`, 'mob'); }
+              const sh = room.shake, left = sh ? sh.tax - sh.paid : 0, share = Math.ceil(left / Math.max(1, plist(room).filter((q) => q.debt > 0).length));
+              const take = Math.min(Math.floor(p.money), share, p.debt); if (take > 0 && sh) { p.money -= take; p.debt -= take; sh.paid += take; toast(p, `The collectors took ${money(take)} from you (off what you owe Sal).`, 'mob'); }
               (G.patted = G.patted || {})[p.id] = 1; p.heldBy = null; g.state = 'chase'; g.target = null; g.cool = now + 1500;
               if (sh && sh.paid >= sh.tax) { feed(room, '💼 The collectors got what they came for.'); outro(room, 'leave'); }
             }
@@ -194,3 +195,4 @@ module.exports = function createGoons({ feed, toast, broadcast, plist, money, se
 };
 module.exports.DOORS = { FRONT, BACK };
 module.exports.TUNE = TUNE;
+module.exports.nav = { field, stepToward, FRONT, FRONT_OUT }; // bum.js walks the same grid indoors

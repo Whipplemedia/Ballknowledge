@@ -9,6 +9,7 @@ const { winProb } = require('./odds');
 const { makeFakeSeason } = require('./fakeseason');
 const { paperFor } = require('./paper');
 const createGoons = require('./goons');
+const createBum = require('./bum');
 
 const PORT = process.env.PORT || 3000;
 const SPEED = Number(process.env.BK_SPEED || 1); // dev: divide all timers
@@ -42,15 +43,18 @@ const MG = { darts: { max: 180 }, bowling: { max: 20 }, cornhole: { max: 12 } };
 const OPPS = { rookie: { label: 'Rookie', mult: 1.6 }, regular: { label: 'Regular', mult: 2.0 }, shark: { label: 'The Shark', mult: 2.8 } };
 const NPC_SKILL = { darts: { rookie: [45, 18], regular: [70, 22], shark: [98, 26] }, bowling: { rookie: [9, 3], regular: [12.5, 3.2], shark: [16, 3] }, cornhole: { rookie: [3, 1.8], regular: [5, 2], shark: [7.5, 2] } };
 const POOL_MULT = { rookie: 1.7, shark: 2.6 };
-const QUOTA_MULT = [1.0, 1.12, 1.3];
-// ---------- the campaign: three nights in Sal's pocket ----------
-// Every night opens with Sal's marker on each player (the tab). It is collected at closing time with everything else you
-// borrowed; what you can't pay is the hitmen's business. Escape them and the unpaid part rolls into the next night at 50%
-// interest. Cash carries over between nights; anyone under $1,000 gets fronted the difference (on the tab, +25%).
-const NIGHTS = 3, TAB = [500, 750, 1000], ROLL_VIG = 1.5, FLOOR_CASH = 1000, FRONT_VIG = 1.25;
+// ---------- the story: save the bar (names and the developer's plan live in public/story.json) ----------
+// The developer holds the bar's lease and wants it gone; the owner can buy him out. Each night the crew's winnings above
+// their starting bankroll go into the Save the Bar fund; reach the buyout by the last night and the bar is saved.
+// Mid-night the developer drops in to check the fund's pace (room.quota): behind it, he adds a permit fee to the buyout.
+// Sal is now the bank of last resort: loans (and debts that escaped the hitmen, +50%, carried to the next night) are all the
+// mob cares about. His collectors only come for people who owe him; the hitmen only for what's unpaid at closing.
+const STORY = JSON.parse(fs.readFileSync(path.join(__dirname, 'public', 'story.json'), 'utf8'));
+const NIGHTS = 3, ROLL_VIG = 1.5, FLOOR_CASH = 250; // under $250 at the start of a night: the owner slips you the difference from the till
+const BUYOUT_PER = { campaign: 1500, single: 600 }, PERMIT_FEE = 150, CHECK_AT = [0.33, 0.7]; // buyout per player; the developer's check-ins (share of the night's games)
 const FORMATS = {
-  campaign: { label: '📖 Campaign (3 nights)', blurb: 'You each owe Sal $500 and it only goes up. Cash carries between nights; clear the books on night 3 to walk out free.' },
-  single: { label: '🌙 Single night', blurb: 'One night, one season. You still start $500 in the hole to Sal.' },
+  campaign: { label: '📖 Campaign (3 nights)', blurb: `${STORY.dev.full} wants ${STORY.bar} gone. Win enough over three nights to buy him out. Winnings go to the fund; your bankroll carries over.` },
+  single: { label: '🌙 Single night', blurb: `One night, one season, a smaller buyout. Save ${STORY.bar} by closing time.` },
 };
 const TICKETS = { base: 5, crewWin: 15, quota: 8 };
 const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 0.5;
@@ -240,22 +244,28 @@ function startGame(room) {
   });
   room.events[0].openAt = now;
   for (const p of room.players.values()) {
-    // tonight's bankroll and Sal's marker (see NIGHTS / TAB above)
+    // tonight's bankroll (carried over in a campaign) and anything still owed to Sal from last night
     const carried = camp && night > 1 && p.campCash != null ? p.campCash : START_MONEY, front = Math.max(0, FLOOR_CASH - carried);
-    p.startCash = carried + front; p.fronted = front; p.tab = TAB[night - 1] + (camp ? p.rollover || 0 : 0) + Math.round(front * FRONT_VIG); p.rollover = 0;
+    p.startCash = carried + front; p.fronted = front; p.tab = camp ? p.rollover || 0 : 0; p.rollover = 0; p.gave = 0; // tab: only what escaped Sal's hitmen last night
     Object.assign(p, { money: p.startCash, debt: p.tab, loans: 0, mobTied: false, bets: {}, fix: {}, results: {}, drunk: 0, drunkT: now, finalCorrect: null, fate: null, remaining: 0, tickets: 0, challenge: null, pool: null, streak: { darts: 0, bowling: 0, cornhole: 0 }, lastChallenge: 0 });
     p.heat = 0; p.banUntil = null; p.bk = 0; p.dead = false;
     p.tol = Math.round((Math.random() * 2 - 1) * 10); p.tips = {}; p.over = false; p.hangUntil = 0; // hidden drink sweet spot for this season
     p.bounties = [...BOUNTIES].sort(() => Math.random() - 0.5).slice(0, 3).map((b) => ({ ...b, done: false }));
     p.job = null; p.jobNext = 0; p.jobsDone = 0; p.vinnie = {};
   }
-  const nE = room.events.length, start = plist(room).reduce((a, p) => a + p.startCash, 0);
-  room.quota = [{ kind: 'mid', idx: Math.max(0, Math.round(nE * 0.33) - 1) }, { kind: 'mid', idx: Math.max(1, Math.round(nE * 0.7) - 1) }, { kind: 'final', idx: nE - 1 }].map((q, i) => ({ ...q, target: Math.round(start * QUOTA_MULT[i]), status: 'pending', crew: 0 }));
+  const nE = room.events.length, start = plist(room).reduce((a, p) => a + p.startCash - p.tab, 0), crewN = Math.max(1, room.players.size);
+  // the buyout (set on the first night) and tonight's share of what's left of it
+  const fund = camp ? (camp.fund = camp.fund || { banked: 0, buyout: Math.max(1500, Math.round(BUYOUT_PER.campaign * crewN / 500) * 500) }) : { banked: 0, buyout: Math.max(1000, Math.round(BUYOUT_PER.single * crewN / 250) * 250) };
+  room.fund = fund; room.crewStart = start; const nightsLeft = camp ? camp.nights - night + 1 : 1;
+  room.goal = Math.max(0, Math.ceil((fund.buyout - fund.banked) / nightsLeft / 50) * 50);
+  room.quota = [...CHECK_AT.map((f, i) => ({ kind: 'mid', idx: Math.max(i, Math.round(nE * f) - 1), frac: f })), { kind: 'final', idx: nE - 1, frac: 1 }].map((q) => ({ ...q, target: Math.round(start + room.goal * q.frac), status: 'pending', crew: 0 }));
+  room.verdictAt = 0; room.deposited = false; room.deposit = 0; room.nextBum = now + (process.env.BK_BUM_SOON ? 20000 : dur(130000 + rnd(60000))); /* BK_BUM_SOON: dev/testing only */ if (room.bum) bum.stop(room); room.pendingShake = 0;
   room.shake = null; room.barEvent = null; room.nextBarEvent = now + dur(55000 + rnd(30000)); room.lastBarKind = null;
   room.altered = false; room.finalWinner = null; room.phase = 'play'; room.paper = paperFor(room);
   feed(room, season.fake ? `${sport.emoji} Welcome to the ${season.league}. None of these teams exist and nothing is written yet - every result is rolled live from the odds.` : `${sport.emoji} A season has been assigned. Nobody will tell you which one. Place your bets before the clock runs out.`);
-  feed(room, camp ? `📖 Night ${night} of ${camp.nights}. Sal's marker tonight: ${money(TAB[night - 1])} each${night > 1 ? ', plus whatever you still owe' : ''}.` : `💼 You each owe Sal ${money(TAB[0])}. He collects at closing time.`);
-  room.cine = { kind: 'opening', start: now, until: now + 9500, quota: room.quota[0].target, at: room.quota[0].idx + 1, night, nights: camp ? camp.nights : 1, tab: TAB[night - 1] };
+  feed(room, `🏚️ ${camp ? `Night ${night} of ${camp.nights}. ` : ''}${STORY.dev.full} wants ${money(fund.buyout)} to walk away from ${STORY.bar}. The fund has ${money(fund.banked)}. Tonight's goal: ${money(room.goal)} in winnings.`);
+  if (plist(room).some((p) => p.tab > 0)) feed(room, `💼 Uncle Sal remembers who still owes him from last night. He collects at closing time.`);
+  room.cine = { kind: 'opening', start: now, until: now + 11500, goal: room.goal, buyout: fund.buyout, banked: fund.banked, at: room.quota[0].idx + 1, night, nights: camp ? camp.nights : 1 };
   clearInterval(room.tick); room.tick = setInterval(() => tick(room), 400);
   broadcast(room);
 }
@@ -272,6 +282,7 @@ function resolveSpin(room) {
   broadcast(room);
 }
 function tick(room) {
+  if (room.verdictAt) { if (Date.now() >= room.verdictAt) { room.verdictAt = 0; finish(room); } return; } // the save-the-bar verdict scene is playing; nothing else happens until it's done
   if (room.spin && Date.now() >= room.spin.until + 400) resolveSpin(room);
   if (room.phase === 'hunt') { // hitmen deadline (tick-driven so it survives a restart): whoever still owes gets dragged to the back room
     if (Date.now() >= room.huntEnd && room.goons && room.goons.phase === 'fight') { const v = plist(room).filter((p) => p.remaining > 0); if (v.length) goons.outro(room, 'kill', v); else goons.outro(room, 'leave'); }
@@ -285,7 +296,10 @@ function tick(room) {
     if (ev.status === 'airing' && now >= ev.resolveAt) { finalizeEvent(room, ev); changed = true; }
   }
   if (room.shake && now >= room.shake.until && (!room.goons || room.goons.phase === 'fight')) { endShake(room, false); changed = true; }
-  if (room.guided && !room.trained && !room.shake && !room.goons && !room.barEvent && room.events.some((e) => e.status === 'airing')) { startTrainingShake(room); changed = true; }
+  if (room.guided && !room.trained && !room.shake && !room.goons && !room.bum && room.events.some((e) => e.status === 'airing')) { startTraining(room); changed = true; }
+  if (room.pendingShake && now >= room.pendingShake && !room.goons && !(room.cine && now < room.cine.until)) { room.pendingShake = 0; if (room.bum) bum.stop(room); startShake(room); changed = true; }
+  if (!room.bum && !room.shake && !room.goons && !(room.cine && now < room.cine.until) && now >= room.nextBum) { // chaos: the bum goes for somebody's wallet
+    room.nextBum = now + dur(120000 + rnd(90000)); const t = bum.pickTarget(room, false); if (t) { bum.spawn(room, t, false); changed = true; } }
   if (room.drops && room.drops.some((d) => now >= d.until)) { room.drops = room.drops.filter((d) => now < d.until); changed = true; }
   if (room.barEvent && now >= room.barEvent.until) { endBarEvent(room); changed = true; }
   else if (!room.barEvent && !room.shake && !room.goons && now >= room.nextBarEvent) { startBarEvent(room); changed = true; }
@@ -375,39 +389,42 @@ function finalizeEvent(room, ev) {
   const q = room.quota.find((x) => x.idx === ev.idx && x.status === 'pending'); if (q) checkQuota(room, q);
 }
 
-// ---------- the mob's quota ----------
+// ---------- the developer's check-ins (room.quota: crew net worth targets on pace for tonight's goal) ----------
+const owing = (room) => plist(room).filter((p) => p.debt > 0 && !p.dead);
 function checkQuota(room, q) {
-  const crew = plist(room).reduce((a, p) => a + networth(room, p), 0); q.crew = Math.round(crew);
-  if (crew >= q.target) {
-    q.status = 'met'; feed(room, `✅ Sal is pleased: the crew hit the ${money(q.target)} quota.`);
-    for (const p of room.players.values()) { p.tickets += TICKETS.quota; if (q.kind === 'mid') p.money += 150; toast(p, q.kind === 'mid' ? `Sal's thank-you: +$150 and +${TICKETS.quota} tickets` : `Final quota met: +${TICKETS.quota} tickets`, 'win'); }
-  } else {
-    q.status = 'missed'; feed(room, `⚠️ The crew missed the ${money(q.target)} quota (${money(crew)}).`);
-    if (q.kind === 'mid') startShake(room, q.target - crew);
-  }
+  const crew = plist(room).reduce((a, p) => a + networth(room, p), 0), n = Math.max(1, room.players.size), now = Date.now(); q.crew = Math.round(crew);
+  const met = crew >= q.target; q.status = met ? 'met' : 'missed';
+  if (met) {
+    feed(room, q.kind === 'mid' ? `📋 ${STORY.dev.name} checked the fund: on pace. "Huh. Beginner's luck."` : `✅ Tonight's goal is in the bag. ${STORY.owner.name} owes you all a round.`);
+    for (const p of room.players.values()) { p.tickets += TICKETS.quota; if (q.kind === 'mid') p.money += 100; toast(p, q.kind === 'mid' ? `On pace! ${STORY.owner.name} comps you $100 (+${TICKETS.quota} tickets)` : `Tonight's goal met: +${TICKETS.quota} tickets`, 'win'); }
+  } else if (q.kind === 'mid') {
+    const fee = PERMIT_FEE * n; room.fund.buyout += fee; q.fee = fee;
+    feed(room, `📋 ${STORY.dev.name} checked the fund: behind pace. "That'll be a permit fee." The buyout went up ${money(fee)} to ${money(room.fund.buyout)}.`);
+  } else feed(room, `⚠️ The crew came up short of tonight's goal (${money(crew - room.crewStart)} of ${money(room.goal)}).`);
+  if (q.kind === 'mid' && !room.goons && !(room.cine && now < room.cine.until)) room.cine = { kind: 'checkIn', start: now, until: now + 7000, met, fee: q.fee || 0, buyout: room.fund.buyout, gained: Math.round(crew - room.crewStart), target: Math.round(q.target - room.crewStart) };
+  if (q.kind === 'mid' && owing(room).length) room.pendingShake = now + 8000; // Sal checks in on his loans too: his collectors walk in once the developer is gone
 }
-// guided first night: one collector, a $100 "reminder", soft enough for two bottles to throw him out
-function startTrainingShake(room) {
-  room.trained = true;
-  const fightAt = goons.spawn(room, 'shake', 1, 16, { amount: 100, training: true });
-  room.shake = { tax: 100, paid: 0, until: fightAt + dur(40000), training: true };
-  feed(room, `🧾 Sal sent a collector over with a friendly reminder. Two bottles will throw him out - or pay him $100.`);
+// the guided first night: the bum shows up early and the napkin teaches bottles on him
+function startTraining(room) {
+  room.trained = true; const t = bum.pickTarget(room, false) || plist(room)[0]; if (t) bum.spawn(room, t, true);
 }
-function startShake(room, shortfall) {
-  const tax = clamp(Math.round(shortfall * 0.5 / 50) * 50, 400, 3000);
-  const fightAt = goons.spawn(room, 'shake', 2, 60 + tax / 30, { amount: tax });
+// Sal's collectors: an installment on what the crew owes him (40%), from the people who owe it. Throw them out and it waits for closing time.
+function startShake(room) {
+  const debt = owing(room).reduce((a, p) => a + p.debt, 0); if (debt <= 0) return;
+  const tax = clamp(Math.round(debt * 0.4 / 50) * 50, 200, 3000);
+  const fightAt = goons.spawn(room, 'shake', 2, 60 + tax / 30, { amount: tax, names: owing(room).map((p) => p.name) });
   room.shake = { tax, paid: 0, until: fightAt + dur(32000) };
-  feed(room, `🔫 Sal's collectors walk in. They want ${money(tax)} - pay up together, or beat them down!`);
+  feed(room, `🔫 Sal's collectors walk in for an installment: ${money(tax)} from ${owing(room).map((p) => p.name).join(', ')}. Pay it - or throw them out.`);
 }
 function endShake(room, beaten) {
   const sh = room.shake; if (!sh) return; room.shake = null;
   if (room.goons && room.goons.kind === 'shake' && room.goons.phase !== 'outro') goons.outro(room, beaten ? 'beaten' : 'leave');
-  if (beaten) { feed(room, sh.training ? '👊 The collector limps out. Sal got the message - and so did you: bottles work.' : `👊 The crew threw Sal's collectors out. Free of charge.`); awardAll(room, 'shakeBeat'); return; }
+  if (beaten) { feed(room, `👊 The crew threw Sal's collectors out. The loans are still due at closing time.`); awardAll(room, 'shakeBeat'); return; }
   const left = sh.tax - sh.paid;
-  if (left <= 0) { feed(room, `💸 The crew paid the collectors. Sal is satisfied.`); return; }
-  const each = Math.ceil(left / room.players.size);
-  for (const p of room.players.values()) { const take = Math.min(p.money, each); p.money -= take; if (take > 0) toast(p, `The collectors shook you down for ${money(take)}.`, 'mob'); }
-  feed(room, `💼 The collectors took the remaining ${money(left)} and left.`);
+  if (left <= 0) { feed(room, `💸 The installment is paid. Sal is satisfied - for now.`); return; }
+  const who = owing(room), each = Math.ceil(left / Math.max(1, who.length)); let took = 0;
+  for (const p of who) { const take = Math.min(Math.floor(p.money), each, p.debt); p.money -= take; p.debt -= take; took += take; if (take > 0) toast(p, `The collectors shook you down for ${money(take)} (off what you owe Sal).`, 'mob'); }
+  feed(room, `💼 The collectors took ${money(took)} toward Sal's loans and left.`);
 }
 
 // ---------- chaos: random bar events ----------
@@ -476,12 +493,26 @@ function endHunt(room, beaten) {
   finish(room);
 }
 function finish(room) {
-  clearInterval(room.tick); room.barEvent = null; room.shake = null; room.cine = null; goons.stop(room);
-  const s = room.season, ps = plist(room);
+  const ps = plist(room), camp = room.format === 'campaign' && room.camp;
+  if (!room.deposited) { // closing time: everyone's winnings above tonight's bankroll go into the Save the Bar fund (the back room keeps a dead man's)
+    room.deposited = true; let dep = 0;
+    for (const p of ps) { const prof = p.dead ? 0 : Math.floor(p.money - p.startCash); p.gave = Math.max(0, prof); if (prof > 0) { p.money -= prof; dep += prof; } }
+    room.fund.banked += dep; room.deposit = dep;
+    feed(room, dep > 0 ? `🏦 The crew put ${money(dep)} in the Save the Bar fund: ${money(room.fund.banked)} of ${money(room.fund.buyout)}.` : `🏦 Nothing for the fund tonight. ${money(room.fund.banked)} of ${money(room.fund.buyout)}.`);
+    const last = !camp || room.night >= camp.nights;
+    if (last) { // the verdict scene plays first; tick() comes back here when it's done
+      const saved = room.fund.banked >= room.fund.buyout, now = Date.now();
+      clearInterval(room.tick); room.tick = setInterval(() => tick(room), 400); room.barEvent = null; room.shake = null; goons.stop(room); if (room.bum) bum.stop(room);
+      room.cine = { kind: 'verdict', saved, start: now, until: now + 12000, banked: room.fund.banked, buyout: room.fund.buyout };
+      room.verdictAt = now + 12000; broadcast(room); return;
+    }
+  }
+  clearInterval(room.tick); room.barEvent = null; room.shake = null; room.cine = null; goons.stop(room); if (room.bum) bum.stop(room);
+  const s = room.season;
   for (const p of ps) if (!p.fate) p.fate = 'paid up';
   const correct = ps.filter((p) => p.finalCorrect).length, fin = room.events[room.events.length - 1], fr = (fin && fin.result) || {};
   const crewWon = correct >= Math.ceil(ps.length / 2) && correct > 0, vacated = crewWon && !!fr.fixed, voidedFinal = !!fr.voided;
-  // the night's result: called the champion AND kept Sal happy = legendary; one of the two = survived; neither = busted
+  // the night's result: called the champion AND made tonight's goal for the fund = legendary; one of the two = survived; neither = busted
   const lastQ = room.quota[room.quota.length - 1], quotaMet = !!(lastQ && lastQ.status === 'met');
   const tier = crewWon && quotaMet ? 'legendary' : crewWon || quotaMet ? 'survived' : 'busted';
   const crewBonus = Math.floor({ legendary: TICKETS.crewWin, survived: 6, busted: 0 }[tier] / (vacated ? 2 : 1));
@@ -489,16 +520,18 @@ function finish(room) {
   room.summary = { t0: room.t0, fake: !!s.fake, sid: s.fake ? null : seasonId(room.sport, s), year: s.year, league: s.league, champion: s.champion, finalWinner: room.finalWinner, altered: room.altered, blurb: s.blurb,
     crewWon, vacated, voidedFinal, correct, total: ps.length, tier, quotaMet, mvp: mvp && (mvp.bk || 0) > 0 ? { id: mvp.id, name: mvp.name, bk: mvp.bk } : null,
     players: ps.map((p) => ({ id: p.id, name: p.name, finalCorrect: p.finalCorrect, fate: p.fate, money: Math.round(p.money), bk: p.bk || 0, tickets: Math.floor((TICKETS.base + p.tickets + (p.fate === 'dead' ? 0 : 3) + crewBonus) / (p.fate === 'dead' ? 2 : 1)), bounties: p.bounties.filter((b) => b.done).length })) };
+  // the fund and the bar's fate
+  const saved = room.fund.banked >= room.fund.buyout, last = !camp || room.night >= camp.nights;
+  room.summary.fund = { banked: room.fund.banked, buyout: room.fund.buyout, deposit: room.deposit || 0, goal: room.goal, last, saved: last ? saved : null };
+  for (const sp of room.summary.players) { const p = room.players.get(sp.id); sp.gave = p ? p.gave || 0 : 0; if (last && saved) sp.tickets += 25; }
   // campaign bookkeeping: cash carries into the next night (the back room keeps whatever the dead had on them)
-  const camp = room.format === 'campaign' && room.camp;
   if (camp) {
-    for (const p of ps) p.campCash = p.dead ? FLOOR_CASH : Math.round(p.money); /* the back room takes everything; you limp in next night with $1,000 of your own */
-    const last = room.night >= camp.nights, anyDead = ps.some((p) => p.dead), owing = ps.some((p) => p.rollover > 0);
-    const result = last ? (anyDead ? 'owned' : owing ? 'hooked' : 'free') : null;
-    if (result === 'free') for (const sp of room.summary.players) sp.tickets += 25;
+    for (const p of ps) p.campCash = p.dead ? 0 : Math.round(p.money); /* the back room takes everything */
+    const anyDead = ps.some((p) => p.dead);
+    const result = last ? (saved ? (anyDead ? 'saved_cost' : 'saved') : 'sold') : null;
     camp.log.push({ night: room.night, tier, sport: room.sport, season: s.fake ? s.league : `${s.year} ${s.league}` });
     room.summary.camp = { night: room.night, nights: camp.nights, last, result, log: camp.log,
-      players: ps.map((p) => { const carried = p.campCash, front = Math.max(0, FLOOR_CASH - carried); return { id: p.id, name: p.name, cash: carried, rollover: p.rollover || 0, dead: !!p.dead, nextTab: last ? null : TAB[room.night] + (p.rollover || 0) + Math.round(front * FRONT_VIG), fronted: front }; }) };
+      players: ps.map((p) => { const carried = p.campCash, front = Math.max(0, FLOOR_CASH - carried); return { id: p.id, name: p.name, cash: carried, rollover: p.rollover || 0, dead: !!p.dead, nextTab: last ? null : p.rollover || 0, fronted: front }; }) };
   }
   room.phase = 'ended'; broadcast(room);
 }
@@ -562,13 +595,14 @@ const JOB_MS = 180000, JOB_GAP_MS = 20000;
 function makeJob(p) {
   const kind = pick(['deliver', 'deliver', 'collect', 'bounce', 'hustle']);
   if (kind === 'deliver') { const t = pick(['Gina', 'Celtics Ray', 'Dealer', 'Clerk']); return { kind, target: t, stage: 'go', reward: 90 + rnd(5) * 15, text: `Take this round over to ${t}.`, step: `Bring the drinks to ${t}` }; }
-  if (kind === 'collect') { const t = pick(['Sloppy Steve', 'Celtics Ray']); return { kind, target: t, stage: 'go', tabCut: 150, text: `${t} owes Sal and keeps "forgetting". Get the envelope and bring it back to me - Sal will take $150 off your tab.`, step: `Collect from ${t}` }; }
+  if (kind === 'collect') { const t = pick(['Sloppy Steve', 'Celtics Ray']); return { kind, target: t, stage: 'go', tabCut: 150, text: `${t} owes Sal and keeps "forgetting". Get the envelope and bring it back to me - Sal pays $150 (off your tab, if you owe him).`, step: `Collect from ${t}` }; }
   if (kind === 'bounce') { const t = pick(['Sloppy Steve', 'Celtics Ray']); return { kind, target: t, stage: 'go', reward: 120, text: `${t} is getting rowdy. Calm him down - a bottle usually works.`, step: `Bottle ${t}` }; }
   return { kind, target: null, stage: 'go', reward: 150, text: 'The Shark has been hustling my customers. Beat him (or the Regular) at darts, bowling, cornhole - or win a game of pool.', step: 'Win a pool game or beat the Regular / Shark' };
 }
 function finishJob(room, p, why) {
   const j = p.job; if (!j) return; p.job = null; p.jobNext = Date.now() + dur(JOB_GAP_MS); p.jobsDone = (p.jobsDone || 0) + 1;
-  if (j.tabCut) { const cut = Math.min(j.tabCut, p.debt); p.debt -= cut; p.tab = Math.max(0, (p.tab || 0) - cut); toast(p, `🍸 ${why} Sal knocked ${money(cut)} off your tab.`, 'win'); }
+  if (j.tabCut && p.debt > 0) { const cut = Math.min(j.tabCut, p.debt); p.debt -= cut; p.tab = Math.max(0, (p.tab || 0) - cut); toast(p, `🍸 ${why} Sal knocked ${money(cut)} off your tab.`, 'win'); }
+  else if (j.tabCut) { p.money += j.tabCut; toast(p, `🍸 ${why} Sal paid you ${money(j.tabCut)}.`, 'win'); }
   else { p.money += j.reward; toast(p, `🍸 ${why} +${money(j.reward)} from the bartender.`, 'win'); }
   feed(room, `🍸 ${p.name} did a job for the bartender.`);
 }
@@ -627,7 +661,7 @@ function view(room, p) {
   const v = { type: 'state', now: Date.now(), code: room.code, you: p.id, host: room.hostId === p.id, phase: room.phase, sport: room.sport, pace: room.pace, mode: room.mode, seasonCount: SEASONS[room.sport].length, league: room.season && room.season.fake ? room.season.league : null,
     sports: Object.entries(SPORTS).map(([id, s]) => ({ id, label: s.label, emoji: s.emoji })), paces: Object.entries(PACES).map(([id, x]) => ({ id, label: x.label })), format: room.format, formats: Object.entries(FORMATS).map(([id, x]) => ({ id, label: x.label, blurb: x.blurb })),
     guided: !!room.guided, guide: room.guide || 'auto', newbies: plist(room).filter((q) => !q.tutDone).length,
-    camp: room.camp ? { night: room.night && room.phase !== 'lobby' ? room.night : room.camp.night, nights: room.camp.nights, log: room.camp.log } : null, nextTab: TAB[(room.camp ? room.camp.night : 1) - 1], modes: Object.entries(MODES).map(([id, x]) => ({ id, label: x.label, blurb: x.blurb })),
+    camp: room.camp ? { night: room.night && room.phase !== 'lobby' ? room.night : room.camp.night, nights: room.camp.nights, log: room.camp.log } : null, story: STORY, fund: room.fund && room.phase !== 'lobby' ? { banked: room.fund.banked, buyout: room.fund.buyout, goal: room.goal || 0, start: room.crewStart || 0 } : room.camp && room.camp.fund ? { banked: room.camp.fund.banked, buyout: room.camp.fund.buyout } : null, modes: Object.entries(MODES).map(([id, x]) => ({ id, label: x.label, blurb: x.blurb })),
     feed: room.feed.slice(-25), drinks: DRINKS, btaken: room.btaken, drops: (room.drops || []).map((d) => ({ id: d.id, x: d.x, z: d.z, amt: d.amt })), // bottle spots on tables: index -> respawn time
 
     players: plist(room).map((q) => ({ id: q.id, name: q.name, color: q.color, cos: q.cos || {}, money: Math.round(q.money), connected: q.connected, fate: q.fate, drunk: Math.round(drunkNow(q)), campCash: q.campCash ?? null, rollover: q.rollover || 0,
@@ -643,6 +677,7 @@ function view(room, p) {
     v.crewNow = Math.round(plist(room).reduce((a, q) => a + networth(room, q), 0));
     v.barEvent = room.barEvent ? { kind: room.barEvent.kind, until: room.barEvent.until, betUntil: room.barEvent.betUntil, red: room.barEvent.red, blue: room.barEvent.blue, hits: room.barEvent.hits || null, title: room.barEvent.title, text: room.barEvent.text, mine: room.barEvent.bets ? room.barEvent.bets[p.id] || null : null } : null;
     v.shake = room.shake ? { training: !!room.shake.training, tax: room.shake.tax, paid: room.shake.paid, hp: goons.hpLeft(room), maxHp: goons.hpMax(room), until: room.shake.until } : null;
+    v.bum = room.bum ? { training: !!room.bum.training, target: room.bum.target, state: room.bum.state, loot: room.bum.loot } : null;
     v.spinning = room.spin ? { by: room.spin.name, until: room.spin.until } : null;
     const cur = room.events.find((e) => e.status === 'open');
     if (cur && room.phase === 'play') {
@@ -656,6 +691,7 @@ function view(room, p) {
   if (inPlay(room)) v.paper = room.paper || null;
   return v;
 }
+const bum = createBum({ feed, toast: (p, t, k) => toast(p, t, k), broadcast: (r) => broadcast(r), plist, money, send: (p, m) => send(p, m), STORY });
 const goons = createGoons({ feed, toast: (p, t, k) => toast(p, t, k), broadcast: (r) => broadcast(r), plist, money, send: (p, m) => send(p, m),
   onDone: (room, kind, how) => { // an ending sequence finished
     if (kind === 'hunt') { if (how === 'kill') endHunt(room, false); else if (how === 'beaten') endHunt(room, true); else finish(room); }
@@ -780,7 +816,7 @@ function handle(room, p, m) {
     case 'shakePay': {
       const sh = room.shake; if (!sh || room.phase !== 'play') break;
       const amt = Math.min(p.money, sh.tax - sh.paid, Math.floor(Number(m.amount) || sh.tax)); if (amt <= 0) break;
-      p.money -= amt; sh.paid += amt; if (sh.paid >= sh.tax) endShake(room, false); broadcast(room); break; // paid in full: the collectors walk out
+      p.money -= amt; sh.paid += amt; p.debt = Math.max(0, p.debt - amt); if (sh.paid >= sh.tax) endShake(room, false); broadcast(room); break; // paid in full: the collectors walk out. It all counts against what you owe Sal
     }
     case 'fightBet': {
       const be = room.barEvent; if (!be || be.kind !== 'fight' || Date.now() > be.betUntil || !['red', 'blue'].includes(m.side)) break;
@@ -864,6 +900,7 @@ function handle(room, p, m) {
       const t = Date.now(); p.credits = p.credits.filter((c) => t - c < 4000); if (!p.credits.length || !inPlay(room)) break; p.credits.shift();
       room.npcKo = room.npcKo || {};
       if (m.kind === 'brawler') { const be = room.barEvent; if (!be || be.kind !== 'fight' || t > be.until || !['red', 'blue'].includes(m.side)) break; be.hits = be.hits || { red: 0, blue: 0 }; be.hits[m.side]++; feed(room, `🍾 ${p.name} beaned ${m.side === 'red' ? be.red : be.blue} with a bottle!`); broadcast(room); break; }
+      if (m.kind === 'goon' && m.target === 'bum') { bum.hit(room, p, true); break; }
       if (m.kind === 'goon') { if (goons.hit(room, p, String(m.target), 8, true)) { feed(room, `🍾 ${p.name} broke a bottle over a ${room.goons && room.goons.kind === 'hunt' ? 'hitman' : 'collector'}!`); broadcast(room); } break; }
       if (m.kind === 'npc') { const i = Math.floor(Number(m.npc)); if (!(i >= 0 && i < 80) || t < (room.npcKo[i] || 0)) break; room.npcKo[i] = t + 5000 + 2000;
         for (const q of room.players.values()) send(q, { type: 'ko', npc: i, until: t + 5000, by: p.id }); feed(room, `🍾 ${p.name} bottled ${m.name && /^[\w .'-]{1,24}$/.test(m.name) ? m.name : 'a bar regular'}.`); jobEvent(room, p, 'npcBottled', { name: String(m.name || '') }); broadcast(room); break; }
@@ -876,12 +913,13 @@ function handle(room, p, m) {
     case 'pos': {
       const x = Number(m.x), z = Number(m.z), ry = Number(m.ry);
       if (![x, z, ry].every(Number.isFinite)) break;
-      p.x = clamp(x, -60, 60); p.z = clamp(z, -60, 60); // the street and the gas station are out past the bar walls p.ry = ry; const sit = Number.isFinite(Number(m.sit)) && Number(m.sit) > 0 ? clamp(Number(m.sit), 0.2, 1.2) : 0; const jy = Number.isFinite(Number(m.jy)) ? clamp(Number(m.jy), 0, 1.2) : 0; const lp = Number.isFinite(Number(m.p)) ? clamp(Number(m.p), -1.6, 1.6) : 0;
+      p.x = clamp(x, -60, 60); p.z = clamp(z, -60, 60); /* the street and the gas station are out past the bar walls */ p.ry = ry; const sit = Number.isFinite(Number(m.sit)) && Number(m.sit) > 0 ? clamp(Number(m.sit), 0.2, 1.2) : 0; const jy = Number.isFinite(Number(m.jy)) ? clamp(Number(m.jy), 0, 1.2) : 0; const lp = Number.isFinite(Number(m.p)) ? clamp(Number(m.p), -1.6, 1.6) : 0;
       for (const q of room.players.values()) if (q !== p) send(q, { type: 'pos', id: p.id, x: p.x, z: p.z, ry, sit, jy, p: lp });
       break;
     }
     case 'struggle': if (goons.struggle(room, p)) broadcast(room); break;
     case 'attack': { // a punch at a named goon; the server checks reach
+      if (m.g === 'bum') { if (room.bum && Date.now() - p.lastHit >= 140) { p.lastHit = Date.now(); bum.hit(room, p, false); } break; }
       if (!room.goons || Date.now() - p.lastHit < 140) break; p.lastHit = Date.now();
       if (goons.hit(room, p, String(m.g || ''), 1, false)) broadcast(room); break;
     }
@@ -921,7 +959,7 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocketServer({ server });
 const ROOM_GRACE_MS = 10 * 60 * 1000; // an empty room waits this long for its players to come back before it is deleted
-function reapLater(room) { clearTimeout(room.reap); room.reap = setTimeout(() => { if (![...room.players.values()].some((q) => q.connected)) { clearInterval(room.tick); clearInterval(room.goonTimer); rooms.delete(room.code); } }, ROOM_GRACE_MS); }
+function reapLater(room) { clearTimeout(room.reap); room.reap = setTimeout(() => { if (![...room.players.values()].some((q) => q.connected)) { clearInterval(room.tick); clearInterval(room.goonTimer); clearInterval(room.bumTimer); rooms.delete(room.code); } }, ROOM_GRACE_MS); }
 wss.on('connection', (ws) => {
   let room = null, player = null;
   ws.on('message', (raw) => {
@@ -961,7 +999,7 @@ wss.on('connection', (ws) => {
     player.connected = false;
     if (room.phase === 'lobby') room.players.delete(player.id);
     else feed(room, `📴 ${player.name} lost connection.`);
-    if (![...room.players.values()].some((q) => q.connected)) { if (!room.players.size) { clearInterval(room.tick); clearInterval(room.goonTimer); rooms.delete(room.code); } else reapLater(room); return; }
+    if (![...room.players.values()].some((q) => q.connected)) { if (!room.players.size) { clearInterval(room.tick); clearInterval(room.goonTimer); clearInterval(room.bumTimer); rooms.delete(room.code); } else reapLater(room); return; }
     if (room.hostId === player.id || !room.players.has(room.hostId)) room.hostId = [...room.players.values()].find((q) => q.connected).id;
     broadcast(room);
   });
@@ -969,7 +1007,7 @@ wss.on('connection', (ws) => {
 
 // ---------- snapshots: rooms survive a server restart/redeploy when BK_STATE_DIR points at persistent storage (e.g. a Railway volume) ----------
 const STATE_DIR = process.env.BK_STATE_DIR || '', STATE_FILE = STATE_DIR && path.join(STATE_DIR, 'rooms.json');
-const SKIP = new Set(['ws', 'tick', 'reap', 'sportDef', 'goonTimer', 'seen']);
+const SKIP = new Set(['ws', 'tick', 'reap', 'sportDef', 'goonTimer', 'bumTimer', 'seen']);
 function snapshot() {
   if (!STATE_FILE) return;
   const out = [...rooms.values()].filter((r) => r.phase !== 'lobby').map((r) => JSON.parse(JSON.stringify({ ...r, players: [...r.players.values()] }, (k, v) => (SKIP.has(k) ? undefined : v))));
@@ -981,7 +1019,7 @@ function restore() {
     const { at, rooms: list } = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); if (Date.now() - at > ROOM_GRACE_MS) return;
     for (const r of list) {
       r.players = new Map(r.players.map((p) => [p.id, { ...p, ws: null, connected: false }])); r.sportDef = SPORTS[r.sport];
-      rooms.set(r.code, r); if (r.phase === 'play' || r.phase === 'hunt') r.tick = setInterval(() => tick(r), 400); goons.resume(r); reapLater(r);
+      rooms.set(r.code, r); if (r.phase === 'play' || r.phase === 'hunt') r.tick = setInterval(() => tick(r), 400); goons.resume(r); bum.resume(r); reapLater(r);
     }
     console.log(`restored ${list.length} room(s) from snapshot`);
   } catch (e) { console.error('restore failed', e.message); }

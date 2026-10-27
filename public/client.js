@@ -38,6 +38,7 @@ function connect(msg) {
     else if (m.type === 'bottle') window.BK.onBottle && window.BK.onBottle(m);
     else if (m.type === 'bottleGot') window.BK.onBottleGot && window.BK.onBottleGot(m);
     else if (m.type === 'goons') window.BK.onGoons && window.BK.onGoons(m);
+    else if (m.type === 'bum') window.BK.onBum && window.BK.onBum(m);
     else if (m.type === 'goonDodge') window.BK.onGoonDodge && window.BK.onGoonDodge(m);
     else if (m.type === 'ko') window.BK.onKo && window.BK.onKo(m);
     else if (m.type === 'spin') window.BK.onSpin && window.BK.onSpin(m);
@@ -188,19 +189,22 @@ function doJoin(withCode) {
 const playerList = () => S.players.map((p) => `<div class="pl"><span>${esc(p.name)}${p.id === S.you ? ' (you)' : ''}${!p.connected ? ' 📴' : ''}${p.drunk >= 15 ? ' 🍺' : ''}</span>
   <span>${S.phase === 'lobby' ? '' : `<span class="ok">${$$(p.money)}</span>${p.hunted ? ' 🎯' : ''}`}</span></div>`).join('');
 
+const ST = () => (S && S.story) || { bar: 'The Dugout', owner: { name: 'Lou' }, dev: { name: 'Chase', full: 'Chase Whitmore' }, bum: { name: 'Dusty' }, plan: { name: 'luxury condos' } };
+const fundBar = (f) => { const pct = Math.max(0, Math.min(100, (f.banked / Math.max(1, f.buyout)) * 100)); return `<div class="qbar ${pct >= 100 ? 'ok' : ''}"><div style="width:${pct}%"></div></div><div class="muted">Save the Bar fund: <b>${$$(f.banked)}</b> of ${$$(f.buyout)}</div>`; };
 // between nights of a campaign: what carries over
 function campLobby() {
   const c = S.camp; if (!c || S.format !== 'campaign' || c.night < 2) return '';
   return `<div class="card camp col"><div class="big">📖 Night ${c.night} of ${c.nights}${c.night === c.nights ? ' - the last night' : ''}</div>
-    <div class="muted">${c.night === c.nights ? 'Clear the books tonight and you walk out free. Come up short and you don\'t walk out.' : 'Sal\'s marker went up. Whatever you didn\'t pay last night is on top of it, with interest.'}</div>
-    ${S.players.map((p) => `<div class="pl"><span>${esc(p.name)}</span><span>${p.campCash != null ? `brings ${$$(p.campCash)}` : 'new in town · $2,000'} · owes ${$$(S.nextTab + (p.rollover || 0) + (p.campCash != null && p.campCash < 1000 ? Math.round((1000 - p.campCash) * 1.25) : 0))}</span></div>`).join('')}
+    <div class="muted">${c.night === c.nights ? `Last chance. Close the gap tonight or ${esc(ST().dev.name)} gets his ${esc(ST().plan.name)}.` : `${esc(ST().dev.name)} isn't going anywhere. Neither are we.`}</div>
+    ${S.fund ? fundBar(S.fund) : ''}
+    ${S.players.map((p) => `<div class="pl"><span>${esc(p.name)}</span><span>${p.campCash != null ? `brings ${$$(p.campCash)}` : 'new in town · $2,000'}${p.rollover ? ` · <b class="bad">owes Sal ${$$(p.rollover)}</b>` : ''}</span></div>`).join('')}
     ${c.log && c.log.length ? `<div class="muted">So far: ${c.log.map((l) => `night ${l.night} ${esc(l.tier)}`).join(' · ')}</div>` : ''}
     ${S.host ? `<button class="ghost" onclick="if(confirm('Walk away from this campaign and start over?'))send({type:'endCampaign'})">Walk away (start a new campaign)</button>` : ''}</div>`;
 }
 function lobbyView() {
   return `<div class="wrap"><div class="card col">
     <div class="top"><img class="logo-img sm" src="logo.webp" alt="Ball Knowledge"><div class="pill">Room <b>${S.code}</b></div></div>
-    <div class="muted">Share the room code. Up to 6 players, co-op. ${S.camp && S.camp.night > 1 ? 'Your cash carries over from last night' : 'You each start with $2,000'} - and you each owe Uncle Sal <b>${$$(S.nextTab)}</b>${S.camp && S.camp.night > 1 ? ' plus whatever is left over' : ''}, due at closing time. A full playoff run of <b>about 10 games</b> is waiting - one new game opens for betting every couple of minutes.</div>
+    <div class="muted">Share the room code. Up to 6 players, co-op. ${S.camp && S.camp.night > 1 ? 'Your cash carries over from last night' : 'You each start with $2,000'}. <b>${esc(ST().dev.full)}</b> wants to tear down ${esc(ST().bar)} for ${esc(ST().plan.name)} - win enough to buy him out. Short on cash? Uncle Sal lends. He also collects. A full playoff run of <b>about 10 games</b> is waiting - one new game opens for betting every couple of minutes.</div>
     ${loadBar()}
     ${campLobby()}
     <div class="title">Crew</div>${playerList()}
@@ -552,8 +556,8 @@ function mobView() {
   const me = S.me, cur = S.cur, ev = cur && S.events[cur.idx], fixed = cur && me.fix[cur.idx];
   return `<div class="card col" style="border-color:#5a2230">
     <div class="big">🕴️ "Uncle Sal"</div>
-    <div class="muted">"I can make things happen, kid. Money, refs, players that suddenly forget how to play defense. Of course, I take a cut. And if you lose the big bet... well. We'll come see you."</div>
-    <div class="side"><b>Your tab: ${$$(me.debt)}</b> - my marker${me.tab > 0 ? ` (${$$(me.tab)})` : ''} plus any loans and fixes. I collect at closing time. Every dollar of it.</div>
+    <div class="muted">"Heard about ${esc(ST().owner.name)}'s little problem. Shame. You need a stake? I lend. Refs, players, a fix - I can do that too. I just always, always collect."</div>
+    <div class="side"><b>You owe me: ${$$(me.debt)}</b>${me.tab > 0 ? ` (${$$(me.tab)} left over from last night)` : ''} - loans and fixes. My collectors drop by for installments; I collect the rest at closing time.</div>
     <div class="side"><b>Loan: ${$$(1000)}</b> - you owe back ${$$(1250)}. (${me.loans}/3 taken)<br>
       <button class="gold" style="margin-top:6px" ${me.loans >= 3 || S.phase !== 'play' ? 'disabled' : ''} onclick="send({type:'loan'})">Borrow</button></div>
     <div class="side"><b>Fix the open game</b> - pay off the refs and players. Adds <b>${cur ? $$(cur.fixPrice) : '...'}</b> to your tab when betting closes. The result gets flipped on the TV.<br>
@@ -583,7 +587,7 @@ function barView() {
     <div class="chalk-sub">You feel <b>${b}</b>${d < 20 ? ` (${d}%)` : ''}. ${S.me.hangover ? '<b>Your head is pounding</b> - no gut feelings until it passes. ' : ''}Somewhere in the buzz your gut gets good: right more often than not. Go past it and it lies to you just as confidently - then the hangover hits. Everyone's sweet spot is different, and it wears off over time.</div>
     ${jobBox()}</div>`;
 }
-// ---------- the guided first night: Sal's napkin ----------
+// ---------- the guided first night: the bartender's napkin ----------
 // A checklist of the bar's systems in a sensible order. The current step gets a "where" hint and the right regular calls
 // out to you (speech bubble, plus a voice line when one exists). Progress is saved in this browser; finishing pays tickets.
 const NAPKIN = [
@@ -592,8 +596,8 @@ const NAPKIN = [
   { id: 'vinnie', text: 'Buy Old Vinnie a drink for a tip', where: 'Old man on the stool by the taps', who: 'Old Vinnie', line: 'Psst. Kid. Buy an old man a drink and I\'ll tell you who wins.', vo: 'vin_hello' },
   { id: 'drink', text: 'Have a drink - find your buzz', where: 'Bartender, behind the counter', who: 'Bartender', line: 'A little buzz helps the gut. Too much and it lies to you.', vo: 'bt_drink' },
   { id: 'job', text: 'Ask the bartender for a side job', where: 'Bartender: "Ask for a job"', who: 'Bartender', line: 'Short on cash? I always have work. Come ask me.', vo: 'bt_job' },
-  { id: 'bottle', text: 'Throw Sal\'s collector out with bottles', where: 'E grabs bottles off any table, click throws', who: 'Uncle Sal', line: 'Just a friendly reminder, kid. Let\'s see what you do.', vo: 'sal_reminder' },
-  { id: 'sal', text: 'Check your tab with Uncle Sal', where: 'Red corner booth, back right', who: 'Uncle Sal', line: 'Come here. Let\'s talk about what you owe me.', vo: 'sal_tab' },
+  { id: 'bottle', text: 'Run the bum off with bottles', where: 'E grabs bottles off any table, click throws', who: 'Bartender', line: 'Watch your wallet - that bum is back. Bottles work wonders.', vo: 'bt_bum' },
+  { id: 'sal', text: 'Meet Uncle Sal (loans, if you go broke)', where: 'Red corner booth, back right', who: 'Uncle Sal', line: 'Short on cash, kid? Come see me. I lend.', vo: 'sal_tab' },
 ];
 const tut = () => (save.tutProg = save.tutProg || {});
 function napkinMark(id) { if (!save.tutDone && !tut()[id]) { tut()[id] = 1; persist(); } }
@@ -606,20 +610,20 @@ function napkinCheck() { // tick off steps from the game state
   if (S.cur && S.cur.vinnie) P.vinnie = 1;
   if ((me.drunk || 0) >= 15) P.drink = 1;
   if (me.job || me.jobsDone > 0) P.job = 1;
-  if (S.shake && S.shake.training) P.sawCollector = 1; else if (P.sawCollector) P.bottle = 1;
+  if (S.bum && S.bum.training) P.sawCollector = 1; else if (P.sawCollector) P.bottle = 1; // the training bum came and went
   const left = NAPKIN.filter((x) => !P[x.id]);
   if (!left.length) { save.tutDone = true; save.tix += 10; persist(); send({ type: 'seen', ids: save.seen || [], tut: true }); toast('🧻 Napkin done - you know your way around. +10 🎟 tickets', 'win'); window.BK.vo && window.BK.vo.play('sal_napkin_done'); return; }
   const cur = napkinCurrent(); const cineOn = !!(S.cine && now() < S.cine.until + 300);
   if (cur && ui.napkinSaid !== cur.id && !cineOn) { ui.napkinSaid = cur.id; setTimeout(() => { window.BK.guideSay && window.BK.guideSay(cur.who, cur.line, cur.vo); }, 1200); }
   if (JSON.stringify(P) !== before) persist();
 }
-function napkinCurrent() { const P = tut(); if (S.shake && S.shake.training && !P.bottle) return NAPKIN.find((x) => x.id === 'bottle'); return NAPKIN.find((x) => !P[x.id] && x.id !== 'bottle'); }
+function napkinCurrent() { const P = tut(); if (S.bum && S.bum.training && !P.bottle) return NAPKIN.find((x) => x.id === 'bottle'); return NAPKIN.find((x) => !P[x.id] && x.id !== 'bottle'); }
 function napkinSkip() { if (!confirm('Skip the guide? You can turn it back on from the Esc menu.')) return; save.tutDone = true; persist(); send({ type: 'seen', ids: save.seen || [], tut: true }); render(); }
 function napkinHud() {
   const P = tut(), cur = napkinCurrent(), n = NAPKIN.filter((x) => P[x.id]).length;
-  return `<div class="hud-napkin"><div class="nk-h">Sal's napkin <span>${n}/${NAPKIN.length}</span><button class="nk-x" onclick="napkinSkip()" title="Skip the guide">✕</button></div>
+  return `<div class="hud-napkin"><div class="nk-h">The bartender's napkin <span>${n}/${NAPKIN.length}</span><button class="nk-x" onclick="napkinSkip()" title="Skip the guide">✕</button></div>
     ${NAPKIN.filter((x) => x.id !== 'bottle' || P.bottle || P.sawCollector || (S.shake && S.shake.training)).map((x) => `<div class="nk-i ${P[x.id] ? 'done' : x === cur ? 'cur' : ''}">${P[x.id] ? '✔' : x === cur ? '➜' : '○'} ${esc(x.text)}${x === cur ? `<small>${esc(x.where)}</small>` : ''}</div>`).join('')}
-    ${!P.sawCollector && !P.bottle ? '<div class="nk-i dim">○ ...Sal will send someone. Be ready.</div>' : ''}</div>`;
+    ${!P.sawCollector && !P.bottle ? '<div class="nk-i dim">○ ...keep an eye on your wallet. Somebody always comes for it.</div>' : ''}</div>`;
 }
 // ---------- side jobs from the bartender ----------
 function jobBox() {
@@ -700,7 +704,8 @@ function endView() {
   const s = S.summary, host = S.host;
   return `<div class="center"><div class="card col" style="width:min(560px,100%)">
     <div class="logo" style="font-size:34px">${{ legendary: '<span>LEGENDARY NIGHT</span>', survived: 'YOU SURVIVED', busted: 'BUSTED' }[s.tier] || (s.crewWon ? '<span>YOU WIN</span>' : 'GAME OVER')}${s.vacated ? '<span>*</span>' : ''}</div>
-    <div class="tiers"><span class="${s.crewWon ? 'ok' : 'bad'}">${s.crewWon ? '✅' : '❌'} Called the champion (${s.correct}/${s.total})</span><span class="${s.quotaMet ? 'ok' : 'bad'}">${s.quotaMet ? '✅' : '❌'} Hit Sal's final number</span></div>
+    <div class="tiers"><span class="${s.crewWon ? 'ok' : 'bad'}">${s.crewWon ? '✅' : '❌'} Called the champion (${s.correct}/${s.total})</span><span class="${s.quotaMet ? 'ok' : 'bad'}">${s.quotaMet ? '✅' : '❌'} Made tonight's goal for the fund</span></div>
+    ${s.fund ? `<div class="card camp col"><div class="big">🏦 ${s.fund.last ? (s.fund.saved ? `${esc(ST().bar)} is SAVED!` : `${esc(ST().bar)} was SOLD`) : `The crew put ${$$(s.fund.deposit)} in the fund`}</div>${fundBar(s.fund)}${s.fund.last ? `<div class="muted">${s.fund.saved ? `${esc(ST().dev.name)} took the check and stormed out. ${esc(ST().owner.name)} is pouring for the house. +25 tickets each.` : `Coming soon: ${esc(ST().plan.name)}. ${esc(ST().owner.name)} is packing up the jerseys.`}</div>` : '<div class="muted">Everyone\'s winnings above tonight\'s bankroll went in. Bankrolls carry over.</div>'}</div>` : ''}
     ${s.mvp ? `<div class="mvp">🏅 MVP of the night: <b>${esc(s.mvp.name)}</b> · ${s.mvp.bk} Ball Knowledge</div>` : ''}
     ${s.vacated ? '<div class="bad">* The championship was fixed. The league struck your title from the books (half the crew bonus).</div>' : ''}${s.voidedFinal ? '<div class="bad">🚨 The league caught a fix on the championship and voided it. Nobody gets the title.</div>' : ''}
     <div class="title">${s.fake ? 'A made-up season' : 'The season was'}</div>
@@ -708,7 +713,7 @@ function endView() {
     <div class="muted">${esc(s.blurb || '')}</div>
     <div>${s.fake ? 'Champion by the dice' : 'Real champion'}: <b>${esc(s.champion)}</b></div>
     <div>${s.altered ? `${s.fake ? 'Your fix overruled the dice' : 'History was rewritten'} - your champion was <b>${esc(s.finalWinner)}</b>.` : s.fake ? 'The dice played it straight.' : 'History played out as it happened.'}</div>
-    ${s.players.map((p) => `<div class="pl"><span>${esc(p.name)} ${p.finalCorrect ? '✅' : '❌'}</span><span>${p.fate === 'dead' ? '💀 dead (half tickets, wears a toe tag next season)' : esc(p.fate)} · ${$$(p.money)} · 🧠 ${p.bk || 0} · +${p.tickets}🎟</span></div>`).join('')}
+    ${s.players.map((p) => `<div class="pl"><span>${esc(p.name)} ${p.finalCorrect ? '✅' : '❌'}</span><span>${p.fate === 'dead' ? '💀 dead (half tickets, wears a toe tag next season)' : esc(p.fate)} · ${$$(p.money)}${p.gave ? ` · <b class="ok">gave ${$$(p.gave)}</b>` : ''} · 🧠 ${p.bk || 0} · +${p.tickets}🎟</span></div>`).join('')}
     ${campEnd(s)}
     <button class="ghost" onclick="openShop()">🛍️ Spend tickets · 🎟 ${save.tix}</button>
     ${host ? (s.camp && !s.camp.last ? `<button onclick="send({type:'rematch',next:true})">On to night ${s.camp.night + 1} →</button><button class="ghost" onclick="if(confirm('Abandon the campaign?'))send({type:'rematch'})">Quit the campaign</button>` : `<button onclick="send({type:'rematch'})">${s.camp ? 'New campaign' : 'Back to lobby'}</button>`) : '<div class="muted">Waiting for host...</div>'}</div></div>`;
@@ -717,21 +722,20 @@ function endView() {
 function campEnd(s) {
   const c = s.camp; if (!c) return '';
   if (c.last) {
-    const R = { free: ['🕊️ FREE AND CLEAR', 'The books are clean. Sal pours you a drink on the house - first time in years. +25 tickets each.'], hooked: ['🪝 STILL ON THE HOOK', 'You got out alive, but somebody still owes Sal. He\'ll be seeing you.'], owned: ['💀 SAL OWNS YOU', 'Not everyone walked out of the back room. The crew works for Sal now.'] }[c.result];
+    const R = { saved: ['🏆 THE BAR IS SAVED', `${ST().bar} stays open. Your names go on the wall.`], saved_cost: ['🏆 SAVED - AT A PRICE', 'The bar stays open. Not everyone walked out of Sal\'s back room, though.'], sold: ['🏗️ SOLD', `${ST().dev.full} got his ${ST().plan.name}.`] }[c.result] || ['', ''];
     return `<div class="card camp col"><div class="big">📖 Campaign over: ${R[0]}</div><div class="muted">${R[1]}</div><div class="muted">${c.log.map((l) => `Night ${l.night}: ${esc(l.season)} - ${esc(l.tier)}`).join('<br>')}</div></div>`;
   }
   return `<div class="card camp col"><div class="big">📖 Night ${c.night} of ${c.nights} done</div>
-    <div class="muted">Cash carries over. Sal's marker goes up. Whatever you didn't pay rolls over at 50% interest. Under $1,000? Sal fronts you the rest - on the tab.</div>
-    ${c.players.map((p) => `<div class="pl"><span>${esc(p.name)}${p.dead ? ' 💀' : ''}</span><span>brings ${$$(p.cash)}${p.fronted ? ` (+${$$(p.fronted)} fronted)` : ''} · owes ${$$(p.nextTab)} next night${p.rollover ? ` <b class="bad">(${$$(p.rollover)} rolled over)</b>` : ''}</span></div>`).join('')}</div>`;
+    <div class="muted">Bankrolls carry over (under $250? ${esc(ST().owner.name)} slips you the rest from the till). Anything you still owe Sal carries over at 50% interest.</div>
+    ${c.players.map((p) => `<div class="pl"><span>${esc(p.name)}${p.dead ? ' 💀' : ''}</span><span>brings ${$$(p.cash)}${p.fronted ? ` (+${$$(p.fronted)} from ${esc(ST().owner.name)})` : ''}${p.rollover ? ` · <b class="bad">owes Sal ${$$(p.rollover)}</b>` : ''}</span></div>`).join('')}</div>`;
 }
 // ---------- quota / bounties / events ----------
-function quotaHud() {
-  if (!S.quota) return '';
-  const nxt = S.quota.find((q) => q.status === 'pending');
-  const chips = S.quota.map((q) => `<span class="qc ${q.status}" title="After game ${q.idx + 1}: ${$$(q.target)}">${q.status === 'met' ? '✓' : q.status === 'missed' ? '✗' : q.idx + 1}</span>`).join('');
-  if (!nxt) return `<div class="hud-quota"><div class="qt">SAL'S QUOTAS <span class="qchips">${chips}</span></div><div class="muted">All quotas settled.</div></div>`;
-  const pct = Math.max(0, Math.min(100, (S.crewNow / nxt.target) * 100)), ok = S.crewNow >= nxt.target;
-  return `<div class="hud-quota"><div class="qt">SAL'S QUOTA <span class="qchips">${chips}</span></div><div class="qbar ${ok ? 'ok' : ''}"><div style="width:${pct}%"></div></div><div class="muted">Crew net worth <b>${$$(S.crewNow)}</b> / ${$$(nxt.target)} by Game ${nxt.idx + 1}${nxt.kind === 'final' ? ' (final)' : ''}</div></div>`;
+function quotaHud() { // the Save the Bar fund, and tonight's pace for the developer's check-ins (S.quota: crew net worth targets)
+  if (!S.quota || !S.fund) return '';
+  const f = S.fund, nxt = S.quota.find((q) => q.status === 'pending'), tonight = (S.crewNow || 0) - (f.start || 0), D = esc(ST().dev.name);
+  const chips = S.quota.map((q) => `<span class="qc ${q.status}" title="${q.kind === 'final' ? 'Tonight\'s goal' : D + ' checks in'} after game ${q.idx + 1}">${q.status === 'met' ? '✓' : q.status === 'missed' ? '✗' : q.idx + 1}</span>`).join('');
+  const pct = Math.max(0, Math.min(100, (Math.max(0, tonight) / Math.max(1, f.goal)) * 100)), ok = nxt ? S.crewNow >= nxt.target : tonight >= f.goal;
+  return `<div class="hud-quota"><div class="qt">SAVE ${esc(ST().bar.toUpperCase())} <span class="qchips">${chips}</span></div><div class="qbar ${ok ? 'ok' : ''}"><div style="width:${pct}%"></div></div><div class="muted">Tonight <b>${tonight >= 0 ? '+' : ''}${$$(tonight)}</b> / ${$$(f.goal)}${nxt && nxt.kind === 'mid' ? ` · ${D} checks in after game ${nxt.idx + 1} (+${$$(nxt.target - f.start)})` : ''} · fund ${$$(f.banked)}/${$$(f.buyout)}</div></div>`;
 }
 function bountyHud() {
   const b = S.me.bounties || []; if (!b.length) return '';
@@ -757,7 +761,7 @@ function shakeBanner() {
   const sh = S.shake; if (!sh) return '';
   const pct = Math.max(0, (sh.hp / Math.max(1, sh.maxHp)) * 100), held = grabbed();
   return `<div class="card hunt col ${held ? 'held' : ''}"><div class="big">${held ? '🫳 A collector is going through your pockets' : "💼 Sal's collectors"} <span class="pill time" id="shaket"></span></div>${held ? struggleMeter(6) : ''}
-    <div class="muted">The crew missed the quota. They want <b class="bad">${$$(sh.tax - sh.paid)}</b> more and they'll pat everyone down to get it. Chip in, or throw them out: punch them up close, or bottle them.</div>
+    <div class="muted">Sal wants an installment on his loans: <b class="bad">${$$(sh.tax - sh.paid)}</b> more, and they'll pat down whoever owes him to get it. Pay it (it comes off what you owe), or throw them out: punch them up close, or bottle them.</div>
     <div class="hp"><div style="width:${pct}%"></div></div>
     <div class="row"><button class="gold" onclick="send({type:'shakePay',amount:100})">Pay $100</button><button class="gold" onclick="send({type:'shakePay',amount:500})">Pay $500</button></div></div>`;
 }

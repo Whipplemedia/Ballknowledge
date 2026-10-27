@@ -1,0 +1,8 @@
+{
+  "_note": "Story names and the developer's plan, shared by server.js (fs) and the client (story.js). Change them here.",
+  "bar": "The Dugout",
+  "owner": { "name": "Lou", "full": "Lou Marchetti", "since": 1987 },
+  "dev": { "name": "Chase", "full": "Chase Whitmore", "company": "Whitmore Development Group" },
+  "bum": { "name": "Dusty" },
+  "plan": { "name": "luxury condos", "pitch": "something with a lot of glass and no TVs" }
+}

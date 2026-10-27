@@ -10,11 +10,12 @@ Dev: `BK_SPEED=10 npm start` divides every timer by 10 (full game in about a min
 - **Markets**: moneyline, spread, total points. Lines are generated from team records (not historical lines). Team stats, form this season, series status and your crew's picks are in the betting UI.
 - **Win condition**: put a moneyline bet on the champion of the title game. Crew wins if at least half the players do.
 - **Bar**: buy drinks. Drunk confidence = gut-feeling hints on each game (more accurate as you get drunker, until you are wasted and they turn to nonsense). It wears off.
-- **Mob (Uncle Sal)**: loans and game fixes (flips the real result, adds to your tab). Conflicting fixes cancel. At the end the mob collects; shortfalls bring the hitmen - pay, wire money, win cash, or fight them in the room.
+- **Save the bar**: a developer wants to tear the bar down; the crew's winnings go into a buyout fund (see *The story* below).
+- **Mob (Uncle Sal)**: the bank of last resort. Loans and game fixes (flips the real result, adds to what you owe). Conflicting fixes cancel. Owe him and his collectors come by for installments; at closing he collects, and shortfalls bring the hitmen - pay, wire money, win cash, or bottle them.
 - **Arcade (no more farming)**: darts, bowling and cornhole pay only when you beat an NPC's posted score in a **challenge** (stake from the bar's board; win streaks raise the stakes, caps apply). Practice mode pays nothing. Plus a 3D roulette wheel whose ball lands on the server's number.
 - **Pool**: full 2D-physics pool table (your 4 solids vs an NPC's 4 stripes + the 8-ball). Pick Rookie or Shark, stake cash, win to double up.
-- **Quota**: Uncle Sal sets crew net-worth checkpoints through the season. Miss one and his collectors shake you down (pay, fight, or forfeit cash). Hit the final quota for bonus tickets.
-- **Chaos**: random bar events (happy hour, bar fight you can bet on, blackout, big tipper) and per-player bounties keep things moving.
+- **Check-ins**: the developer drops in twice a night to check the fund's pace. Behind it, he adds a permit fee to the buyout.
+- **Chaos**: random bar events (happy hour, bar fight you can bet on, blackout, big tipper), the bum who picks pockets, and per-player bounties keep things moving.
 - **Pro Shop**: earn tickets (finishing games, crew wins, quotas, bounties) and open crates for ~50 wearable items (helmets, jerseys, golf clubs, and more) in four rarities. Cosmetics are visible to the whole crew. Saved in browser localStorage.
 
 ## Controls
@@ -51,23 +52,32 @@ Game results were verified against web sources where possible (2016 NBA Finals +
 
 Second batch (Oct 2026), all game scores and home teams checked against web search results: NFL 2014 and 2019, college football 2014 and 2019, NBA 2014 and 2019, NCAA tournament 2016 and 2019, NHL 2010 and 2011, MLB 2011 and 2019. College football later added 2016, 2017, 2022 and 2023 (every score checked the same way). The library is now 26 seasons (college football 7, NFL 5, NBA 4, MLB 4, college basketball 3, hockey 3). Records and stat lines in this batch are also from memory.
 
-## Campaign and Sal's tab
+## The story: save the bar
+- Names and the developer's plan live in `public/story.json` (read by server.js and by the client through `public/story.js`): the owner **Lou Marchetti** (since 1987), the developer **Chase Whitmore** of Whitmore Development Group, the bum **Dusty**. The plan is a placeholder (`"luxury condos"`) until we pick it; change it there and every line follows.
 - Lobby **Story** setting: Campaign (3 nights, default) or Single night (`{type:'setFormat'}`); locked once night 2 starts. `{type:'endCampaign'}` walks away.
-- Every night opens with **Sal's marker** on each player: $500 / $750 / $1,000 on nights 1-3 (`TAB`). It sits in `p.debt` with loans and fixes, so it counts against crew net worth: the first quota (game ~3) needs the crew to earn the marker back.
-- Collected at closing time. Unpaid -> hitmen. Escape them and the unpaid part rolls into the next night at 50% interest (`ROLL_VIG`); die and you lose your cash (next night you limp in with $1,000) plus half your tickets.
-- Cash carries between nights; anyone under $1,000 is fronted the difference by Sal, added to the tab at +25%. Quota targets are built from the crew's starting cash each night.
-- Night 3 ends the campaign: **Free and clear** (everyone alive, nothing rolled over, +25 tickets each), **Still on the hook**, or **Sal owns you**. The opening cutscene changes per night.
+- **The buyout** (`BUYOUT_PER` in server.js): $1,500 per player for the campaign (at least $1,500), $600 per player for a single night. It's set on night 1 and only goes up (permit fees).
+- **The fund**: at closing time, after Sal has collected, everyone's winnings above tonight's starting bankroll go into the fund (`finish()`; `p.gave` on the results screen). Your bankroll carries into the next night; under $250, Lou slips you the difference from the till (`FLOOR_CASH`).
+- **Tonight's goal** is what's left of the buyout divided by the nights left. The developer checks in after ~33% and ~70% of the games (`CHECK_AT`, `room.quota` = crew net-worth targets on that pace): on pace = Lou comps $100 each + tickets; behind = a permit fee of $150 per player on the buyout. The last checkpoint is tonight's goal itself (the "legendary night" tier needs it plus the champion).
+- **The end**: after the last night a 12 s verdict scene plays (`cine: verdict`), then the results: **Saved** (+25 tickets each), **Saved - at a price** (someone died in Sal's back room) or **Sold**.
+- **Sal** no longer has a marker: nobody owes him unless they borrow ($1,000 loans, owe $1,250) or buy fixes. Collectors come only for people who owe him, right after a developer check-in (an installment of 40% of what's owed, taken from the debtors and paid off their debt); hitmen come at closing for what's unpaid. Escape them and it rolls into the next night at +50% (`ROLL_VIG`).
+- **Cutscenes** (`public/cine.js`, puppeting `bar.dev` and `bar.owner`): the night opens with Chase walking in the front door to gloat at Lou across the bar, Lou's reply, and tonight's number; the check-ins are short door visits (on pace / permit fee); the verdict ends with Chase storming out, or a "SOLD" fade with the wrecking ball.
+
+## The bum (Dusty)
+- `bum.js` (server) + `public/bumview.js` (client), streamed as `{type:'bum'}`. Every ~2-3.5 minutes, when no collectors or hitmen are around, he goes for a player with $150+ (three times likelier to pick someone outside the bar). He comes up the street, across the gas-station lot, or in the bar's front door; indoors he walks the bar's nav grid (`goons.nav`).
+- He walks slower than you (1.9 m/s vs 3.8), so you can leave. If he reaches you he spends 2.4 s in your pocket, then runs with 12% of your cash (at least $40, at most $400). Two hits run him off - bottles from anywhere, or punches up close; hit him while he's carrying your money and he drops it on the floor for anyone to grab.
+- On a guided first night he replaces Sal's training collector: he's the one the napkin teaches bottles on.
+- `BK_BUM_SOON=1` (dev only) sends him 20 s after a night starts.
 
 ## Side jobs, Old Vinnie, the newspaper
-- **Bartender side jobs** (bar panel): one at a time, 3 minutes, 20 s between jobs. Deliver a round to a named regular, collect Sal's envelope (pays $150 off your tab; getting bottled on the way back loses it), bottle a rowdy regular, or beat the Shark/Regular (pool or arcade). Target spots are checked server-side (`SPOTS` in server.js matches bar.js).
+- **Bartender side jobs** (bar panel): one at a time, 3 minutes, 20 s between jobs. Deliver a round to a named regular, collect Sal's envelope (Sal pays $150, off your tab if you owe him; getting bottled on the way back loses it), bottle a rowdy regular, or beat the Shark/Regular (pool or arcade). Target spots are checked server-side (`SPOTS` in server.js matches bar.js).
 - **Old Vinnie** (stool by the taps): $100 buys a tip on the open game, right ~70% of the time; the whole crew hears the same tip (seeded per game).
 - **The Daily Ledger** (on the counter, E to read): a sports page with the date torn off. Real seasons carry a regular-season headline plus three news-of-the-year briefs (`paper.js`); standings and hot players come from the season data. It never prints a playoff result.
-- New regulars from Meshy (`gina`, `vinnie`, `ray`, `steve` in `public/models`): Gina at the pool table, Old Vinnie and Celtics Ray on the stools, Sloppy Steve on the couch.
+- New regulars from Meshy (`gina`, `vinnie`, `ray`, `steve`, and the story's `owner`, `exec`, `bum` in `public/models`, task ids in `blender/meshy_tasks.json`): Gina at the pool table, Old Vinnie and Celtics Ray on the stools, Sloppy Steve on the couch.
 
 ## Guided first night
 - Lobby setting **Guided first night**: Auto (default: on when anyone in the crew hasn't finished the guide in this browser), Always, Off. Each browser reports `tut` with its `seen` message.
-- **Sal's napkin** (HUD, replaces bounties while guided) walks through: bet a winner, read the paper, buy Old Vinnie a drink, have a drink, ask for a side job, throw Sal's collector out, check your tab with Sal. The current step names where to go, and the right regular calls out to you (`bar.say`, plus a voice line when one exists). Finishing pays +10 tickets; ✕ skips; the Esc menu can turn it back on.
-- When game 1 goes on the air, Sal sends a single **training collector** ($100, two bottles throw him out) so bottles are learned before the hitmen.
+- **The bartender's napkin** (HUD, replaces bounties while guided) walks through: bet a winner, read the paper, buy Old Vinnie a drink, have a drink, ask for a side job, run the bum off with bottles, meet Uncle Sal. The current step names where to go, and the right regular calls out to you (`bar.say`, plus a voice line when one exists). Finishing pays +10 tickets; ✕ skips; the Esc menu can turn it back on.
+- When game 1 goes on the air, **Dusty** comes for someone's wallet so bottles are learned before anyone needs them on Sal's men.
 
 ## Voice lines (ElevenLabs)
 - `tools/voice-script.json`: 24 lines (Sal, the bartender, Old Vinnie, the hitmen, the TV announcer) with a voice direction per speaker.

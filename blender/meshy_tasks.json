@@ -1,106 +1,121 @@
 {
-  "_note": "Meshy task ids behind public/models/*_ai.glb (multi-image-to-3d gen, then rigging). Settings: meshy-7.1, t-pose, 2k texture, remesh ~9000 tris. Inputs are crops of the reference-pack character sheets.",
-  "bub": {
-    "gen": "01a17457-7328-7584-b7d8-540e77ddda60",
-    "rig": "01a17459-824d-76f1-9d1b-c1efabdf24d5",
-    "note": "inputs were a cap/backpack-free edit (image-to-image 01a17456-b96e-755d-8ef9-181e04d70bf5), 4k texture, 10000 tris"
+ "_note": "Meshy task ids behind public/models/*_ai.glb (multi-image-to-3d gen, then rigging). Settings: meshy-7.1, t-pose, 2k texture, remesh ~9000 tris. Inputs are crops of the reference-pack character sheets.",
+ "bub": {
+  "gen": "01a17457-7328-7584-b7d8-540e77ddda60",
+  "rig": "01a17459-824d-76f1-9d1b-c1efabdf24d5",
+  "note": "inputs were a cap/backpack-free edit (image-to-image 01a17456-b96e-755d-8ef9-181e04d70bf5), 4k texture, 10000 tris"
+ },
+ "bartender": {
+  "gen": "01a17460-3f1f-70c9-ae77-b1dc20bb775b",
+  "rig": "01a17463-bfc7-7119-84ca-30deb42e9fcd"
+ },
+ "sal": {
+  "gen": "01a17460-44e4-7203-9751-f3e9d04390f4",
+  "rig": "01a17463-ca7b-75be-ad4a-7b5d57cb02bc"
+ },
+ "jock": {
+  "gen": "01a17463-99eb-7740-b579-c8532da92ea1",
+  "rig": "01a17469-5c1a-7216-b925-7b556379467c"
+ },
+ "knowItAll": {
+  "gen": "01a17463-9fb6-758a-ae9c-fbd83284a828",
+  "rig": "01a17469-65dc-725a-8bc1-725a771c18e1"
+ },
+ "gambler": {
+  "gen": "01a17463-a5ba-700c-b790-33a92bf7316c",
+  "rig": "01a17469-7051-7659-a261-19a0551876d3"
+ },
+ "chill": {
+  "gen": "01a17463-aaec-73f6-8527-a8fa0ba9bd61",
+  "rig": "01a17469-7a1c-7786-a613-960f8f9fe3fd"
+ },
+ "dieHard": {
+  "gen": "01a17463-b019-76dc-8e40-e7dd09a5774e",
+  "rig": "01a17469-8425-748e-b3c4-234927f4319e"
+ },
+ "rookie": {
+  "gen": "01a17463-b4e3-7775-8855-06bf9a5f2eee",
+  "rig": "01a17469-8f92-705d-92c7-0b1fef54073f"
+ },
+ "hitman": {
+  "gen": "01a17463-b953-720a-8bc4-d93f1c088831",
+  "rig": "01a17469-99d6-7747-9bae-f92e1252ffa1"
+ },
+ "props": {
+  "stool": {
+   "gen": "01a17472-6491-75c2-bf7b-f42e878f6ecd"
   },
-  "bartender": {
-    "gen": "01a17460-3f1f-70c9-ae77-b1dc20bb775b",
-    "rig": "01a17463-bfc7-7119-84ca-30deb42e9fcd"
+  "booth": {
+   "gen": "01a17472-68f5-7175-bb89-8bf36d4183d3"
   },
-  "sal": {
-    "gen": "01a17460-44e4-7203-9751-f3e9d04390f4",
-    "rig": "01a17463-ca7b-75be-ad4a-7b5d57cb02bc"
+  "tv": {
+   "gen": "01a17472-6ce7-700b-bbc7-37efc742adb6"
   },
-  "jock": {
-    "gen": "01a17463-99eb-7740-b579-c8532da92ea1",
-    "rig": "01a17469-5c1a-7216-b925-7b556379467c"
+  "terminal": {
+   "gen": "01a17472-7149-71af-8a85-af2acf86d66b"
   },
-  "knowItAll": {
-    "gen": "01a17463-9fb6-758a-ae9c-fbd83284a828",
-    "rig": "01a17469-65dc-725a-8bc1-725a771c18e1"
+  "pool": {
+   "gen": "01a174bc-d278-75ad-a630-04d1ce70287f",
+   "ref": "image-to-image 01a174bc-7c94-760a-9718-d4ea915b41ea",
+   "note": "single clean 3/4 view -> image-to-3d; first multi-view attempt 01a17476-228b-739d-92e5-876f7b6b32b8 was rejected"
   },
-  "gambler": {
-    "gen": "01a17463-a5ba-700c-b790-33a92bf7316c",
-    "rig": "01a17469-7051-7659-a261-19a0551876d3"
+  "pin": {
+   "gen": "01a1748b-7ecd-701f-8c94-fff51f255685"
   },
-  "chill": {
-    "gen": "01a17463-aaec-73f6-8527-a8fa0ba9bd61",
-    "rig": "01a17469-7a1c-7786-a613-960f8f9fe3fd"
+  "ball": {
+   "gen": "01a1748b-8459-720a-bf09-7df8714b92af"
   },
-  "dieHard": {
-    "gen": "01a17463-b019-76dc-8e40-e7dd09a5774e",
-    "rig": "01a17469-8425-748e-b3c4-234927f4319e"
+  "return": {
+   "gen": "01a1748b-8899-76f0-a9ff-8b3742c703dd"
   },
-  "rookie": {
-    "gen": "01a17463-b4e3-7775-8855-06bf9a5f2eee",
-    "rig": "01a17469-8f92-705d-92c7-0b1fef54073f"
+  "bag": {
+   "gen": "01a1748b-8cb6-77ed-a296-82ab91af506a"
   },
-  "hitman": {
-    "gen": "01a17463-b953-720a-8bc4-d93f1c088831",
-    "rig": "01a17469-99d6-7747-9bae-f92e1252ffa1"
+  "lamp": {
+   "gen": "01a1748b-90f4-7470-bfc8-52fe7242c8fb"
   },
-  "props": {
-    "stool": {
-      "gen": "01a17472-6491-75c2-bf7b-f42e878f6ecd"
-    },
-    "booth": {
-      "gen": "01a17472-68f5-7175-bb89-8bf36d4183d3"
-    },
-    "tv": {
-      "gen": "01a17472-6ce7-700b-bbc7-37efc742adb6"
-    },
-    "terminal": {
-      "gen": "01a17472-7149-71af-8a85-af2acf86d66b"
-    },
-    "pool": {
-      "gen": "01a174bc-d278-75ad-a630-04d1ce70287f",
-      "ref": "image-to-image 01a174bc-7c94-760a-9718-d4ea915b41ea",
-      "note": "single clean 3/4 view -> image-to-3d; first multi-view attempt 01a17476-228b-739d-92e5-876f7b6b32b8 was rejected"
-    },
-    "pin": {
-      "gen": "01a1748b-7ecd-701f-8c94-fff51f255685"
-    },
-    "ball": {
-      "gen": "01a1748b-8459-720a-bf09-7df8714b92af"
-    },
-    "return": {
-      "gen": "01a1748b-8899-76f0-a9ff-8b3742c703dd"
-    },
-    "bag": {
-      "gen": "01a1748b-8cb6-77ed-a296-82ab91af506a"
-    },
-    "lamp": {
-      "gen": "01a1748b-90f4-7470-bfc8-52fe7242c8fb"
-    },
-    "cornboard": {
-      "gen": "01a174c4-e4ae-77ce-9627-092e8109c288",
-      "ref": "image-to-image 01a174c4-908b-744a-acfc-9004bd7465e3",
-      "note": "hole-less board; hole is the procedural disc at the physics position"
-    },
-    "counter": {
-      "gen": "01a174e7-7980-7104-8c5b-751fa2ea5f01",
-      "ref": "01a174e6-acc4-757b-9fd5-195439758a4d",
-      "note": "first attempt too low/flat; regenerated as a taller module",
-      "gen2": "01a174eb-6ed4-749c-b784-98026bcd7117",
-      "ref2": "01a174eb-1711-71ab-a0bc-85d5b6c43928"
-    },
-    "backbar": {
-      "gen": "01a174e7-7cff-7376-aadb-beb7ad147421",
-      "ref": "01a174e6-af08-72ff-bea6-0e9d4d37442c"
-    },
-    "jerseyframe": {
-      "gen": "01a174e7-80b7-74e8-96ca-a687a09262c6",
-      "ref": "01a174e6-b167-74b1-b196-1f9374298d46"
-    },
-    "jukebox": {
-      "gen": "01a174e7-8382-70d1-83e5-c04a0f13924c",
-      "ref": "01a174e6-b2c6-75a3-a8e0-3c7dfb99a8fe"
-    },
-    "couch": {
-      "gen": "01a174e7-86fd-7684-8eb7-c7078b1b2888",
-      "ref": "01a174e6-b439-70b0-bf51-e093f4423cb4"
-    }
+  "cornboard": {
+   "gen": "01a174c4-e4ae-77ce-9627-092e8109c288",
+   "ref": "image-to-image 01a174c4-908b-744a-acfc-9004bd7465e3",
+   "note": "hole-less board; hole is the procedural disc at the physics position"
+  },
+  "counter": {
+   "gen": "01a174e7-7980-7104-8c5b-751fa2ea5f01",
+   "ref": "01a174e6-acc4-757b-9fd5-195439758a4d",
+   "note": "first attempt too low/flat; regenerated as a taller module",
+   "gen2": "01a174eb-6ed4-749c-b784-98026bcd7117",
+   "ref2": "01a174eb-1711-71ab-a0bc-85d5b6c43928"
+  },
+  "backbar": {
+   "gen": "01a174e7-7cff-7376-aadb-beb7ad147421",
+   "ref": "01a174e6-af08-72ff-bea6-0e9d4d37442c"
+  },
+  "jerseyframe": {
+   "gen": "01a174e7-80b7-74e8-96ca-a687a09262c6",
+   "ref": "01a174e6-b167-74b1-b196-1f9374298d46"
+  },
+  "jukebox": {
+   "gen": "01a174e7-8382-70d1-83e5-c04a0f13924c",
+   "ref": "01a174e6-b2c6-75a3-a8e0-3c7dfb99a8fe"
+  },
+  "couch": {
+   "gen": "01a174e7-86fd-7684-8eb7-c7078b1b2888",
+   "ref": "01a174e6-b439-70b0-bf51-e093f4423cb4"
   }
+ },
+ "owner": {
+  "gen": "01a17f23-717a-73aa-9988-c19456e77bbb",
+  "note": "bar owner (save-the-bar story), single front image-to-3d, meshy-7.1 t-pose 9000 tris",
+  "rig": "01a17f25-d077-734e-bf15-29ab65e715b1"
+ },
+ "bum": {
+  "gen": "01a17f23-6e87-739c-aff4-4c05c9f465fc",
+  "note": "the bum who robs you outside / in the bar",
+  "rig": "01a17f25-c30e-7426-94ec-45de38ed66e7"
+ },
+ "exec": {
+  "gen": "01a17f23-746c-7462-b182-73556dbfe31c",
+  "note": "the corporate developer trying to tear the bar down",
+  "rig": "01a17f25-f417-7726-a1e1-edb1c64d0631"
+ }
 }

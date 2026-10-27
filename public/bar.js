@@ -6,6 +6,7 @@ import { buildItem, applyCosmetics } from './cosmetics.js';
 import { createSeatedLife } from './seated.js';
 import { makeDizzy, headPos } from './dizzy.js';
 import { OUT } from './outside.js';
+import { STORY } from './story.js';
 
 export const ROOM = { x: 12, z: 8, h: 5 };
 
@@ -194,7 +195,12 @@ export function buildBar({ scene, BK, tv }) {
   };
   const tag = (txt, x, y, z, col = '#ffd9a0') => { const l = TX.label(txt, col, 0.8); l.position.set(x, y, z); scene.add(l); };
   // Uncle Sal in his booth
-  spawn(makePreset('sal'), 9.5, -7.0, Math.PI, 'idle', ['Everything has a price, kid.', 'Need a little... help?', 'I know a guy. I always know a guy.', 'Pay me back and we stay friends.'], 'Uncle Sal', 0.52);
+  spawn(makePreset('sal'), 9.5, -7.0, Math.PI, 'idle', ['Short on cash? I\'m the bank of last resort.', 'Need a little... help?', 'I lend. I always collect.', 'Pay me back and we stay friends.'], 'Uncle Sal', 0.52);
+  // the owner, at the far end of the bar, and the developer (only ever on screen in the story's cutscenes: cine.js walks him around)
+  const owner = spawn(makePreset('owner'), 11.15, -0.6, Math.PI / 2, 'idle', [`${STORY.owner.since} I opened this place. I\'m not handing it to a guy in loafers.`, 'Every dollar helps, kid.', `${STORY.dev.name} has never watched a full game in his life.`, 'Bet smart. Or bet big. Just win.', 'First round of the comeback is on me.'], STORY.owner.name);
+  tag(STORY.owner.name + ' · owner', 11.1, 2.55, -0.6);
+  const dev = spawn(makePreset('exec'), OUT.door.x, ROOM.z + 2.5, Math.PI, 'idle', ['Love what you\'ve done with the place. Shame about the wrecking ball.', 'Tick tock.'], STORY.dev.name);
+  dev.P.group.visible = false; dev.P.group.userData.zone = 'all'; dev.cine = true; // walks between the street and the bar: always on zones.js layer 0
   // bartender behind the counter, polishing
   spawn(makePreset('bartender'), 11.15, 2.5, Math.PI / 2, 'polish', ['What\'ll it be?', 'No credit. Don\'t ask.', 'You look thirsty.', 'Tip your bartender.'], 'Bartender');
   tag('Bartender', 11.1, 2.55, 2.5);
@@ -472,6 +478,7 @@ export function buildBar({ scene, BK, tv }) {
     const ph = BK.S && BK.S.paper ? BK.S.paper.head : ''; if (ph !== paperHead) { paperHead = ph; drawPaper(ph); }
     let talking = npcs.filter((n) => n.bubble && n.bubble.sprite.visible).length;
     for (const n of npcs) {
+      if (n.cine) continue; // the developer: puppeted by cine.js (hidden off stage)
       if (n === gina && kissing) { kissTick(n, t, dt); continue; }
       const koNow = n.ko && n.ko > BK.now();
       if (n.dizzy) n.dizzy.update(dt, t, headPos(n.P), !!koNow); // stars orbit the head while out cold, then shrink away
@@ -516,5 +523,5 @@ export function buildBar({ scene, BK, tv }) {
   const say = (who, text, secs = 6) => { const n = npcs.find((x) => x.who === who) || npcs.find((x) => x.name === who); if (!n || !n.bubble) return null; if (n.bubble.sprite.visible && !n.forced) n.bubble.set(''); n.forced = { text, secs, shown: false }; return n; };
   // the street door opens for anyone walking up to it (null: a cutscene is driving it)
   const frontDoor = (dt, near) => { const d = doors.front; if (!d || near === null) return; const tgt = (d.userData.base ?? (d.userData.base = d.rotation.y)) + (near ? 1.35 : 0); d.rotation.y += (tgt - d.rotation.y) * Math.min(1, dt * 6); };
-  return { stations, obstacles, npcs, seats, update, wanderPos, life, bottleSpots, doors, say, backroom, kiss, ginaHead, spawn, frontDoor };
+  return { owner, dev, stations, obstacles, npcs, seats, update, wanderPos, life, bottleSpots, doors, say, backroom, kiss, ginaHead, spawn, frontDoor };
 }

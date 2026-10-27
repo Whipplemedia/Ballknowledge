@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import { animate } from './people.js';
+import { STORY } from './story.js';
 
-// Cutscenes for Sal's muscle, timed by the server (state.cine = {kind, start, until, names?, amount?, victims?}) so every
+// Cutscenes for the save-the-bar story (the developer's visits, the verdict) and Sal's muscle, timed by the server (state.cine = {kind, start, until, names?, amount?, victims?}) so every
 // player sees the same beats. Returns true while it owns the camera; world.js then skips input and its own camera.
 // Shots are short, letterboxed, with a caption; doors swing on cue.
 const FRONT_IN = new THREE.Vector3(5, 1.3, 7.9), BACK_IN = new THREE.Vector3(11.7, 1.2, -6.6);
 // the kill: dragged out (0 - DRAG s), then the restroom: Sal, a bat, lights out (BR = seconds after the cut)
 const DRAG = 6.5, BR = { talk: 2.3, wind: 3.5, hit: 3.75, black: 4.4 };
-export function createCine({ camera, BK, doors, goons, audio, backroom }) {
+export function createCine({ camera, BK, doors, goons, audio, backroom, owner, dev }) {
   const top = document.createElement('div'), bot = document.createElement('div'), cap = document.createElement('div'), fade = document.createElement('div'), flash = document.createElement('div');
   top.className = 'lbox top'; bot.className = 'lbox bot'; cap.id = 'cinecap'; fade.id = 'cinefade'; flash.id = 'cineflash'; document.body.append(top, bot, cap, fade, flash);
   const lerp = (a, b, k) => a + (b - a) * Math.max(0, Math.min(1, k)), ease = (k) => { k = Math.max(0, Math.min(1, k)); return k * k * (3 - 2 * k); };
@@ -45,13 +46,59 @@ export function createCine({ camera, BK, doors, goons, audio, backroom }) {
     else if (u > BR.black + 0.3) caption('LIGHTS OUT.', ''); else caption('', '');
   }
 
+  // ---- the developer (bar.dev, hidden off stage) and the owner (bar.owner, behind the bar) ----
+  const D = STORY.dev, O = STORY.owner, AT_BAR = { x: 8.95, z: -0.6 }, LOU = { x: 11.15, z: -0.6 };
+  const place = (n, x, z, ry, mode, t, sp = 0) => { if (!n) return; const g = n.P.group; g.visible = true; g.position.set(x, 0, z); g.rotation.y = ry; n.P.moveSpeed = sp; animate(n.P, mode, t, Math.min(1.4, sp / 3)); };
+  const hideDev = () => { if (dev) dev.P.group.visible = false; };
+  const walkIn = (t, t0, t1, from, to) => { const k = Math.max(0, Math.min(1, (t - t0) / (t1 - t0))); return { x: lerp(from.x, to.x, k), z: lerp(from.z, to.z, k), moving: k > 0 && k < 1, sp: Math.hypot(to.x - from.x, to.z - from.z) / (t1 - t0) }; };
+  const across = () => shot(10.35, 1.68, 0.75, AT_BAR.x, 1.55, AT_BAR.z); // from behind the bar, across the counter at his face
+  const fundLine = (c) => `The fund: ${money(c.banked)} of ${money(c.buyout)}`;
+  function storyShot(c, t, dt) {
+    const n = c.night || 1, last = c.kind === 'opening' && n > 1 && n === c.nights;
+    if (c.kind === 'opening') {
+      // 1: he walks in the front door; 2: over the owner's shoulder at him; 3: the owner; 4: the crew, and tonight's number
+      door(doors.front, t > 0.3 && t < 3.4, dt);
+      if (t > 0.3) cue('door', () => audio.sfx('knock', { pos: { x: 5, y: 1.2, z: 7.8 } }));
+      if (t < 3.2) { const w = walkIn(t, 0.4, 3.2, { x: 5, z: 9.6 }, { x: 5.0, z: 6.6 }); place(dev, w.x, w.z, 0, w.moving ? 'walk' : 'idle', t, w.moving ? w.sp * 0.8 : 0); shot(4.7, 1.55, 4.55, w.x, 1.45, w.z);
+        caption(t > 1.0 ? D.full.toUpperCase() : '', t > 1.0 ? `${D.company}. Owns the lease. Has never finished watching a game.` : ''); }
+      else if (t < 6.4) { place(dev, AT_BAR.x, AT_BAR.z, -Math.PI / 2, 'point', t); across();
+        caption(D.name.toUpperCase(), n === 1 ? `"${O.name}, buddy. ${money(c.buyout)} and I walk. Otherwise this place becomes ${STORY.plan.name}."` : last ? `"Last night, ${O.name}. Tomorrow it's ${STORY.plan.name}."` : `"Still open? Cute. ${money(c.buyout - c.banked)} to go, ${O.name}."`); }
+      else if (t < 9.0) { place(dev, AT_BAR.x, AT_BAR.z, -Math.PI / 2, 'idle', t); shot(9.7, 1.6, -0.35, LOU.x, 1.55, LOU.z);
+        caption(O.name.toUpperCase(), n === 1 ? `"Since ${O.since}, kids. I need you. Bet like the bar depends on it - because it does."` : `"We've got ${money(c.banked)} in the jar. Tonight we need ${money(c.goal)}."`); }
+      else { hideDev(); const k = (t - 9.0) / 2.5; shot(8.6 - k * 0.8, 2.5 + k * 0.3, -4.6 + k * 0.6, 0, 1.2, 3);
+        caption(`SAVE ${STORY.bar.toUpperCase()}`, `Tonight's goal: ${money(c.goal)} in winnings · ${fundLine(c)}`); }
+      return;
+    }
+    if (c.kind === 'checkIn') { // he pops in the front door, checks the books on his phone, and leaves
+      door(doors.front, t < 1.2 || t > 5.8, dt); if (t > 0.1) cue('door', () => audio.sfx('knock', { pos: { x: 5, y: 1.2, z: 7.8 } }));
+      const w = walkIn(t, 0, 1.4, { x: 5, z: 8.9 }, { x: 5, z: 6.3 }); place(dev, w.x, w.z, 0, w.moving ? 'walk' : c.met ? 'idle' : 'point', t, w.moving ? w.sp : 0);
+      shot(5.35, 1.66, 3.7, w.x, 1.55, w.z);
+      if (t > 1.2) cue('vo', () => audio.sfx(c.met ? 'groan' : 'laugh', { pos: { x: 5, y: 1.6, z: 6.3 } }));
+      if (c.met) caption(`${D.name.toUpperCase()} CHECKS THE BOOKS`, `"+${money(c.gained)} already? ...Beginner's luck." On pace for tonight.`);
+      else caption('PERMIT FEE', `"${c.gained >= 0 ? '+' : ''}${money(c.gained)}? You're behind. That'll be a permit fee: +${money(c.fee)}." Buyout: ${money(c.buyout)}`);
+      return;
+    }
+    // the verdict, after the last night: the fund against the buyout, then the bar's fate
+    if (t < 4) { place(dev, AT_BAR.x, AT_BAR.z, -Math.PI / 2, 'idle', t); shot(7.0, 2.2, 2.2, 10, 1.4, -0.6); caption('CLOSING TIME', fundLine(c) + '.'); return; }
+    if (c.saved) {
+      if (t < 8) { place(dev, AT_BAR.x, AT_BAR.z, -Math.PI / 2, 'stagger', t); across(); caption(`"THIS ISN'T OVER."`, `${D.full} takes the check and storms off.`); cue('boo', () => audio.sfx('boo', { v: 0.7 })); return; }
+      const w = walkIn(t, 8, 11, AT_BAR, { x: 5, z: 9 }); place(dev, w.x, w.z, Math.atan2(-(5 - AT_BAR.x), -(9 - AT_BAR.z)), 'walk', t, w.sp); door(doors.front, true, dt);
+      shot(2.5, 2.2, -2.5, w.x, 1.2, w.z); cue('cheer', () => { audio.sfx('cheer', { v: 1 }); audio.sfx('horn', { delay: 0.2 }); });
+      caption('SAVED!', `${STORY.bar} stays open. ${O.name} pours a round for the house.`); return;
+    }
+    if (t < 8) { place(dev, AT_BAR.x, AT_BAR.z, -Math.PI / 2, 'cheer', t); across(); caption(`"PLEASURE DOING BUSINESS."`, `${STORY.bar} is going to be ${STORY.plan.name}.`); return; }
+    hideDev(); const sh = t > 9 ? (Math.random() - 0.5) * 0.05 * Math.min(1, t - 9) : 0; shot(0, 2.4 + sh, 4, 0 + sh, 2, -7);
+    cue('wreck', () => { audio.sfx('pinCrash', { v: 1.2 }); audio.sfx('glassBreak', { delay: 0.2 }); audio.sfx('bonk', { delay: 0.5, v: 1.3 }); });
+    fade.style.opacity = Math.min(1, (t - 8.4) / 2.2); caption('SOLD.', `Coming soon: ${STORY.plan.name} - ${STORY.plan.pitch}.`);
+  }
+
   return {
     // me: the local player's id; returns 'camera' (cutscene owns the camera), or null
     update(dt, myId) {
       const c = BK.S && BK.S.cine, now = BK.now();
       const on = !!(c && now < c.until + 200);
       document.body.classList.toggle('cine', on);
-      if (!on) { if (shown) { shown = null; cues = {}; caption(''); fade.style.opacity = 0; flash.style.opacity = 0; if (backroom) backroom.show(false); } return null; } // outside a cutscene, both doors open for whoever walks up to them (bar.js)
+      if (!on) { if (shown) { shown = null; cues = {}; caption(''); fade.style.opacity = 0; flash.style.opacity = 0; if (backroom) backroom.show(false); hideDev(); } return null; } // outside a cutscene, both doors open for whoever walks up to them (bar.js)
       if (shown !== c.start) { shown = c.start; cues = {}; }
       const t = (now - c.start) / 1000, L = lead();
       fade.style.opacity = 0;
@@ -67,23 +114,11 @@ export function createCine({ camera, BK, doors, goons, audio, backroom }) {
           shot(p.x + fx * d + 0.25, 1.62, p.z + fz * d, p.x, 1.62, p.z);
           if (hunt) caption('SAL SENDS HIS REGARDS', `${(c.names || []).join(', ')} - ${money(c.amount)}. Tonight.`);
           else if (c.training) caption('A FRIENDLY REMINDER', `Sal wants ${money(c.amount)} - or show him what a bottle can do. Grab one and click to throw.`);
-          else caption("SAL'S COLLECTORS", `The crew came up ${money(c.amount)} short. Pay up - or throw them out.`);
+          else caption("SAL'S COLLECTORS", `${(c.names || []).join(', ') || 'Somebody'} owe${(c.names || []).length > 1 ? '' : 's'} Sal. ${money(c.amount)} installment - pay it, or throw them out.`);
         }
         return 'camera';
       }
-      if (c.kind === 'opening') { // the night opens on Sal in his booth: who he is, what the crew owes, what tonight's number is
-        if (t < 6.4) { const k = Math.min(1, t / 6.4); shot(9.5 + Math.sin(t * 0.3) * 0.15, 1.42, -4.9 - k * 0.55, 9.5, 1.36, -7.0); }
-        else { const k = (t - 6.4) / 3.1; shot(8.6 - k * 0.8, 2.5 + k * 0.3, -4.6 + k * 0.6, 0, 1.2, 3); }
-        const n = c.night || 1, last = n > 1 && n === c.nights; /* Sal's pitch changes night to night */
-        if (t < 3.2) caption(n === 1 ? 'UNCLE SAL' : last ? `LAST NIGHT` : `NIGHT ${n} OF ${c.nights}`, n === 1 ? `You each owe me ${money(c.tab)}. From last time. You remember last time.` : last ? 'Clear my books tonight and you walk out of here free.' : `Back again. The marker's ${money(c.tab)} now - plus what you still owe.`);
-        else if (t < 6.4) caption('TONIGHT YOU WORK IT OFF', `${money(c.quota)} by game ${c.at}. Then more. Then more.`);
-        else caption('AND REMEMBER', last ? 'Come up short... and you don\'t walk out.' : 'I always collect.');
-        if (t > 0.2) cue('sting', () => audio.sfx('knock', { pos: { x: 9.5, y: 1.2, z: -6.6 } }));
-        if (t > 0.4) cue('vo1', () => BK.vo && BK.vo.play(n === 1 ? 'sal_open1a' : last ? 'sal_open3a' : 'sal_open2a'));
-        if (t > 3.3) cue('vo2', () => BK.vo && BK.vo.play('sal_open_b'));
-        if (t > 6.5) cue('vo3', () => BK.vo && BK.vo.play(last ? 'sal_open3c' : 'sal_open1c'));
-        return 'camera';
-      }
+      if (c.kind === 'opening' || c.kind === 'checkIn' || c.kind === 'verdict') { storyShot(c, t, dt); return 'camera'; }
       if (c.kind === 'huntBeaten' || c.kind === 'shakeBeaten') {
         door(doors.front, t > 2.2, dt); if (t > 2.2) cue('door', () => audio.sfx('knock'));
         shot(5, 2.2, 1.6, 5, 1.0, 6.2); caption(t > 0.6 ? 'AND STAY OUT!' : '', t > 0.6 ? "Sal's men limp back out the front door." : '');
