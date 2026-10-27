@@ -1,13 +1,16 @@
-// Dusty (public/story.json "bum"): a pickpocket who shuffles up to whoever looks easiest to rob, outside on the street, in the
-// gas station, or in the bar when Sal's collectors aren't around. Server-authoritative like goons.js: he walks at the target
-// (the bar's nav grid indoors, straight lines outside), lifts a chunk of cash if he gets a hand in your pocket, and runs off
-// with it. Two hits (bottles, or punches up close) send him packing; hit him while he's carrying your money and he drops it.
-// Streamed as {type:'bum', b} at 10 Hz (b = null when he's gone).
+// Dusty (public/story.json "bum"): he lives on the street. All night he shuffles between his spots outside (the dumpster by the
+// bar, the sidewalks, the gas-station lot); every so often he picks a mark and goes for their wallet - outside, in the gas station,
+// or in the bar when Sal's collectors aren't around. Server-authoritative like goons.js: he walks at the target (the bar's nav grid
+// indoors, straight lines outside), lifts a chunk of cash if he gets a hand in your pocket, and runs off with it. Two hits (bottles,
+// or punches up close) send him packing; hit him while he's carrying your money and he drops it. Afterwards he goes back to loitering.
+// Streamed as {type:'bum', b} at 10 Hz (b = null when there's no night on).
 const { nav } = require('./goons');
 
 const STEP_MS = 100;
 const T = { grab: 2400, stun: 1100, give: 45000, chase: 30000 };
-const SPEED = { walk: 1.9, flee: 3.4 }; // you walk 3.8: you can always just leave
+const SPEED = { walk: 1.9, flee: 3.4, loiter: 0.9 }; // you walk 3.8: you can always just leave
+// where he hangs out (all outside, on the street side the players walk): by the dumpster, the sidewalks, under the L, the gas-station lot
+const SPOTS = [[13.8, 9.9], [9.2, 10.6], [-2.5, 10.2], [-11, 10.8], [20, 11.2], [3, 23.4], [16.5, 24.6], [24, 33.6], [31, 28]];
 const ROOM = { x: 12, z: 8 }, STORE = { x0: 18, x1: 30, z0: 36, z1: 48, door: 24.07 }; // public/bar.js ROOM, public/outside.js OUT.casino
 const inBar = (x, z) => Math.abs(x) < ROOM.x && z < ROOM.z + 0.2 && z > -ROOM.z;
 const inStore = (x, z) => x > STORE.x0 && x < STORE.x1 && z > STORE.z0 - 0.2 && z < STORE.z1;
@@ -43,10 +46,18 @@ module.exports = function createBum({ feed, toast, broadcast, plist, money, send
     b.x += (dx / l) * s; b.z += (dz / l) * s; b.ry = Math.atan2(-dx, -dz); return l < 0.15;
   }
 
-  function spawn(room, target, training) {
-    const now = Date.now(), e = entry(target);
-    room.bum = { id: 'bum', x: e.x, z: e.z, ry: 0, out: e, target: target.id, state: 'walk', hp: training ? 2 : 2, maxHp: 2, until: 0, loot: 0, hit: 0, born: now, training: !!training, moving: false };
+  const farSpot = (x, z) => { const s = [...SPOTS].sort((a, b) => Math.hypot(b[0] - x, b[1] - z) - Math.hypot(a[0] - x, a[1] - z))[Math.floor(Math.random() * 3)]; return { x: s[0], z: s[1] }; };
+  // the night starts with him out on the street
+  function ensure(room) {
+    if (room.bum) return; const s = SPOTS[Math.floor(Math.random() * SPOTS.length)], now = Date.now();
+    room.bum = { id: 'bum', x: s[0], z: s[1], ry: 0, out: { x: s[0], z: s[1] }, target: null, state: 'loiter', wp: null, pause: now + 3000, hp: 2, maxHp: 2, until: 0, loot: 0, hit: 0, born: now, training: false, moving: false };
     clearInterval(room.bumTimer); room.bumTimer = setInterval(() => step(room), STEP_MS);
+  }
+  const busy = (room) => !!(room.bum && room.bum.state !== 'loiter');
+  // he picks his mark and heads for them from wherever he is (if he's not around yet, he comes up the street / across the lot / in the door)
+  function spawn(room, target, training) {
+    const now = Date.now(); if (!room.bum) { const e = entry(target); ensure(room); Object.assign(room.bum, { x: e.x, z: e.z }); }
+    Object.assign(room.bum, { target: target.id, state: 'walk', hp: 2, until: 0, loot: 0, born: now, training: !!training, out: farSpot(target.x || 0, target.z || 0) });
     feed(room, `🥫 ${name} is shuffling toward ${target.name}${training ? '' : '. Keep a hand on your wallet - or a bottle.'}`);
     toast(target, training ? `${name} the bum has his eye on your wallet! Grab a bottle (E at any table) and click to throw - or punch him twice.` : `👀 ${name} is coming for your wallet! Bottle him, punch him (click, up close) or keep moving.`, 'mob');
     broadcast(room);
@@ -65,6 +76,7 @@ module.exports = function createBum({ feed, toast, broadcast, plist, money, send
   // a bottle (stun) or a punch (in reach) on him
   function hit(room, p, bottle) {
     const b = room.bum, now = Date.now(); if (!b || b.state === 'run' || b.state === 'gone') return false;
+    if (b.state === 'loiter') { b.hit = now; b.hp -= 1; if (b.hp <= 0) { b.state = 'run'; b.out = farSpot(p.x, p.z); b.born = now; feed(room, `🍾 ${p.name} chased ${name} off his corner. He'll be back.`); } else toast(p, `${name}: "Hey! I'm just standing here!"`, 'info'); broadcast(room); return true; }
     if (!bottle && dist(p, b) > 2.4) return false;
     b.hp -= 1; b.hit = now; // a bottle from anywhere, or a shove up close: two of either and he's gone
     if (b.hp <= 0) {
@@ -101,12 +113,20 @@ module.exports = function createBum({ feed, toast, broadcast, plist, money, send
       if (b.state === 'flee' && b.until && now < b.until) { /* stunned for a beat */ }
       else if (walk(room, b, b.out.x, b.out.z, b.state === 'flee' ? SPEED.flee : SPEED.flee * 1.1, dt) || dist(b, b.out) < 0.3 || now - b.born > T.give) {
         if (b.loot > 0) feed(room, `🥫 ${name} got away with ${money(b.loot)}.`);
-        stop(room); broadcast(room); return;
+        if (inBar(b.x, b.z) || inStore(b.x, b.z)) { const s = farSpot(b.x, b.z); b.x = s.x; b.z = s.z; } // never left loitering indoors
+        Object.assign(b, { state: 'loiter', target: null, loot: 0, hp: 2, training: false, wp: null, pause: now + 4000 }); broadcast(room);
+      }
+    } else if (b.state === 'loiter') { // shuffle between his spots, stopping for a while at each
+      if (now >= b.pause) {
+        if (!b.wp) { const s = SPOTS[Math.floor(Math.random() * SPOTS.length)]; b.wp = { x: s[0] + (Math.random() - 0.5), z: s[1] + (Math.random() - 0.5) }; }
+        if (walk(room, b, b.wp.x, b.wp.z, SPEED.loiter, dt)) { b.wp = null; b.pause = now + 4000 + Math.random() * 9000; }
       }
     }
     const msg = { type: 'bum', b: [+b.x.toFixed(2), +b.z.toFixed(2), +b.ry.toFixed(2), b.state, b.hp, b.maxHp, b.target, b.moving ? 1 : 0, now - b.hit < 300 ? 1 : 0, b.loot] };
     for (const q of room.players.values()) send(q, msg);
   }
 
-  return { spawn, resume, stop, hit, pickTarget };
+  // Sal's men are coming in: he makes himself scarce (back to his corner)
+  function scram(room) { const b = room.bum; if (b && b.state !== 'loiter' && b.state !== 'run' && b.state !== 'flee') { b.state = 'run'; b.born = Date.now(); b.out = farSpot(b.x, b.z); } }
+  return { spawn, ensure, busy, scram, resume, stop, hit, pickTarget };
 };

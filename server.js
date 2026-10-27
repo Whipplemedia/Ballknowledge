@@ -259,7 +259,7 @@ function startGame(room) {
   room.fund = fund; room.crewStart = start; const nightsLeft = camp ? camp.nights - night + 1 : 1;
   room.goal = Math.max(0, Math.ceil((fund.buyout - fund.banked) / nightsLeft / 50) * 50);
   room.quota = [...CHECK_AT.map((f, i) => ({ kind: 'mid', idx: Math.max(i, Math.round(nE * f) - 1), frac: f })), { kind: 'final', idx: nE - 1, frac: 1 }].map((q) => ({ ...q, target: Math.round(start + room.goal * q.frac), status: 'pending', crew: 0 }));
-  room.verdictAt = 0; room.deposited = false; room.deposit = 0; room.nextBum = now + (process.env.BK_BUM_SOON ? 20000 : dur(130000 + rnd(60000))); /* BK_BUM_SOON: dev/testing only */ if (room.bum) bum.stop(room); room.pendingShake = 0;
+  room.verdictAt = 0; room.deposited = false; room.deposit = 0; room.nextBum = now + (process.env.BK_BUM_SOON ? 20000 : dur(55000 + rnd(35000))); /* BK_BUM_SOON: dev/testing only */ bum.stop(room); bum.ensure(room); // Dusty is out on the street all night room.pendingShake = 0;
   room.shake = null; room.barEvent = null; room.nextBarEvent = now + dur(55000 + rnd(30000)); room.lastBarKind = null;
   room.altered = false; room.finalWinner = null; room.phase = 'play'; room.paper = paperFor(room);
   feed(room, season.fake ? `${sport.emoji} Welcome to the ${season.league}. None of these teams exist and nothing is written yet - every result is rolled live from the odds.` : `${sport.emoji} A season has been assigned. Nobody will tell you which one. Place your bets before the clock runs out.`);
@@ -296,10 +296,11 @@ function tick(room) {
     if (ev.status === 'airing' && now >= ev.resolveAt) { finalizeEvent(room, ev); changed = true; }
   }
   if (room.shake && now >= room.shake.until && (!room.goons || room.goons.phase === 'fight')) { endShake(room, false); changed = true; }
-  if (room.guided && !room.trained && !room.shake && !room.goons && !room.bum && room.events.some((e) => e.status === 'airing')) { startTraining(room); changed = true; }
-  if (room.pendingShake && now >= room.pendingShake && !room.goons && !(room.cine && now < room.cine.until)) { room.pendingShake = 0; if (room.bum) bum.stop(room); startShake(room); changed = true; }
-  if (!room.bum && !room.shake && !room.goons && !(room.cine && now < room.cine.until) && now >= room.nextBum) { // chaos: the bum goes for somebody's wallet
-    room.nextBum = now + dur(120000 + rnd(90000)); const t = bum.pickTarget(room, false); if (t) { bum.spawn(room, t, false); changed = true; } }
+  if (room.guided && !room.trained && !room.shake && !room.goons && !bum.busy(room) && room.events.some((e) => e.status === 'airing')) { startTraining(room); changed = true; }
+  if (room.pendingShake && now >= room.pendingShake && !room.goons && !(room.cine && now < room.cine.until)) { room.pendingShake = 0; bum.scram(room); startShake(room); changed = true; }
+  if (!room.bum) bum.ensure(room); // (after a restart)
+  if (!bum.busy(room) && !room.shake && !room.goons && !(room.cine && now < room.cine.until) && now >= room.nextBum) { // chaos: the bum goes for somebody's wallet
+    room.nextBum = now + dur(80000 + rnd(60000)); const t = bum.pickTarget(room, false); if (t) { bum.spawn(room, t, false); changed = true; } }
   if (room.drops && room.drops.some((d) => now >= d.until)) { room.drops = room.drops.filter((d) => now < d.until); changed = true; }
   if (room.barEvent && now >= room.barEvent.until) { endBarEvent(room); changed = true; }
   else if (!room.barEvent && !room.shake && !room.goons && now >= room.nextBarEvent) { startBarEvent(room); changed = true; }
@@ -470,7 +471,7 @@ function settle(room) {
   }
   const hunted = plist(room).filter((p) => p.remaining > 0);
   if (!hunted.length) return finish(room);
-  room.phase = 'hunt';
+  room.phase = 'hunt'; bum.scram(room);
   // the way out is bottles: each hitman takes HUNT_HITS clean bottle hits (they dodge, and get back up unless all are down at once)
   const crew = room.players.size, n = crew <= 3 ? 3 : crew <= 5 ? 4 : 5, hits = room.finale ? 4 : 3; /* bigger crews face more hitmen; on the last night each takes one more hit */
   const fightAt = goons.spawn(room, 'hunt', n, n * hits, { names: hunted.map((p) => p.name), amount: Math.round(total), hp: hits });
