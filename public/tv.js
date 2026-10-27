@@ -146,7 +146,7 @@ export function createTV(BK) {
     else fit(g, 'No game open', W / 2, 330, W - 40, '700 44px "Barlow Condensed", system-ui', '#8f9bc7');
     fit(g, 'PRESS E', W / 2, 580, W, '800 32px "Barlow Condensed", system-ui', '#ffc83d'); upd(K);
   }
-  let last = 0;
+  let last = 0, lastBoards = 0;
   return { center: C.t, left: L.t, right: R.t, kiosk: K.t, amb: AMB.map((o) => o.t),
     blackout: false,
     draw(S, ts) {
@@ -159,5 +159,6 @@ export function createTV(BK) {
         { const l = L; bg(l.g, l.c.width, l.c.height, '#0e2a22', '#04100c'); fit(l.g, 'TONIGHT', l.c.width / 2, 120, l.c.width, '400 56px Bungee, system-ui', '#27e08a'); fit(l.g, 'A mystery season', l.c.width / 2, 200, l.c.width - 30, '700 34px "Barlow Condensed", system-ui', '#ffc83d'); fit(l.g, 'Real or made-up', l.c.width / 2, 250, l.c.width - 30, '700 30px "Barlow Condensed", system-ui', '#e8ecff'); upd(l); }
         { const r = R; bg(r.g, r.c.width, r.c.height, '#1a1030', '#07040f'); fit(r.g, 'RESULTS', r.c.width / 2, 40, r.c.width, '400 34px Bungee, system-ui', '#ff60e0'); fit(r.g, 'No games final yet', r.c.width / 2, r.c.height / 2, r.c.width - 40, '700 26px "Barlow Condensed", system-ui', '#566'); upd(r); }
         return;
-      } if (ts - last < 190) return; last = ts; const now = BK.now(); center(S, now, ts); ambient(S, now, ts); left(S, now); right(S, now); kiosk(S, now); } };
+      } if (ts - last < 190) return; last = ts; const now = BK.now(); center(S, now, ts); ambient(S, now, ts);
+      if (ts - lastBoards > 950) { lastBoards = ts; left(S, now); right(S, now); kiosk(S, now); } } }; // the text boards change once a second at most: no need to re-upload them 5x a second
 }

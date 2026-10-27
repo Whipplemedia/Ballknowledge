@@ -491,6 +491,7 @@ export function buildBar({ scene, BK, tv }) {
         if (mv) { mode = 'walk'; n.P.moveSpeed = 1.2; }
       }
       if (n.throwT && t < n.throwT && !n.life) mode = 'point'; // winding up to throw a bottle at someone
+      if (n.offscreen) continue; // in a zone the camera can't see into (world.js / zones.js): no animation work
       if (n.life) { life.tick(n.life, t, dt, { me, cam: { x: me.x, y: me.sit ? me.sit.sit + 0.76 : 1.65, z: me.z }, npcs }); animate(n.P, 'seated', t); life.place(n.life); }
       else { animate(n.P, mode, t); if (n.seated) n.P.legs.forEach((l) => (l.rotation.x = 1.45)); }
       if (n.bubble) { // speech bubbles: only nearby NPCs in front of you, at most two at once, sized by distance so they never fill the screen

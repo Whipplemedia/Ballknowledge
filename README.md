@@ -92,7 +92,18 @@ Second batch (Oct 2026), all game scores and home teams checked against web sear
 - Art is procedural low-poly; no sound or voice chat yet.
 
 ## Performance
-The scene has ~1,400 meshes and ~12 lights. If the first couple of seconds average under ~30 fps the game switches itself to performance mode (no shadows/bloom, 1x resolution). Force it with `?quality=low` or disable the check with `?quality=high`.
+- **Zone culling** (`public/zones.js`). three.js draws everything in the view frustum, walls or not. Static things are tagged at load by where they stand: the bar, the restroom, outside (street + lot) or the store interior, each on its own camera layer. Each frame the camera only sees its own zone plus the zone past a doorway that's in view (the bar's two doors only while they're open, the store's doorway always). Layer 0 is always drawn: players, goons, thrown bottles, the doors, and anything touching a zone's walls. Props that load later are tagged as they arrive (`onPlace` in props.js). Shadows follow the camera layers, the shadow map only refreshes while the bar is visible, the TVs only redraw then, and NPCs in hidden zones skip their animation.
+- **Light pool.** Every lit material evaluates every light in the scene, and the map now has 21 point lights. They are kept as "virtual" lights (blackouts, the party light and cutscenes still drive them), but only 10 real point lights are ever on. Those are fed from the strongest lights near the camera in the visible zones and crossfaded over ~0.3 s. The light count never changes, so walking through a door never recompiles shaders.
+- **Character shadows**: characters only cast shadows within ~9 m of the camera.
+- **Post-processing**: the colour grade runs inside OutputPass (one full-screen pass instead of two), and MSAA drops to 2x on high-DPI screens.
+- **TV boards**: the left/right boards and the sportsbook kiosk redraw once a second; the main and ambient TVs keep ~5 Hz.
+- **Auto graphics** (default). The render resolution follows the frame rate: under ~45 fps it steps down 100 → 85 → 72 → 60%, and with headroom for ~8 s it steps back up (if that brings the stutter back, it stays down for a minute). Still slow at 60%: shadows and bloom go too. Force it with `?quality=low`, or the Esc menu's Low/High; `?quality=high` (and automated browsers) keep full quality.
+- **Measured** (software renderer, 960×540, same views before → after; draw calls / triangles incl. the shadow pass / frame time):
+  - bar, looking toward the front door: 732 / 834k → 306 / 513k, 4.8 s → 2.3 s;
+  - street: 234 / 676k → 95 / 69k, 2.9 s → 1.8 s;
+  - the store's gaming room: 998 / 986k → 581 / 280k, 6.0 s → 3.0 s;
+  - restroom: 627 / 865k → 144 / 84k, 5.3 s → 1.7 s.
+  Software-rendered times are only relative; on a GPU the light pool and the lighter post-processing matter more, since fill rate dominates there.
 
 ## Character motion & NPC wandering
 - `public/models/clips.json` holds Meshy's free walk/run clips (extracted from the rigged Bub GLB) retargeted onto every AI character at runtime via rest-relative deltas. `people.js` blends them over the procedural pose (`P.clipW`); `?clips=0` disables them. Remote players blend walk/run from their measured speed (`P.moveSpeed`).

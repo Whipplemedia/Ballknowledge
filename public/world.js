@@ -3,6 +3,8 @@ import { createGames } from './games.js';
 import { buildBar, ROOM } from './bar.js';
 import { createTV } from './tv.js';
 import { createRoulette } from './roulette.js';
+import { createZones } from './zones.js';
+import { onPlace } from './props.js';
 import { createOutside, OUT, drawSym } from './outside.js';
 import { createFX } from './fx.js';
 import { makePreset, animate } from './people.js';
@@ -212,7 +214,7 @@ function syncBrawlers() {
 // lights: remember base intensities so blackouts can dim everything
 const lightList = []; scene.traverse((o) => { if (o.isLight && !o.userData.noDim) lightList.push([o, o.intensity]); });
 const party = new THREE.PointLight(0xff40d0, 0, 14, 2); party.position.set(0, 3.6, 1); scene.add(party);
-const ray = new THREE.Raycaster();
+const ray = new THREE.Raycaster(); ray.layers.enableAll(); // zones.js puts static things on per-zone layers
 // grabbed by one of Sal's men: every Space press is a wrench; the server counts them and lets you go when you've fought enough
 function struggle() { BK.send({ type: 'struggle' }); me.punch = 0.6; audio.sfx('punch', { v: 0.35 }); BK.struggle = (BK.struggle || 0) + 1; BK.struggleAt = performance.now(); window.render && window.render(); }
 canvas.addEventListener('mousedown', (e) => {
@@ -291,13 +293,25 @@ function netSend(t) {
 }
 
 // ---------- loop ----------
-let prev = performance.now(), spawned = false, t0 = performance.now(), shadowTick = 0;
-// auto performance mode: if the first ~2 seconds average under ~30fps, drop shadows, bloom and resolution
-const perf = { frames: 0, acc: 0, done: !!navigator.webdriver || /[?&]quality=high/.test(location.search), low: /[?&]quality=low/.test(location.search) };
-function setLowQuality() { renderer.setPixelRatio(1); renderer.shadowMap.enabled = false; scene.traverse((o) => { if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => (m.needsUpdate = true)); } }); fx.setBloom(false); resize(); console.log('Ball Knowledge: performance mode on'); }
+let prev = performance.now(), spawned = false, t0 = performance.now(), shadowTick = 0, shadowPick = 0;
+// auto performance ('auto' graphics): the render resolution follows the frame rate. Under ~45fps it steps down (to 60% at most),
+// with headroom for a while it steps back up (and stays put for a minute if that made it stutter again); still slow at the
+// lowest step: shadows and bloom go too (performance mode)
+const perf = { done: !!navigator.webdriver || /[?&]quality=high/.test(location.search), low: /[?&]quality=low/.test(location.search), lvl: 0, n: 0, acc: 0, good: 0, cool: 0, cap: 0, capT: 0, upAt: 0, lowOn: false };
+const RES = [1, 0.85, 0.72, 0.6], basePR = () => Math.min(devicePixelRatio, 1.5);
+function setRes(l) { perf.lvl = l; renderer.setPixelRatio(basePR() * RES[l]); resize(); }
+function autoRes(rawDt, t) {
+  if (perf.done || !(rawDt > 0 && rawDt < 0.25)) return; perf.acc += rawDt; if (++perf.n < 45) return; // tab switches and loading hitches don't count
+  const avg = perf.acc / perf.n; perf.n = 0; perf.acc = 0; if (t < perf.cool) return;
+  if (avg > 1 / 45) { perf.good = 0;
+    if (t - perf.upAt < 4) { perf.cap = perf.lvl + 1; perf.capT = t + 60; } // stepping up didn't hold: stay below that for a minute
+    if (perf.lvl < RES.length - 1) { setRes(perf.lvl + 1); perf.cool = t + 2; } else if (!perf.lowOn && avg > 1 / 36) { perf.lowOn = true; setLowQuality(); } }
+  else if (avg < 1 / 57 && perf.lvl > 0 && ++perf.good >= 8 && !(perf.lvl - 1 < perf.cap && t < perf.capT)) { perf.good = 0; setRes(perf.lvl - 1); perf.upAt = t; perf.cool = t + 2; }
+}
+function setLowQuality() { renderer.setPixelRatio(Math.min(renderer.getPixelRatio(), 1)); renderer.shadowMap.enabled = false; scene.traverse((o) => { if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => (m.needsUpdate = true)); } }); fx.setBloom(false); resize(); console.log('Ball Knowledge: performance mode on'); }
 function setHighQuality() { renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)); renderer.shadowMap.enabled = true; renderer.shadowMap.needsUpdate = true; scene.traverse((o) => { if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => (m.needsUpdate = true)); } }); fx.setBloom(true); resize(); }
 // graphics setting from the Esc menu: 'low' / 'high' are fixed; 'auto' keeps the first-seconds check (or leaves things as they are)
-BK.setQuality = (q) => { if (q === 'low') { perf.done = true; setLowQuality(); } else if (q === 'high') { perf.done = true; setHighQuality(); } };
+BK.setQuality = (q) => { if (q === 'low') { perf.done = true; setLowQuality(); } else if (q === 'high') { perf.done = true; perf.lvl = 0; setHighQuality(); } else if (!navigator.webdriver) perf.done = false; };
 { const q = BK.settings && BK.settings.quality; if (q === 'low') perf.low = true; else if (q === 'high') perf.done = true; }
 function resize() { renderer.setSize(innerWidth, innerHeight, false); fx.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
@@ -309,15 +323,15 @@ BK.onRender = () => {
 
 function frame(now) {
   requestAnimationFrame(frame);
-  if ((shadowTick = (shadowTick + 1) % 2) === 0) renderer.shadowMap.needsUpdate = true; // shadows refresh at half rate: a big saving, invisible at bar speeds
+  if ((shadowTick = (shadowTick + 1) % 2) === 0 && zones.barOn) renderer.shadowMap.needsUpdate = true; // shadows refresh at half rate, and only while the bar (the one shadow light's room) is in view
   const rawDt = (now - prev) / 1000, dt = Math.min(0.1, rawDt); prev = now; const t = (now - t0) / 1000;
   if (perf.low) { perf.low = false; setLowQuality(); }
-  if (!perf.done && active() && t > 1) { perf.acc += rawDt; if (++perf.frames >= 90) { perf.done = true; if (perf.acc / 90 > 0.034) setLowQuality(); } }
+  if (active() && t > 1) autoRes(rawDt, t);
   const on = active(); cross.style.display = on && !BK.ui.open ? 'block' : 'none';
   if (!on) { // title / lobby: slow cinematic drift through the bar
     promptEl.classList.add('hidden'); cine.update(dt, null); goons.update(dt, t, null);
     const k = t * 0.06; camera.position.set(Math.sin(k) * 3 - 1.2, 2.5 + Math.sin(k * 1.7) * 0.2, 0.4 + Math.cos(k * 0.8) * 0.8); camera.lookAt(Math.sin(k * 0.7) * 5, 1.9, -6); camera.rotation.z = 0;
-    const mm = { x: camera.position.x, z: camera.position.z }; bar.update(t, dt, mm); roulette.update(dt); tv.draw(BK.S, now); fx.setDrunk(0, t); fx.render(); return;
+    const mm = { x: camera.position.x, z: camera.position.z }; bar.update(t, dt, mm); roulette.update(dt); tv.draw(BK.S, now); fx.setDrunk(0, t); zones.update(); fx.render(); return;
   }
   const drunkAmt = Math.pow(Math.min(1, Math.max(0, (BK.drunk - 8) / 80)), 1.1);
   const look = roulette.lookTarget();
@@ -359,7 +373,11 @@ function frame(now) {
   { const cn = BK.S && BK.S.cine, ce = cn ? BK.now() - cn.start : 1e9, flick = cn && /Intro$/.test(cn.kind) && ce > 400 && ce < 1500;
     const tgt = blackout ? (Math.random() < 0.06 ? 0.5 : 0.05) : flick ? (Math.random() < 0.35 ? 0.45 : 0.95) : 1; for (const [l, base] of lightList) l.intensity += (base * tgt - l.intensity) * Math.min(1, dt * 9); party.intensity += ((happy ? 26 : 0) - party.intensity) * Math.min(1, dt * 4); party.color.setHSL((t * 0.25) % 1, 1, 0.55); }
   brawlers.forEach((b, k) => { const g = b.P.group, sway = Math.sin(t * 3 + k) * 0.35; g.position.x = b.x + sway * (k ? -1 : 1) * 0.6; g.position.z = -2.2 + Math.sin(t * 2.3 + k * 2) * 0.35; animate(b.P, 'fight', t + k, 1); });
-  roulette.update(dt); bar.update(t, dt, me); tv.draw(BK.S, now);
+  for (const n of bar.npcs) n.offscreen = !(zones.mask & n.P.group.layers.mask);
+  if ((shadowPick -= dt) <= 0) { shadowPick = 0.5; // characters only cast shadows near you, where they show: skinning every one of them into the shadow map costs a lot
+    const c = camera.position, near = (g) => Math.hypot(g.position.x - c.x, g.position.z - c.z) < 9;
+    for (const g of [...bar.npcs.map((n) => n.P.group), ...[...avatars.values()].map((a) => a.P.group), ...goons.list().map((o) => o.P.group), ...brawlers.map((b) => b.P.group)]) { const on = near(g); g.traverse((o) => { if (!o.isMesh) return; if (o.userData.cs0 === undefined) o.userData.cs0 = o.castShadow; o.castShadow = on && o.userData.cs0; }); } }
+  roulette.update(dt); bar.update(t, dt, me); if (zones.barOn) tv.draw(BK.S, now); // the TVs are all in the bar
   { const c = BK.S && BK.S.cine, killOn = !!(c && c.kind === 'kill' && BK.now() < c.until + 200), dn = (x, z) => Math.hypot(x - ROOM.x, z + 6.6) < 1.8; // restroom door: opens for anyone near it (the kill scene drives it itself)
     const near = openOut() && (dn(me.x, me.z) || [...avatars.values()].some((a) => dn(a.P.group.position.x, a.P.group.position.z))); bar.backroom.tick(dt, t, killOn ? null : near);
     const cineOnNow = !!(c && BK.now() < c.until + 200), fn = (x, z) => Math.hypot(x - OUT.door.x, z - ROOM.z) < 2.0; // the street door: same, unless a cutscene is using it
@@ -400,8 +418,15 @@ function frame(now) {
   if (st && !cineOn && !BK.ui.open && !BK.ui.shop && !BK.ui.menu && !me.sit && !games.active()) { promptEl.textContent = st.text; promptEl.classList.remove('hidden'); } else promptEl.classList.add('hidden');
   if (!st && !cineOn && !games.active() && !BK.ui.open && !BK.ui.shop && !BK.ui.menu && document.pointerLockElement !== canvas) { promptEl.textContent = 'Click to look around'; promptEl.classList.remove('hidden'); }
   fx.setDrunk(drunkAmt, t);
-  fx.render();
+  zones.update(); fx.render();
 }
-window.__dbg = { renderer, scene, camera, me, games, roulette, bar, fx, tv, avatars, bottles, voice, keys };
+// ---------- zone culling + light pool (zones.js): only draw the parts of the map the camera can see into ----------
+for (const d of [bar.doors.front, bar.doors.back]) d.traverse((o) => { o.userData.zone = 'all'; });
+const zones = (() => { const B = bar.backroom.bounds, C = OUT.casino, V = (x, y, z) => new THREE.Vector3(x, y, z), fd = bar.doors.front, bd = bar.doors.back, fBase = fd.rotation.y, bBase = bd.rotation.y;
+  return createZones({ scene, camera, bar: new THREE.Box3(V(-ROOM.x, -1, -ROOM.z), V(ROOM.x - 0.25, 12, ROOM.z - 0.25)), rest: new THREE.Box3(V(B.x0, -1, B.z0), V(B.x1, 12, B.z1)),
+    store: new THREE.Box3(V(C.x0, -1, C.z0), V(C.x1, 12, C.z1)), frontDoor: { x: OUT.door.x, z: ROOM.z }, backDoor: { x: ROOM.x, z: (B.dz0 + B.dz1) / 2 }, storeDoor: { x: C.door.x, z: C.z0 },
+    frontOpen: () => Math.abs(fd.rotation.y - (fd.userData.base ?? fBase)) > 0.03, backOpen: () => Math.abs(bd.rotation.y - (bd.userData.base ?? bBase)) > 0.03 }); })();
+zones.tagAll(); onPlace(zones.tag);
+window.__dbg = { zones, renderer, scene, camera, me, games, roulette, bar, fx, tv, avatars, bottles, voice, keys };
 requestAnimationFrame(frame);
 window.__worldReady = true; if (typeof window.render === 'function') window.render(); // drop the loading bar / loading screen

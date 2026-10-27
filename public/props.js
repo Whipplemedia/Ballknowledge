@@ -36,6 +36,7 @@ export function prop(name, { w = null, h = null, d = null, rotY = 0, rotX = 0, a
   rot.scale.set(w != null ? w / s.x : k, h != null ? h / s.y : k, d != null ? d / s.z : k); g.updateMatrixWorld(true);
   const b2 = new THREE.Box3().setFromObject(g), c = b2.getCenter(new THREE.Vector3());
   rot.position.set(-c.x, anchor === 'bottom' ? -b2.min.y : -c.y, -c.z);
+  g.userData.prop = name;
   if (shadow) g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return g;
 }
@@ -47,6 +48,7 @@ export function lazyProp(name) {
   if (!LAZY[name]) LAZY[name] = SRC[name] ? Promise.resolve(true) : (typeof location !== 'undefined' && !/[?&]props=0/.test(location.search) ? gltfLoader().loadAsync('models/props/' + name + '.glb').then((g) => { SRC[name] = g.scene; return true; }).catch(() => false) : Promise.resolve(false));
   return LAZY[name];
 }
+let placeHook = null; export const onPlace = (f) => { placeHook = f; }; // zones.js tags late arrivals by where they land
 export function place(parent, name, opts, x, y, z, then) {
-  return lazyProp(name).then((ok) => { if (!ok) return null; const g = prop(name, opts); g.position.set(x, y, z); parent.add(g); if (then) then(g); return g; });
+  return lazyProp(name).then((ok) => { if (!ok) return null; const g = prop(name, opts); g.position.set(x, y, z); parent.add(g); if (then) then(g); if (placeHook) { g.updateMatrixWorld(true); placeHook(g); } return g; });
 }

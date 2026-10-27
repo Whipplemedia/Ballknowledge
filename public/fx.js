@@ -26,29 +26,25 @@ const DrunkShader = {
   }`,
 };
 
-const GradeShader = {
-  uniforms: { tDiffuse: { value: null } },
-  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-  fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
-  void main(){ vec3 c = texture2D(tDiffuse, vUv).rgb;
+// the colour grade, run at the end of OutputPass's shader (after tone mapping + sRGB): a little saturation and contrast, warm, vignette
+const GRADE = `{ vec3 c = gl_FragColor.rgb;
     float l = dot(c, vec3(0.299,0.587,0.114)); c = mix(vec3(l), c, 1.16);
     c = (c - 0.5) * 1.07 + 0.5; c *= vec3(1.03, 1.0, 0.96);
     float v = smoothstep(0.95, 0.35, distance(vUv, vec2(0.5))); c *= mix(0.78, 1.0, v);
-    gl_FragColor = vec4(c, 1.0); }`,
-};
+    gl_FragColor = vec4(c, 1.0); }`;
 export function createFX(renderer, scene, camera) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
   const size = renderer.getSize(new THREE.Vector2());
-  const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+  const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: renderer.getPixelRatio() > 1.2 ? 2 : 4 }); // dense screens need less MSAA
   const composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
   const bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.38, 0.5, 0.92); composer.addPass(bloom);
   const drunk = new ShaderPass(DrunkShader); drunk.enabled = false; composer.addPass(drunk);
-  composer.addPass(new OutputPass());
-  composer.addPass(new ShaderPass(GradeShader));
+  // tone mapping + sRGB (OutputPass) and the colour grade in one full-screen pass instead of two
+  const out = new OutputPass(); out.material.fragmentShader = out.material.fragmentShader.replace(/}\s*$/, GRADE + '\n}'); composer.addPass(out);
   return {
     render() { composer.render(); },
-    setSize(w, h) { composer.setSize(w, h); bloom.setSize(w, h); },
+    setSize(w, h) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(w, h); bloom.setSize(w, h); }, // the composer keeps its own copy of the pixel ratio: resolution changes (auto quality) must reach it
     setBloom(on) { bloom.enabled = on; },
     setDrunk(a, t) { bloom.strength = 0.38 + a * 0.5; drunk.enabled = a > 0.02; drunk.uniforms.amount.value = a; drunk.uniforms.time.value = t; },
   };
