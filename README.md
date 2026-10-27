@@ -18,7 +18,7 @@ Dev: `BK_SPEED=10 npm start` divides every timer by 10 (full game in about a min
 - **Pro Shop**: earn tickets (finishing games, crew wins, quotas, bounties) and open crates for ~50 wearable items (helmets, jerseys, golf clubs, and more) in four rarities. Cosmetics are visible to the whole crew. Saved in browser localStorage.
 
 ## Controls
-WASD move, mouse look, E interact, C crew/wire money, Esc releases the mouse / closes menus.
+WASD move, mouse look, E interact, C crew/wire money, P phone (check your bets), Esc releases the mouse / closes menus.
 
 ## Bottles
 Grab 3 bottles at the bar (station near the stools, `E - Grab bottles`), throw with **F** or **right-click**. Bottles arc, spin and shatter on anything (glass-break sound + shards). A bottle that hits another player or an NPC knocks them out for 5 seconds (flat on their back / slumped if seated, stars overhead); the victim's controls lock and the camera drops to the floor. After waking there is 3 s of immunity. Flight is simulated on every client from the thrower's origin/velocity; only the thrower reports hits and the server accepts a hit only if the thrower really threw a bottle in the last 4 s (rate limited, one hit per throw).
@@ -117,6 +117,15 @@ The scene has ~1,400 meshes and ~12 lights. If the first couple of seconds avera
 - All character and prop GLBs are compressed with glTF-Transform (`gltf-transform webp --quality 88` then `gltf-transform meshopt --level medium`): ~18 MB → ~7.9 MB. They need the meshopt decoder (`public/vendor/addons/libs/meshopt_decoder.module.js`), wired up by `public/loading.js` (`gltfLoader()`); use it for any new GLB. Re-run the same two commands on new Meshy downloads before committing them.
 - `loading.js` also drives the loading bar (join screen, lobby, and an in-game "getting the bar ready" card if a game starts before the models finish).
 - The server serves static files with ETags (repeat visits get 304s) and caches gzip copies in memory (three.module.js 1.27 MB → 257 KB). First visit ≈ 7.8 MB on the wire instead of ≈ 20 MB.
+
+## The phone (bet results)
+- Every settled game buzzes your phone. The server stores one line per bet in `p.results[idx].lines` (`{mk, label, won, stake, net}`, or `void: true` when the league catches a fix). The client diffs `S.me.results` against what it has already buzzed for, so a page refresh or a new night never replays old results. There is no settle toast any more; the phone replaces it.
+- **A bet hits:** a big "BET HIT! +$X" splash across the screen, a green edge flash, falling cash, the win, cash and coin sounds, and the phone peeks up from the bottom right with the result.
+- **Only losses:** the phone buzzes and peeks up with a red "Bet lost" card, with no splash.
+- **P** (or the 📱 button by the sound icon) pulls the phone out at any time without pausing; the mouse wheel scrolls it.
+  - Live & open: your open bets with payouts, the live score from the TV highlights, and WINNING / LOSING on moneylines and spreads.
+  - Settled: newest first, each bet ✅ / ❌ with its net and the game total.
+- Code: the `phone*` functions and `betSplash` in client.js, and the `#phone` / `#betsplash` styles. The phone lives outside `#app`, so `render()` doesn't wipe it.
 
 ## HUD, speech bubbles & Esc menu
 - Compact HUD (default; H toggles, also in the menu): the objective banner shrinks to one line 9 s after it changes, feed lines fade after 12 s, and the bounties card collapses to a "0/3 done" line 12 s after a bounty changes.

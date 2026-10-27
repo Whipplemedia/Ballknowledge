@@ -84,7 +84,7 @@ function menuView() {
       <div class="muted" style="font-size:12px">${q === 'auto' ? 'Drops to Low by itself if the first seconds run slowly.' : q === 'low' ? 'No shadows or glow, lower resolution.' : 'Shadows, glow and full resolution.'}</div></div>
     <div class="msec"><div class="title">Screen</div>${tog('compact', 'Compact HUD (H)')}${tog('bubbles', 'NPC speech bubbles')}</div>
     <div class="row"><button onclick="closeMenu(false);window.BK.audioUI&&window.BK.audioUI.open()">🔊 Sound &amp; voice</button><button onclick="ui.menuKeys=!ui.menuKeys;render()">⌨ ${ui.menuKeys ? 'Hide' : 'Show'} all controls</button></div>
-    ${ui.menuKeys ? `<div class="keys">${[['WASD', 'Move'], ['Shift', 'Run'], ['Space', 'Jump'], ['Mouse', 'Look'], ['E', 'Interact / sit / stand'], ['Click (or F)', 'Throw a bottle (when holding one)'], ['Space (mashed)', 'Break free when grabbed'], ['1-9', 'Pop-up buttons'], ['Tab', 'Free the mouse'], ['C', 'Crew & wire money'], ['H', 'Compact / full HUD'], ['V', 'Push-to-talk'], ['M', 'Mute mic'], ['O', 'Sound & voice'], ['Esc', 'This menu']].map(([k, d]) => `<div><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</div>` : ''}
+    ${ui.menuKeys ? `<div class="keys">${[['WASD', 'Move'], ['Shift', 'Run'], ['Space', 'Jump'], ['Mouse', 'Look'], ['E', 'Interact / sit / stand'], ['Click (or F)', 'Throw a bottle (when holding one)'], ['Space (mashed)', 'Break free when grabbed'], ['1-9', 'Pop-up buttons'], ['Tab', 'Free the mouse'], ['P', 'Phone: check your bets'], ['C', 'Crew & wire money'], ['H', 'Compact / full HUD'], ['V', 'Push-to-talk'], ['M', 'Mute mic'], ['O', 'Sound & voice'], ['Esc', 'This menu']].map(([k, d]) => `<div><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</div>` : ''}
     <div class="row"><span class="muted">Room <b>${S.code}</b></span>${save.tutDone ? `<button class="ghost" onclick="napkinReset()">↺ Guide me again next first night</button>` : ''}<button class="ghost red-t" style="margin-left:auto" onclick="leaveGame()">Leave game</button></div>
   </div></div>`;
 }
@@ -121,7 +121,7 @@ function hudHotkeys() {
   const sig = [...document.querySelectorAll('#app .hud button[data-hk]')].map((b) => b.closest('.hud-event,.hunt')?.className || '').join('|');
   if (k && sig && sig !== ui.hkSig && document.pointerLockElement) toast(`Press 1${k > 1 ? '-' + k : ''} to choose, or Tab to use the mouse`, 'info');
   ui.hkSig = k ? sig : '';
-  const help = document.querySelector('#app .hud-help'); if (help) help.textContent = `WASD move · Space jump · Mouse look · E interact · C crew/wire${k ? ' · 1-' + k + ' pop-up buttons · Tab free the mouse' : ''} · H ${settings.compact ? 'full' : 'compact'} HUD · Esc menu`;
+  const help = document.querySelector('#app .hud-help'); if (help) help.textContent = `WASD move · Space jump · Mouse look · E interact · C crew/wire · P phone${k ? ' · 1-' + k + ' pop-up buttons · Tab free the mouse' : ''} · H ${settings.compact ? 'full' : 'compact'} HUD · Esc menu`;
 }
 addEventListener('keydown', (e) => {
   if (!S || !['play', 'hunt'].includes(S.phase) || ui.open || ui.shop || ui.menu || /INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '')) return;
@@ -153,7 +153,7 @@ function render() {
   if (ui.shop) app.insertAdjacentHTML('beforeend', shopView());
   if (ui.menu && S && ['play', 'hunt'].includes(S.phase) && !ui.open && !ui.shop) app.insertAdjacentHTML('beforeend', menuView()); else ui.menu = false;
   if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { el.setSelectionRange(keep.s, keep.e); } catch {} } }
-  tick(); hudHotkeys(); hudCompact(); napkinCheck();
+  tick(); hudHotkeys(); hudCompact(); napkinCheck(); phoneSync();
   { const v = S && S.cur && S.cur.vinnie ? S.cur.idx : -1; if (v >= 0 && ui.vinSaid !== v) { ui.vinSaid = v; window.BK.vo && window.BK.vo.play('vin_tip'); } }
   window.BK.onRender && window.BK.onRender();
 }
@@ -237,7 +237,111 @@ function tick() {
   const st = $('#shaket'); if (st && S.shake) st.textContent = mmss(S.shake.until - now());
   const dm = $('#drunkfill'); if (dm) { const d = drunkLevel(); dm.style.width = Math.round(d) + '%'; dm.parentElement.style.filter = `blur(${Math.max(0, (d - 20) / 22).toFixed(1)}px)`; }
 }
-setInterval(() => { if (S) { tick(); hudCompact(); napkinCheck(); } }, 250);
+setInterval(() => { if (S) { tick(); hudCompact(); napkinCheck(); } phoneTick(); }, 250);
+
+// ---------- the phone: buzzes the moment a bet settles, P pulls it out to check every bet ----------
+// lives outside #app so render() never wipes it; settled results are diffed against what we've already buzzed for
+const phone = { mode: 'away', el: null, seen: null, game: null, note: null, peekUntil: 0, unread: 0, html: '' };
+const sfx = (n, o) => window.BK.sfx && window.BK.sfx(n, o);
+function phoneEl() {
+  if (phone.el) return phone.el;
+  const d = document.createElement('div'); d.id = 'phone';
+  d.innerHTML = '<button id="phonepill" title="Your phone (P)" onclick="phoneToggle()">📱 <kbd>P</kbd><i></i></button><div class="ph-body"><div class="ph-notch"></div><div class="ph-scr"></div></div>';
+  d.querySelector('.ph-body').addEventListener('click', () => { if (phone.mode !== 'open') phoneToggle(true); });
+  document.body.appendChild(d); phone.el = d; return d;
+}
+const phoneOn = () => !!S && ['play', 'hunt'].includes(S.phase) && !!window.__worldReady && !!S.events;
+function phoneToggle(open = phone.mode !== 'open') {
+  phone.mode = open ? 'open' : 'away'; if (open) phone.unread = 0;
+  sfx('click'); phoneDraw();
+}
+function phoneSync() {
+  const el = phoneEl(), on = phoneOn(); el.style.display = on ? '' : 'none';
+  if (!on) { phone.mode = 'away'; return; }
+  const game = S.code + ':' + (S.events[0] ? S.events[0].openAt : 0), keys = Object.keys(S.me.results || {});
+  if (phone.game !== game) { phone.game = game; phone.seen = new Set(keys); phone.note = null; phone.unread = 0; } // new night or a page refresh: no replays
+  for (const k of keys) if (!phone.seen.has(k)) { phone.seen.add(k); phoneBuzz(+k); }
+  phoneDraw();
+}
+function phoneTick() {
+  if (!phone.el || !phoneOn()) return;
+  if (phone.mode === 'peek' && Date.now() > phone.peekUntil) phone.mode = 'away';
+  phoneDraw();
+}
+function phoneBuzz(idx) {
+  const r = S.me.results[idx], ev = S.events[idx], lines = (r && r.lines) || []; if (!ev || !lines.length) return; // no bets on that one
+  const won = lines.filter((l) => l.won);
+  phone.note = { idx, at: Date.now() }; phone.unread++;
+  if (phone.mode !== 'open') { phone.mode = 'peek'; phone.peekUntil = Date.now() + (won.length ? 7000 : 5000); }
+  const el = phoneEl(); el.classList.remove('buzz'); void el.offsetWidth; el.classList.add('buzz');
+  sfx('vibrate'); setTimeout(() => sfx('vibrate'), 700);
+  if (won.length) betSplash(ev, won, r);
+}
+// the "you can't miss it" moment: giant BET HIT across the screen, green edge flash, cash raining down
+function betSplash(ev, won, r) {
+  const net = won.reduce((a, l) => a + l.net, 0);
+  for (const old of document.querySelectorAll('#betsplash,#betflash,.cashrain')) old.remove();
+  const picks = won.map((l) => esc(betLabel(ev, l.mk, (S.me.bets[ev.idx] || {})[l.mk], l.label))).join(' + ');
+  document.body.insertAdjacentHTML('beforeend', `<div id="betflash"></div><div id="betsplash"><div class="bh">${won.length > 1 ? won.length + ' BETS HIT!' : 'BET HIT!'}</div><div class="bm">+${$$(net)}</div><div class="bl">✅ ${picks} · ${esc(ev.label)}</div>${r.delta < net ? `<div class="bs">Night net on this game: ${r.delta >= 0 ? '+' : ''}${$$(r.delta)}</div>` : ''}</div><div class="cashrain">${Array.from({ length: 26 }, () => `<span style="left:${(Math.random() * 100).toFixed(1)}vw;animation-duration:${(1.8 + Math.random() * 1.8).toFixed(2)}s;animation-delay:${(Math.random() * 0.9).toFixed(2)}s;--r:${Math.round(Math.random() * 720 - 360)}deg">${Math.random() < 0.75 ? '💵' : '💰'}</span>`).join('')}</div>`);
+  setTimeout(() => { for (const n of document.querySelectorAll('#betsplash,#betflash,.cashrain')) n.remove(); }, 4800);
+  sfx('win'); setTimeout(() => sfx('cash'), 250); for (let i = 0; i < 5; i++) setTimeout(() => sfx('coin'), 500 + i * 140);
+}
+function betLabel(ev, mk, b, fallback = '') {
+  if (!b) return fallback;
+  const nm = (s) => { const n = s === 'a' ? ev.a : ev.b; return (S.teams && S.teams[n] && S.teams[n].short) || n; };
+  return mk === 'ml' ? `${nm(b.pick)} ML` : mk === 'spread' ? `${nm(b.pick)} ${b.line > 0 ? '+' : ''}${b.line}` : `${b.pick === 'over' ? 'Over' : 'Under'} ${b.line}`;
+}
+function livePlay(ev) {
+  if (ev.status !== 'airing' || !ev.plays || !ev.plays.length) return null;
+  const f = Math.max(0, Math.min(1, (now() - ev.closeAt) / (ev.resolveAt - ev.closeAt))), P = ev.plays; let i = 0;
+  while (i + 1 < P.length && P[i + 1].f <= f) i++; return P[i];
+}
+function liveState(mk, b, sa, sb) { // is this bet winning right now? (totals can't say until it's over, unless the over already cashed)
+  if (mk === 'ml') return sa === sb ? 'tied' : (sa > sb) === (b.pick === 'a') ? 'up' : 'down';
+  if (mk === 'spread') { const my = b.pick === 'a' ? sa : sb, o = b.pick === 'a' ? sb : sa; return my + b.line > o ? 'up' : 'down'; }
+  const tot = sa + sb; return tot > b.line ? (b.pick === 'over' ? 'up' : 'down') : '';
+}
+function phoneDraw() {
+  if (!phone.el || !phoneOn()) return;
+  const el = phone.el; el.className = phone.mode; el.querySelector('#phonepill i').textContent = phone.unread ? phone.unread : '';
+  if (phone.mode === 'away') return;
+  const me = S.me, nm = (n) => (S.teams && S.teams[n] && S.teams[n].short) || n;
+  const live = S.events.filter((e) => e.status !== 'final' && Object.keys(me.bets[e.idx] || {}).length);
+  const done = S.events.filter((e) => e.status === 'final' && me.results[e.idx] && (me.results[e.idx].lines || []).length).reverse();
+  const d = new Date(), clock = `${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')}`;
+  let note = '';
+  if (phone.note && Date.now() - phone.note.at < 15000) {
+    const ev = S.events[phone.note.idx], r = me.results[phone.note.idx], ls = r.lines || [], won = ls.filter((l) => l.won), net = ls.reduce((a, l) => a + l.net, 0);
+    note = r.voided ? `<div class="pn void"><b>⚠️ VOID</b><span>${esc(ev.label)}: the league caught a fix. Stakes returned.</span></div>`
+      : won.length ? `<div class="pn hit"><b>✅ BET HIT! +${$$(won.reduce((a, l) => a + l.net, 0))}</b><span>${esc(ev.label)} · ${ls.map((l) => (l.won ? '✅ ' : '❌ ') + esc(betLabel(ev, l.mk, (me.bets[ev.idx] || {})[l.mk], l.label))).join(' · ')}</span></div>`
+      : `<div class="pn miss"><b>❌ Bet lost ${$$(net)}</b><span>${esc(ev.label)} · ${ls.map((l) => esc(betLabel(ev, l.mk, (me.bets[ev.idx] || {})[l.mk], l.label))).join(' · ')}</span></div>`;
+  }
+  const liveCard = (e) => {
+    const bets = me.bets[e.idx] || {}, p = livePlay(e);
+    const head = e.status === 'airing' ? `<span class="pc live">● LIVE</span>` : e.status === 'open' ? `<span class="pc open">Bets close ${mmss(e.closeAt - now())}</span>` : `<span class="pc">Opens ${mmss(e.openAt - now())}</span>`;
+    const score = p ? `<div class="psc"><span>${esc(nm(e.a))} <b>${p.sa}</b></span><em>${esc(p.per || '')}</em><span><b>${p.sb}</b> ${esc(nm(e.b))}</span></div><div class="ptx">${esc(p.txt || '')}</div>` : `<div class="pvs">${esc(nm(e.a))} vs ${esc(nm(e.b))}</div>`;
+    const rows = Object.entries(bets).map(([mk, b]) => { const st = p ? liveState(mk, b, p.sa, p.sb) : ''; return `<div class="pb ${st}"><span>${esc(betLabel(e, mk, b))}</span><span>${$$(b.stake)} → <b>${$$(b.stake * b.dec)}</b></span>${st ? `<i>${st === 'up' ? 'WINNING' : st === 'down' ? 'LOSING' : 'TIED'}</i>` : ''}</div>`; }).join('');
+    return `<div class="pcard"><div class="ph">${esc(e.label)}${e.final ? ' 🏆' : ''}${head}</div>${score}${rows}</div>`;
+  };
+  const doneCard = (e) => {
+    const r = me.results[e.idx], ls = r.lines, tot = ls.reduce((a, l) => a + l.net, 0), cls = r.voided ? 'void' : ls.some((l) => l.won) ? 'hit' : 'miss';
+    return `<div class="pcard ${cls}"><div class="ph">${esc(e.label)}${e.final ? ' 🏆' : ''}<span class="pc">FINAL</span></div>
+      <div class="psc"><span>${esc(nm(e.a))} <b>${e.result.sa}</b></span><em>${e.ot ? 'OT' : ''}</em><span><b>${e.result.sb}</b> ${esc(nm(e.b))}</span></div>
+      ${ls.map((l) => `<div class="pb ${l.void ? '' : l.won ? 'up' : 'down'}"><span>${l.void ? '↩️' : l.won ? '✅' : '❌'} ${esc(betLabel(e, l.mk, (me.bets[e.idx] || {})[l.mk], l.label))}</span><b>${l.void ? 'void' : (l.net >= 0 ? '+' : '') + $$(l.net)}</b></div>`).join('')}
+      <div class="ptot">${r.voided ? 'Stakes returned' : `${cls === 'hit' ? 'CASHED' : 'Lost'} <b>${tot >= 0 ? '+' : ''}${$$(tot)}</b>`}</div></div>`;
+  };
+  const html = `<div class="psb"><span>${clock}</span><span>BallBook</span><span>📶 🔋</span></div>${note}
+    <div class="pbal"><div><small>Balance</small><b>${$$(me.money)}</b></div>${me.debt > 0 ? `<div class="r"><small>Sal's tab</small><b class="bad">${$$(me.debt)}</b></div>` : ''}</div>
+    <div class="psec">Live &amp; open</div>${live.length ? live.map(liveCard).join('') : `<div class="pempty">${S.cur ? 'A game is open. Bet at the terminal under the TVs.' : 'No open bets.'}</div>`}
+    <div class="psec">Settled</div>${done.length ? done.map(doneCard).join('') : '<div class="pempty">Nothing settled yet.</div>'}
+    <div class="pfoot">${phone.mode === 'open' ? 'P or click 📱 to put it away · scroll to see more' : 'Press P to check your bets'}</div>`;
+  if (html !== phone.html) { phone.html = html; el.querySelector('.ph-scr').innerHTML = html; }
+}
+addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyP' || e.repeat || !phoneOn() || ui.menu || /INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '')) return;
+  phoneToggle();
+});
+addEventListener('wheel', (e) => { if (phone.mode === 'open' && document.pointerLockElement && phone.el) phone.el.querySelector('.ph-scr').scrollTop += e.deltaY; }, { passive: true });
 
 // ---------- game HUD ----------
 function resultOf(e) { const r = S.me.results[e.idx]; return r ? r.delta : null; }
@@ -280,7 +384,7 @@ function gameView() {
     ${hunt ? huntBanner() : ''}
     <div class="hud-crew">${playerList()}</div>
     <div class="hud-feed">${[...S.feed].slice(-4).reverse().map((f) => `<div data-t="${f.t}">${esc(f.text)}</div>`).join('')}</div>
-    <div class="hud-help">WASD move · Mouse look · E interact · C crew/wire · Esc menu</div>
+    <div class="hud-help">WASD move · Mouse look · E interact · C crew/wire · P phone · Esc menu</div>
   </div>
   ${ui.open ? `<div class="overlay"><div class="panel">
     <div class="tabs">${tabs.map(([id, l]) => `<button class="${id === 'mob' ? 'mob ' : ''}${ui.tab === id ? 'on' : ''}" onclick="ui.tab='${id}';render()">${l}</button>`).join('')}

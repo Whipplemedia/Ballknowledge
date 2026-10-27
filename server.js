@@ -323,20 +323,21 @@ function lockEvent(room, ev) {
 function settleBets(room, ev) {
   const r = ev.result, win = r.winner;
   for (const p of room.players.values()) {
-    const bets = p.bets[ev.idx] || {}, notes = []; let delta = 0, ret = 0;
-    if (r.voided) { for (const b of Object.values(bets)) ret += b.stake; p.money += ret; if (ev.final) p.finalCorrect = false; if (Object.keys(bets).length) { notes.push('🚨 VOID - the league caught a fix. Stakes returned.'); toast(p, `${ev.label}: VOID - stakes returned`, 'info'); } p.results[ev.idx] = { delta: 0, notes }; continue; }
+    const bets = p.bets[ev.idx] || {}, notes = [], lines = []; let delta = 0, ret = 0; // lines: one per bet, for the phone
+    if (r.voided) { for (const [mk, b] of Object.entries(bets)) { ret += b.stake; lines.push({ mk, stake: b.stake, won: null, void: true, net: 0 }); } p.money += ret; if (ev.final) p.finalCorrect = false; if (Object.keys(bets).length) notes.push('🚨 VOID - the league caught a fix. Stakes returned.'); p.results[ev.idx] = { delta: 0, notes, lines, voided: true }; continue; }
     for (const [mk, b] of Object.entries(bets)) {
       let won = false, label;
       if (mk === 'ml') { won = b.pick === win; label = `${b.pick === 'a' ? ev.a : ev.b} ML`; }
       else if (mk === 'spread') { const my = b.pick === 'a' ? r.sa : r.sb, other = b.pick === 'a' ? r.sb : r.sa; won = my + b.line > other; label = `${b.pick === 'a' ? ev.a : ev.b} ${b.line > 0 ? '+' : ''}${b.line}`; }
       else { const tot = r.sa + r.sb; won = b.pick === 'over' ? tot > b.line : tot < b.line; label = `${b.pick === 'over' ? 'Over' : 'Under'} ${b.line}`; }
       if (won) { p.bk = (p.bk || 0) + (mk === 'ml' ? Math.round(100 * b.dec) * (ev.final ? 2 : 1) : 50); /* Ball Knowledge: long shots count more, the final double */ const pay = b.stake * b.dec; ret += pay; delta += pay - b.stake; notes.push(`✅ ${label}: +${money(pay - b.stake)}`); award(room, p, 'betWin', { mk, dec: b.dec, stake: b.stake, band: b.band || 0 }); } else { delta -= b.stake; notes.push(`❌ ${label}: -${money(b.stake)}`); }
+      lines.push({ mk, label, won, stake: b.stake, net: Math.round(won ? b.stake * (b.dec - 1) : -b.stake) });
     }
     p.money += ret;
     if (ev.final) p.finalCorrect = !!(bets.ml && bets.ml.pick === win);
     if (p.fix[ev.idx]) notes.push(r.contested ? 'Another crew fixed it the other way - the mob kept both fees.' : r.fixed ? 'The fix was in.' : 'You paid for a fix on a result that was already going your way.');
-    p.results[ev.idx] = { delta: Math.round(delta), notes };
-    if (notes.length || bets.ml) toast(p, `${ev.label}: ${delta >= 0 ? '+' : ''}${money(delta)}`, delta >= 0 ? 'win' : 'err');
+    p.results[ev.idx] = { delta: Math.round(delta), notes, lines };
+    // no toast: the phone buzzes with the result (client diffs p.results)
   }
 }
 

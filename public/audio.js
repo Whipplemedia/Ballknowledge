@@ -41,6 +41,7 @@ export const SFX = {
   tick: (c, o, t, p) => { T(c, o, t, 0.02, { type: 'triangle', f: 2600 * (p.pitch || 1), g: 0.18 }); N(c, o, t, 0.012, { f: 5000, g: 0.12 }); },
   bet: (c, o, t) => { SFX.chip(c, o, t); T(c, o, t + 0.05, 0.1, { f: 900, f2: 1300, g: 0.18, type: 'triangle' }); },
   chip: (c, o, t) => { for (let i = 0; i < 3; i++) { const u = t + i * 0.045 + rnd(0, 0.01); T(c, o, u, 0.05, { type: 'triangle', f: rnd(2000, 2600), f2: 1500, g: 0.2 }); N(c, o, u, 0.025, { f: rnd(3500, 5000), q: 2, g: 0.15 }); } },
+  vibrate: (c, o, t) => { for (let i = 0; i < 2; i++) { T(c, o, t + i * 0.24, 0.18, { type: 'square', f: 118, g: 0.16 }); T(c, o, t + i * 0.24, 0.18, { type: 'sawtooth', f: 236, g: 0.05 }); } }, // phone on vibrate
   coin: (c, o, t) => { T(c, o, t, 0.12, { type: 'square', f: 1318, g: 0.1 }); T(c, o, t + 0.07, 0.4, { type: 'square', f: 1975, g: 0.1 }); bell(c, o, t + 0.07, 1975, 0.5, 0.08, [1, 2.01]); },
   cash: (c, o, t) => { for (let i = 0; i < 6; i++) N(c, o, t + i * 0.035, 0.03, { f: 3000 + i * 300, q: 3, g: 0.14 }); bell(c, o, t + 0.25, 2093, 0.9, 0.22, [1, 2.4, 4.1]); },
   win: (c, o, t) => { [523, 659, 784, 1047].forEach((f, i) => { T(c, o, t + i * 0.09, 0.35, { type: 'triangle', f, g: 0.22 }); T(c, o, t + i * 0.09, 0.35, { type: 'square', f: f * 2, g: 0.04 }); }); bell(c, o, t + 0.36, 2093, 0.8, 0.12); },
