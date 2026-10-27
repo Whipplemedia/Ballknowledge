@@ -100,7 +100,7 @@ export function createRoulette({ scene: world, BK, me, stations, obstacles, at =
     },
     active: () => !!spin && (performance.now() - spin.start) / 1000 < spin.T + 4.5,
     debug() { const th = Math.atan2(ball.position.x, ball.position.z), rel = trueMod(th - D.rotation.y); return { under: ORDER[Math.floor(rel / STEP)], expected: spin ? spin.n : null, t: spin ? (performance.now() - spin.start) / 1000 : null, popup: !pop.classList.contains('hidden'), popText: pop.textContent, radius: Math.hypot(ball.position.x, ball.position.z) }; },
-    lookTarget() { return spin && spin.mine && (performance.now() - spin.start) / 1000 < spin.T + 2.5 ? { x: -5.75 + DX, z: -3.6 + DZ, yaw: 0, pitch: -0.5 } : null; },
+    lookTarget() { const at = { x: -5.75 + DX, z: -3.6 + DZ, yaw: 0, pitch: -0.5 }; return spin && spin.mine && (performance.now() - spin.start) / 1000 < spin.T + 2.5 && Math.hypot(me.x - at.x, me.z - at.z) < 5 ? at : null; }, // betting by phone (the hunt): no walk to the table
     update(dt) {
       if (!spin) { psi += wheelW * 0.15 * dt; D.rotation.y = psi; return; }
       const t = (performance.now() - spin.start) / 1000, T = spin.T;

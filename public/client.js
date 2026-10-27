@@ -411,7 +411,7 @@ function huntBanner() {
     <div class="muted">${held ? `<b class="bad">He's shaking the money out of you.</b> Mash <b>SPACE</b> to wrench free, then run - he's slower than you. Crew: bottle him now, he can't dodge while he's holding someone.` : me.remaining > 0 ? `<b class="bad">They want ${$$(me.remaining)} from YOU.</b> Pay it, get wired cash, or escape: the crew has to drop <b>every</b> hitman with bottles.` : 'You are clear - help your crew. Only bottles hurt them - grab some and click to throw.'}</div>
     <div class="gpips">${pips}</div>
     <div class="muted">${up} of ${gs.length} standing. Each needs ${gs[0] ? gs[0].max : 3} bottle hits. They sidestep throws when they're free, and a downed one gets back up after ~10s - drop them all at once.</div>
-    ${me.remaining > 0 ? (me.money > 0 ? `<div class="row"><button class="gold" onclick="send({type:'pay'})">Pay what I can (${$$(Math.min(me.money, me.remaining))})</button></div>` : `<div class="muted"><b class="bad">You're broke - nothing to pay with.</b> Ask the crew to wire you cash (C), keep away from them, and let the crew bottle them down.</div>`) : ''}</div>`;
+    ${me.remaining > 0 ? (me.money > 0 ? `<div class="row"><button class="gold" onclick="send({type:'pay'})">Pay what I can (${$$(Math.min(me.money, me.remaining))})</button><button class="ghost" onclick="openPanel('wheel')">🎰 Last-ditch roulette (by phone)</button></div>` : `<div class="muted"><b class="bad">You're broke - nothing to pay with.</b> Ask the crew to wire you cash (C), keep away from them, and let the crew bottle them down.</div>`) : ''}</div>`;
 }
 
 // ---------- sportsbook ----------
