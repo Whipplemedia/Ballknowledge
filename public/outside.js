@@ -11,12 +11,12 @@ import { audio } from './audio.js';
 export const OUT = {
   door: { x: 5, w: 1.24, h: 2.34 },                 // the bar's front door, in the z = 8 wall
   street: { z0: 12, z1: 22 },                        // curb to curb (sidewalks either side)
-  lot: { x0: 12, x1: 36, z0: 22, z1: 46 },
-  casino: { x0: 18, x1: 30, z0: 36, z1: 44, h: 4.2, fh: 5.56, door: { x: 24.07, w: 2.5, h: 3.0 } }, // fh: the false front (art/gas_station_store is 2.16:1); the door sits where the art's glass doors are
-  roulette: { x: 21.6, z: 39.4 },                   // table centre (roulette.js lays itself out around it)
-  dealer: { x: 21.5, z: 37.95 },
+  lot: { x0: 12, x1: 36, z0: 22, z1: 50 },
+  casino: { x0: 18, x1: 30, z0: 36, z1: 48, h: 4.2, fh: 5.56, door: { x: 24.07, w: 2.5, h: 3.0 }, back: 41.6 }, // fh: the false front (art/gas_station_store is 2.16:1); the door sits where the art's glass doors are; back: where the shop ends and the gaming room starts
+  roulette: { x: 21.6, z: 43.6 },                   // table centre (roulette.js lays itself out around it)
+  dealer: { x: 21.5, z: 42.15 },
 };
-OUT.roulette.signZ = OUT.casino.z0 + 0.12; OUT.roulette.signY = 3.4;
+OUT.roulette.signZ = OUT.casino.back + 0.15; OUT.roulette.signY = 3.3; // hangs over the dealer, facing the players
 OUT.slots = [19.7, 21.2, 22.7, 24.2, 25.7, 27.2].map((x, i) => ({ i, x, z: OUT.casino.z1 - 0.5 }));
 
 // ---------- slot symbols (shared with the slot panel in client.js through BK.slotDraw) ----------
@@ -162,11 +162,16 @@ export function createOutside({ scene, BK, stations, obstacles, bar, ROOM }) {
     const lino = TX.canvasTex(256, 256, (g, w, h) => { for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { g.fillStyle = (x + y) % 2 ? '#c8c2b0' : '#8a9aa8'; g.fillRect(x * 32, y * 32, 32, 32); } const R = rnd(31); for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(40,30,20,${R() * 0.1})`; g.fillRect(R() * w, R() * h, 3, 2); } }, { repeat: [W / 1.6, (CA.z1 - CA.z0) / 1.6] }).t;
     flat(W, CA.z1 - CA.z0, MT(lino, { roughness: 0.4 }), (CA.x0 + CA.x1) / 2, 0.012, (CA.z0 + CA.z1) / 2);
     const ce = new THREE.Mesh(new THREE.PlaneGeometry(W, CA.z1 - CA.z0), M(0xd8d4c8)); ce.rotation.x = Math.PI / 2; ce.position.set((CA.x0 + CA.x1) / 2, H - 0.02, (CA.z0 + CA.z1) / 2); scene.add(ce);
-    for (let x = CA.x0 + 2; x < CA.x1 - 1; x += 3) for (const z of [CA.z0 + 2.2, CA.z1 - 2.2]) box(1.2, 0.03, 0.6, glow(0xf4f8ff, 1.8), x, H - 0.04, z);
+    for (let x = CA.x0 + 2; x < CA.x1 - 1; x += 3) for (const z of [CA.z0 + 2.2, CA.z0 + 4.6, CA.z1 - 2.2]) box(1.2, 0.03, 0.6, glow(0xf4f8ff, 1.8), x, H - 0.04, z);
+    // the gaming room at the back: casino carpet, and a neon header you see from the shop
+    const carpet = TX.canvasTex(256, 256, (g, w, h) => { g.fillStyle = '#3a0c22'; g.fillRect(0, 0, w, h); const R = rnd(37); for (let i = 0; i < 70; i++) { g.strokeStyle = ['#d8a020', '#2a6ab0', '#b0204a'][i % 3]; g.lineWidth = 3; g.beginPath(); g.arc(R() * w, R() * h, 6 + R() * 16, 0, 7); g.stroke(); } }, { repeat: [W / 2, (CA.z1 - CA.back) / 2] }).t;
+    flat(W, CA.z1 - CA.back, MT(carpet, { roughness: 1 }), (CA.x0 + CA.x1) / 2, 0.016, (CA.z1 + CA.back) / 2);
+    box(W, 0.5, 0.12, M(0x2a0a18), (CA.x0 + CA.x1) / 2, H - 0.25, CA.back); // soffit over the gaming room's opening
+    { const gs = TX.neon('GAMING · 21+', '#3ad8ff', { w: 640, h: 128, size: 72 }).t; plane(2.6, 0.52, new THREE.MeshBasicMaterial({ map: gs, transparent: true, depthWrite: false, toneMapped: false }), 26.4, H - 0.25, CA.back - 0.07, Math.PI); }
     const wallM = M(0x6a2a3a, { roughness: 0.9 }); // dark red casino walls
     plane(W, H, wallM, (CA.x0 + CA.x1) / 2, H / 2, CA.z1 - 0.02, Math.PI); plane(CA.z1 - CA.z0, H, wallM, CA.x0 + 0.02, H / 2, (CA.z0 + CA.z1) / 2, Math.PI / 2); plane(CA.z1 - CA.z0, H, wallM, CA.x1 - 0.02, H / 2, (CA.z0 + CA.z1) / 2, -Math.PI / 2);
     plane(d0 - a, H, wallM, (a + d0) / 2, H / 2, CA.z0 + 0.02, 0); plane(CA.x1 - d1, H, wallM, (d1 + CA.x1) / 2, H / 2, CA.z0 + 0.02, 0); plane(CA.door.w, H - CA.door.h, wallM, CA.door.x, (CA.door.h + H) / 2, CA.z0 + 0.02, 0);
-    const l = new THREE.PointLight(0xfff0d8, 22, 14, 1.4); l.position.set((CA.x0 + CA.x1) / 2, H - 0.5, (CA.z0 + CA.z1) / 2 + 1); l.userData.noDim = true; scene.add(l);
+    for (const [z, c, k] of [[CA.z0 + 2.8, 0xfff0d8, 20], [CA.z1 - 3, 0xffd8c0, 16]]) { const l = new THREE.PointLight(c, k, 11, 1.4); l.position.set((CA.x0 + CA.x1) / 2, H - 0.5, z); l.userData.noDim = true; scene.add(l); } // shop, gaming room
     const sl = TX.neon('SLOTS', '#ffd24a', { w: 512, h: 128, size: 80 }).t; plane(2.2, 0.55, new THREE.MeshBasicMaterial({ map: sl, transparent: true, depthWrite: false, toneMapped: false }), 23.5, 3.5, CA.z1 - 0.05, Math.PI);
   }
   // checkout counter along the right wall, and the clerk behind it
@@ -174,6 +179,26 @@ export function createOutside({ scene, BK, stations, obstacles, bar, ROOM }) {
     obstacles.push({ x: CA.x1 - 1.2, z: cz0 + 0.5, r: 0.55 }, { x: CA.x1 - 1.2, z: cz0 + 1.4, r: 0.55 }, { x: CA.x1 - 1.2, z: cz0 + 2.3, r: 0.55 });
     const clerk = bar.spawn(makePreset('rookie', { beard: 'stubble', outfit: 'tee', shirt: 0xc8102e, hat: { color: 0xc8102e, backwards: false } }), CA.x1 - 0.62, cz0 + 1.4, Math.PI / 2, 'idle', ['Pump number?', 'Slots are in the back.', 'No, the lotto machine is broken.', 'You buying something?'], 'Gas clerk');
     clerk.who = 'Gas clerk'; }
+  // the shop floor (Meshy props, see blender/meshy_world.json "store"): drink coolers down the left wall, a candy gondola, coffee, ATM, chips, crates of empties;
+  // glass bottles stand on the surfaces (bar.bottleSpots, picked up like the bar's) and the coolers hand out a few at a time
+  { const F = 0.06; // wall thickness inside the shell
+    for (const z of [38.15, 40.05]) { place(scene, 'cooler', { h: 2.1, rotY: Math.PI / 2 }, CA.x0 + F + 0.36, 0, z); obstacles.push({ x: CA.x0 + 0.4, z: z - 0.5, r: 0.5 }, { x: CA.x0 + 0.4, z: z + 0.5, r: 0.5 });
+      stations.push({ x: CA.x0 + 1.2, z, r: 1.0, text: 'E - Grab bottles from the cooler (click to throw)', act: () => BK.bottles && BK.bottles.grab() }); }
+    place(scene, 'gondola', { h: 1.5, rotY: Math.PI / 2 }, 21.4, 0, 38.9); obstacles.push({ x: 21.4, z: 38.0, r: 0.6 }, { x: 21.4, z: 38.9, r: 0.6 }, { x: 21.4, z: 39.8, r: 0.6 });
+    place(scene, 'coffee_bar', { w: 1.8 }, 20.2, 0, CA.z0 + F + 0.36); obstacles.push({ x: 19.75, z: CA.z0 + 0.4, r: 0.45 }, { x: 20.65, z: CA.z0 + 0.4, r: 0.45 });
+    place(scene, 'atm', { h: 1.75 }, 22.35, 0, CA.z0 + F + 0.46); obstacles.push({ x: 22.35, z: CA.z0 + 0.5, r: 0.45 });
+    stations.push({ x: 22.35, z: CA.z0 + 1.3, r: 0.8, text: 'ATM · out of service', act: () => BK.toast && BK.toast('OUT OF SERVICE. Sal\'s guys emptied it.', 'info') });
+    place(scene, 'chip_rack', { h: 1.6 }, 26.1, 0, CA.z0 + F + 0.27); obstacles.push({ x: 26.1, z: CA.z0 + 0.35, r: 0.4 });
+    for (const [x, z, ry] of [[18.45, 41.35, 0.15], [27.75, 40.55, -0.2]]) { place(scene, 'bottle_crate', { h: 0.8, rotY: ry }, x, 0, z); obstacles.push({ x, z, r: 0.38 }); }
+    place(scene, 'ice_chest', { w: 1.5, rotY: Math.PI / 2 }, 20.4, 0, CA.z0 - 0.55); obstacles.push({ x: 20.0, z: CA.z0 - 0.55, r: 0.5 }, { x: 20.8, z: CA.z0 - 0.55, r: 0.5 });
+    bar.bottleSpots.push(
+      [28.66, 1.05, 38.0, 1.35], [28.66, 1.05, 38.95, 1.35],   // checkout counter
+      [20.75, 0.93, CA.z0 + 0.7, 1.2],                          // coffee bar
+      [21.4, 1.5, 37.85, 1.1], [21.4, 1.5, 39.95, 1.1],        // gondola top
+      [18.45, 0.62, 41.35, 1.05], [27.75, 0.62, 40.55, 1.05],   // in the crates
+      [20.05, 1.03, CA.z0 - 0.55, 1.1], [20.8, 1.03, CA.z0 - 0.5, 1.1], // ice chest outside
+      [OUT.roulette.x - 1.2, 0.95, OUT.roulette.z + 0.7, 1.3]); // roulette table, the players' edge
+  }
   // slot machines along the back wall (A15 art replaces the cabinet); each screen is a canvas the spin animates for everyone
   const machines = OUT.slots.map(({ i, x, z }) => {
     const g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g); // front (screen, buttons) faces -z: the room

@@ -557,7 +557,7 @@ function hintFor(room, p, ev) {
 // ---------- side jobs from the bartender ----------
 // One job at a time, 3 minutes to finish it. Targets are named regulars at fixed spots (they match bar.js); the server
 // checks you are standing next to them. Collecting for Sal pays in a smaller tab instead of cash.
-const SPOTS = { 'Gina': [5.4, 3.4], 'Celtics Ray': [8.3, 4.6], 'Sloppy Steve': [7.6, 6.2], 'Dealer': [21.5, 38.95] /* the gas-station casino (public/outside.js OUT.dealer) */, 'Clerk': [-8.6, 6.4], bar: [8.3, 2.5] };
+const SPOTS = { 'Gina': [5.4, 3.4], 'Celtics Ray': [8.3, 4.6], 'Sloppy Steve': [7.6, 6.2], 'Dealer': [21.5, 43.15] /* the gas-station casino (public/outside.js OUT.dealer) */, 'Clerk': [-8.6, 6.4], bar: [8.3, 2.5] };
 const JOB_MS = 180000, JOB_GAP_MS = 20000;
 function makeJob(p) {
   const kind = pick(['deliver', 'deliver', 'collect', 'bounce', 'hustle']);
