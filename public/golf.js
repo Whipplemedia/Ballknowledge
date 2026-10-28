@@ -85,6 +85,10 @@ export function createGolf({ scene, camera, BK, me, stations, obstacles, hud, ke
     say(`HOLE ${i + 1} · ${h.name.toUpperCase()} · PAR ${h.par}`, 2.6);
   }
   const onGreen = () => surface(st.ball, st.h) === 'green';
+  // a perfect-pace putt (half a swing) along the current aim: how far it rolls and how much it breaks (yards, + = right)
+  const puttRead = () => { const h = st.h, d = Math.max(0.3, dist(st.ball, h.pin)), dir = [Math.sin(st.aim), Math.cos(st.aim)], perp = [dir[1], -dir[0]];
+    return { d, dir, perp, brk: (h.slope[0] * perp[0] + h.slope[1] * perp[1]) * d * 0.05 }; };
+  const ft = (yd) => { const f = yd * 3; return f < 1 ? `${Math.max(1, Math.round(f * 12))} in` : `${f < 10 ? f.toFixed(1).replace(/\.0$/, '') : Math.round(f)} ft`; };
 
   // ---------- the swing (trackball = pointer-locked mouse) ----------
   function down() { if (!st || st.phase !== 'aim') return; st.phase = 'back'; st.swing = { back: 0, fwd: 0, lat: 0, t0: 0 }; }
@@ -134,7 +138,7 @@ export function createGolf({ scene, camera, BK, me, stations, obstacles, hud, ke
     const a = f.from, b = f.to, dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy || 1, k = Math.max(0, Math.min(1, ((h.pin[0] - a[0]) * dx + (h.pin[1] - a[1]) * dy) / L2)), cx = a[0] + dx * k, cy = a[1] + dy * k;
     const miss = Math.hypot(h.pin[0] - cx, h.pin[1] - cy), past = Math.sqrt(L2) - Math.hypot(h.pin[0] - a[0], h.pin[1] - a[1]);
     if (miss < CUP && past > -0.1 && past < 3) return holed();
-    st.ball = b; say(past < 0 ? 'Short!' : 'Missed'); return settle();
+    st.ball = b; const left = Math.hypot(h.pin[0] - b[0], h.pin[1] - b[1]); say(past < 0 ? `Short · ${ft(left)} left` : miss < CUP * 3 ? `Lipped out! ${ft(left)} past` : `Missed · ${ft(left)} away`, 1.8); return settle();
   }
   function settle() { st.phase = 'aim'; st.camAt = null; const h = st.h; if (st.strokes >= h.par + 4) { say('Picked up'); return finishHole(); } st.aim = Math.atan2(h.pin[0] - st.ball[0], h.pin[1] - st.ball[1]); st.club = pickClub(st.ball, h); }
   function holed() { st.ball = [...st.h.pin]; audio.sfx('pocket', { v: 1 }); const d = st.strokes - st.h.par; say(st.strokes === 1 ? 'HOLE IN ONE!!!' : { '-3': 'ALBATROSS!', '-2': 'EAGLE!', '-1': 'BIRDIE!', 0: 'PAR', 1: 'Bogey', 2: 'Double bogey' }[d] || `+${d}`, 2.4); if (d < 0 || st.strokes === 1) audio.sfx('cheer', { v: 0.6 }); finishHole(); }
@@ -146,11 +150,12 @@ export function createGolf({ scene, camera, BK, me, stations, obstacles, hud, ke
   // ---------- drawing the screen ----------
   function view() { // camera behind the ball looking along the aim (chasing the ball in flight)
     let at = st.ball, dirA = st.aim;
+    const putt = onGreen() && st.phase !== 'fly' || (st.flight && st.flight.kind === 'putt' && st.phase === 'fly'), pd = putt ? dist(st.flight && st.phase === 'fly' ? st.flight.from : st.ball, st.h.pin) : 0;
+    const back = putt ? Math.min(CAM_BACK, 2.4 + pd * 0.4) : CAM_BACK;
     if (st.phase === 'fly' && st.flight.kind === 'air') { const k = Math.min(1, st.flight.t / st.flight.T); at = bez(st.flight, Math.max(0, k - 0.25)); }
-    const want = { x: at[0] - Math.sin(dirA) * CAM_BACK, y: at[1] - Math.cos(dirA) * CAM_BACK, a: dirA };
+    const want = { x: at[0] - Math.sin(dirA) * back, y: at[1] - Math.cos(dirA) * back, a: dirA };
     if (!st.camAt) st.camAt = { ...want }; else { const k = 0.12; st.camAt.x += (want.x - st.camAt.x) * k; st.camAt.y += (want.y - st.camAt.y) * k; st.camAt.a += (want.a - st.camAt.a) * k; }
-    const putt = onGreen() && st.phase !== 'fly' || (st.flight && st.flight.kind === 'putt' && st.phase === 'fly');
-    return { x: st.camAt.x, y: st.camAt.y, a: st.camAt.a, h: putt ? 2.2 : CAM_H, near: 1.2 };
+    return { x: st.camAt.x, y: st.camAt.y, a: st.camAt.a, h: putt ? Math.min(2.8, 1.8 + pd * 0.1) : CAM_H, near: putt ? 0.4 : 1.2, putt };
   }
   function draw() {
     const h = st.h, V = view(), ca = Math.cos(V.a), sa = Math.sin(V.a);
@@ -172,6 +177,15 @@ export function createGolf({ scene, camera, BK, me, stations, obstacles, hud, ke
     poly([[h.tee[0] - 5, h.tee[1] - 4], [h.tee[0] + 5, h.tee[1] - 4], [h.tee[0] + 5, h.tee[1] + 4], [h.tee[0] - 5, h.tee[1] + 4]], '#77c955');
     for (const b of h.bunkers) poly(ell(b), '#e6d29a'); for (const w of h.water) poly(ell(w), '#3a8fd8');
     poly(ell([h.green[0], h.green[1], h.green[2] + 4, h.green[2] + 4]), '#5aae3f'); poly(ell([h.green[0], h.green[1], h.green[2], h.green[2]]), '#86d860');
+    if (V.putt) { // which way the green runs: faint chevrons pointing downhill
+      const sl = Math.hypot(h.slope[0], h.slope[1]), ux = h.slope[0] / sl, uy = h.slope[1] / sl; g.strokeStyle = 'rgba(255,255,255,0.4)'; g.lineWidth = 2;
+      for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) { const c = [h.green[0] + i * 5, h.green[1] + j * 5]; if (dist(c, h.green) > h.green[2] - 1.5) continue;
+        const a = rel([c[0] - ux * 0.6 - uy * 0.5, c[1] - uy * 0.6 + ux * 0.5]), m = rel([c[0] + ux * 0.6, c[1] + uy * 0.6]), b = rel([c[0] - ux * 0.6 + uy * 0.5, c[1] - uy * 0.6 - ux * 0.5]);
+        if (a[1] <= V.near || m[1] <= V.near || b[1] <= V.near) continue; const [x1, y1] = proj(a), [x2, y2] = proj(m), [x3, y3] = proj(b); g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.lineTo(x3, y3); g.stroke(); } }
+    const cupR = rel(h.pin); if (cupR[1] > V.near) { // the cup: a dark hole with a white lip, never smaller than a few pixels so you can see it from the fairway
+      const [x, y] = proj(cupR), rx = Math.max(5, (CUP * 1.2 / cupR[1]) * FOC), ry = Math.max(2, rx * Math.max(0.4, Math.min(1, V.h / cupR[1])));
+      g.fillStyle = '#0d1a0d'; g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, 7); g.fill(); g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = Math.max(1, rx * 0.12); g.stroke();
+    } // drawn at the size that catches a putt (CUP): roll through it at a fair pace and it drops
     // pin, trees (far to near), ball
     const items = h.trees.map((t) => ({ r: rel(t), t })).filter((o) => o.r[1] > 7) /* not the ones right behind the camera */.sort((a, b) => b.r[1] - a.r[1]);
     const pinR = rel(h.pin); let pinDrawn = false;
@@ -180,9 +194,12 @@ export function createGolf({ scene, camera, BK, me, stations, obstacles, hud, ke
       g.fillStyle = '#5a3a20'; g.fillRect(x - s * 0.12, yt + (y - yt) * 0.55, s * 0.24, (y - yt) * 0.45); g.fillStyle = o.t[3] > 12 ? '#2c6e2a' : '#3a8a30'; g.beginPath(); g.ellipse(x, yt + (y - yt) * 0.32, s, (y - yt) * 0.4, 0, 0, 7); g.fill(); }
     if (!pinDrawn) drawPin();
     let bp = st.ball, bh = 0; if (st.phase === 'fly') { const f = st.flight, k = Math.min(1, f.t / f.T); bp = f.kind === 'air' ? bez(f, k) : [f.from[0] + (f.to[0] - f.from[0]) * (1 - (1 - k) ** 2), f.from[1] + (f.to[1] - f.from[1]) * (1 - (1 - k) ** 2)]; bh = 4 * f.apex * k * (1 - k); }
-    const br = rel(bp); if (br[1] > V.near) { const [x, y] = proj(br), [, yh] = proj(br, bh), s = Math.max(2, 0.06 / br[1] * FOC * 4); g.fillStyle = 'rgba(0,0,0,0.3)'; g.beginPath(); g.ellipse(x, y, s, s * 0.4, 0, 0, 7); g.fill(); g.fillStyle = '#fff'; g.beginPath(); g.arc(x, yh - s, s, 0, 7); g.fill(); }
+    const br = rel(bp); if (br[1] > V.near) { const [x, y] = proj(br), [, yh] = proj(br, bh), s = Math.max(2, (V.putt ? 0.05 : 0.24) / br[1] * FOC); /* on the green, true to scale next to the cup */ g.fillStyle = 'rgba(0,0,0,0.3)'; g.beginPath(); g.ellipse(x, y, s, s * 0.4, 0, 0, 7); g.fill(); g.fillStyle = '#fff'; g.beginPath(); g.arc(x, yh - s, s, 0, 7); g.fill(); }
     // aim line while aiming
-    if (st.phase === 'aim' || st.phase === 'back' || st.phase === 'fwd') { const d = onGreen() ? Math.min(dist(st.ball, h.pin) * 1.4, 30) : CLUBS[st.club][1]; g.strokeStyle = 'rgba(255,240,120,0.85)'; g.setLineDash([6, 6]); g.lineWidth = 2; g.beginPath();
+    if ((st.phase === 'aim' || st.phase === 'back' || st.phase === 'fwd') && V.putt) { const R = puttRead(); g.strokeStyle = 'rgba(255,240,120,0.9)'; g.setLineDash([4, 5]); g.lineWidth = 2; g.beginPath(); let started = false, ex = 0, ey = 0;
+      for (let k = 0; k <= 24; k++) { const u = k / 24, q = [st.ball[0] + R.dir[0] * R.d * u + R.perp[0] * R.brk * u * u, st.ball[1] + R.dir[1] * R.d * u + R.perp[1] * R.brk * u * u], r = rel(q); if (r[1] <= V.near) continue; [ex, ey] = proj(r); started ? g.lineTo(ex, ey) : g.moveTo(ex, ey); started = true; }
+      g.stroke(); g.setLineDash([]); if (started) { g.strokeStyle = '#ffcf3a'; g.lineWidth = 2; g.beginPath(); g.moveTo(ex - 4, ey); g.lineTo(ex + 4, ey); g.moveTo(ex, ey - 3); g.lineTo(ex, ey + 3); g.stroke(); } }
+    else if (st.phase === 'aim' || st.phase === 'back' || st.phase === 'fwd') { const d = onGreen() ? Math.min(dist(st.ball, h.pin) * 1.4, 30) : CLUBS[st.club][1]; g.strokeStyle = 'rgba(255,240,120,0.85)'; g.setLineDash([6, 6]); g.lineWidth = 2; g.beginPath();
       for (let k = 0; k <= 12; k++) { const q = [st.ball[0] + Math.sin(st.aim) * d * k / 12, st.ball[1] + Math.cos(st.aim) * d * k / 12], r = rel(q); if (r[1] <= V.near) continue; const [x, y] = proj(r); k ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); g.setLineDash([]); }
     minimap(); hudBox();
   }
@@ -204,8 +221,9 @@ export function createGolf({ scene, camera, BK, me, stations, obstacles, hud, ke
     g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(10, T0, 170, 74); g.fillStyle = '#ffcf3a'; g.font = '400 18px Bungee, system-ui'; g.textAlign = 'left'; g.fillText(`HOLE ${st.hole + 1}`, 18, T0 + 22);
     g.fillStyle = '#fff'; g.font = '700 16px "Barlow Condensed", system-ui'; g.fillText(`PAR ${h.par} · ${putt ? Math.round(yd * 3) + ' FT' : yd + ' YDS'} TO PIN`, 18, T0 + 42); g.fillText(`STROKE ${st.strokes + 1} · ${st.card.reduce((a, c) => a + c.pts, 0)} PTS`, 18, T0 + 62);
     g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(10, H - 64, 250, 54); g.fillStyle = '#fff'; g.font = '700 18px "Barlow Condensed", system-ui'; g.fillText(putt ? 'PUTTER · HALF A SWING = THE CUP' : `${CLUBS[st.club][0].toUpperCase()} · ${CLUBS[st.club][1]} YDS`, 18, H - 40);
-    const wm = Math.round(Math.hypot(st.wind[0], st.wind[1])), wa = Math.atan2(st.wind[0], st.wind[1]) - st.aim; g.fillText(`WIND ${wm} MPH`, 18, H - 18);
-    g.save(); g.translate(150, H - 24); g.rotate(wa); g.fillStyle = '#ffcf3a'; g.beginPath(); g.moveTo(0, -12); g.lineTo(7, 6); g.lineTo(-7, 6); g.fill(); g.restore();
+    if (putt) { const R = puttRead(), b = R.brk; g.fillText(Math.abs(b) * 3 < 0.25 ? 'DEAD STRAIGHT · AIM AT THE CUP' : `BREAKS ${ft(Math.abs(b))} ${b > 0 ? 'RIGHT' : 'LEFT'} · AIM ${b > 0 ? 'LEFT' : 'RIGHT'}`, 18, H - 18); }
+    else { const wm = Math.round(Math.hypot(st.wind[0], st.wind[1])), wa = Math.atan2(st.wind[0], st.wind[1]) - st.aim; g.fillText(`WIND ${wm} MPH`, 18, H - 18);
+    g.save(); g.translate(150, H - 24); g.rotate(wa); g.fillStyle = '#ffcf3a'; g.beginPath(); g.moveTo(0, -12); g.lineTo(7, 6); g.lineTo(-7, 6); g.fill(); g.restore(); }
     // swing meter
     if (st.phase === 'back' || st.phase === 'fwd') { const s = st.swing; g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(W - 150, H - 64, 24, 54); g.fillStyle = st.phase === 'back' ? '#7ab0ff' : '#ffcf3a'; const k = st.phase === 'back' ? Math.min(1, s.back / 200) : Math.min(1, s.fwd / Math.max(1, s.back)); g.fillRect(W - 147, H - 13 - 48 * k, 18, 48 * k); }
     if (st.msgT > 0) { let fs = 30; g.font = `400 ${fs}px Bungee, system-ui`; while (g.measureText(st.msg).width > W - 150 && fs > 14) { fs -= 2; g.font = `400 ${fs}px Bungee, system-ui`; } g.textAlign = 'center'; g.lineWidth = 6; g.strokeStyle = '#000'; g.strokeText(st.msg, W / 2 - 60, 150); g.fillStyle = '#ffcf3a'; g.fillText(st.msg, W / 2 - 60, 150); g.textAlign = 'left'; }
@@ -221,6 +239,7 @@ export function createGolf({ scene, camera, BK, me, stations, obstacles, hud, ke
     name: 'golf', spot, limits: { yaw: 0.25, pitch: 0.2 },
     enter() { st = { card: [] }; startHole(0); hud.title(''); this.hudUpdate(); },
     exit() { st = null; },
+    _st: () => st, // tests: read / poke the round
     hudUpdate() { hud.sub(''); hud.help(`3 holes, par ${PAR}: birdie 4 / par 3 / bogey 1 pts${tgt()}. Hold click, pull the mouse back, roll it forward fast (speed = power, drift = hook/slice). A/D aim · W/S club · E to leave.`); },
     down, up, move,
     camOffset: () => ({ y: 0, p: 0 }),
@@ -231,7 +250,7 @@ export function createGolf({ scene, camera, BK, me, stations, obstacles, hud, ke
     step(dt) {
       if (!st || st.attract) return;
       st.msgT = Math.max(0, (st.msgT || 0) - dt);
-      if (st.phase === 'aim') { const turn = ((keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0)) * dt * 0.45; st.aim += turn;
+      if (st.phase === 'aim') { const turn = ((keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0)) * dt * (onGreen() ? 0.16 : 0.45); st.aim += turn;
         if (!st.clubKey && (keys.KeyW || keys.KeyS || keys.ArrowUp || keys.ArrowDown) && !onGreen()) { st.club = Math.max(0, Math.min(CLUBS.length - 1, st.club + (keys.KeyS || keys.ArrowDown ? 1 : -1))); st.clubKey = true; audio.sfx('click'); }
         if (!(keys.KeyW || keys.KeyS || keys.ArrowUp || keys.ArrowDown)) st.clubKey = false; }
       if (st.phase === 'fly') { const f = st.flight; f.t += dt; if (f.t >= f.T) { const p = f.to; st.phase = 'landing'; land(p); } }
