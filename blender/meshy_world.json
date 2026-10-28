@@ -47,11 +47,54 @@
   "bottle_crate": {
    "img": "01a17e4c-22df-77ff-b398-f5d97c244755",
    "gen": "01a17e4d-2ee1-7792-97ff-4f6571c4b5a4"
+  },
+  "overtime_can": {
+   "gen": "01a183b2-c16a-70a3-a6d5-c3f97d177abf",
+   "note": "from the user's energy_drink.png"
+  },
+  "cig_pack": {
+   "gen": "01a183b2-ce95-7013-8a7b-62a05e1112b7",
+   "note": "from cigarette_pack.png (Last Call)"
+  },
+  "cash": {
+   "gen": "01a183b2-dc63-75ac-82a9-a275177c4089",
+   "note": "from cash.png; dropped money"
+  },
+  "pouch": {
+   "gen": "01a183b2-e74d-7520-9351-fc541eea8192",
+   "note": "from nicotine_pouch_with_hair.png; the men's room toilet"
   }
  },
  "golf_cabinet": {
   "img": "01a18041-2a64-74a2-bb13-17c847dcac28",
   "gen": "01a18042-0713-76e9-9a9d-de61cfa0e090",
   "note": "Golden Tee-Off cabinet: Meshy text-to-image (nano-banana) recreating the user reference with the parody marquee, then image-to-3d meshy-7.1, 12k tris"
+ },
+ "hands": {
+  "_note": "first-person hands in Bub's style: nano-banana-pro concept (refs: Bub multi-view image-to-image 01a17456..., plus the user's item references) -> meshy-7.1 image-to-3d; compressed with gltf-transform (simplify 0.12, webp 1024, meshopt). public/models/hands/<name>.glb",
+  "fist": {
+   "img": "01a183b3-7948-70d0-a459-cff2d898fb13",
+   "gen": "01a183b5-2bae-7587-a170-1d8013ce2f9c"
+  },
+  "cig": {
+   "img": "01a183b3-7cbb-762e-bcc1-34cc4316e3c4",
+   "gen": "01a183b5-2f4a-7756-a4cc-08505fe9d1f4"
+  },
+  "energy": {
+   "img": "01a183b3-81b4-74de-b19e-b928ad1304ca",
+   "gen": "01a183b5-3289-7046-805f-b121d5d0fe00"
+  },
+  "beer": {
+   "img": "01a183b3-86b9-7568-82fd-7fe4cb3788a2",
+   "gen": "01a183b5-370c-7002-83d7-e4ed40846a21"
+  },
+  "lighter": {
+   "img": "01a183b3-8967-73b7-a195-3a7980d77824",
+   "gen": "01a183b5-39f9-7300-bf9e-024476f20c9e"
+  },
+  "pouch": {
+   "img": "01a183b3-8bd4-718c-81d2-eb1993be1427",
+   "gen": "01a183b5-3d5a-73af-b7a8-30cce6992fc5"
+  }
  }
 }

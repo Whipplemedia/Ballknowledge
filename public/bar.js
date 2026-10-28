@@ -320,6 +320,7 @@ export function buildBar({ scene, BK, tv }) {
       swap(tG, 'toilet', { h: 0.95, rotY: -Math.PI / 2 }, X1 - 0.45, 0, z);
       if (i === 0) { // somebody keeps spitting nicotine pouches in this one (server 'zyn'; public/items.js shows it while there's one in there)
         const pouch = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.008, 0.028), M(0xe6e8d6, { roughness: 0.3 })); pouch.position.set(X1 - 0.6, 0.37, z + 0.03); pouch.rotation.y = 0.5; g.add(pouch); BK.zynPouch = pouch;
+        place(g, 'pouch', { w: 0.07, rotX: -Math.PI / 2 }, X1 - 0.6, 0.365, z + 0.03, (m) => { m.rotation.y = 0.5; g.remove(pouch); BK.zynPouch = m; }); // the Meshy one (prop pouch), hair and all
         stations.push({ x: X1 - 1.15, z, r: 0.85, prio: 2, on: () => !(BK.S && BK.S.zynAt > BK.now()), text: 'E - Fish the nicotine pouch out of the toilet (steady hands for 90s. Gross.)', act: () => BK.send({ type: 'zyn' }) });
       }
       const d = new THREE.Group(); d.position.set(SX, 0, z - 0.6); d.rotation.y = i ? -0.9 : -0.35; stG.add(d); box(0.04, 1.6, 1.15, part, 0, 1.0, 0.575, d);

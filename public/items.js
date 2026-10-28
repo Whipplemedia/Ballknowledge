@@ -1,20 +1,20 @@
 // Gas-station goods in first person (server: 'gas', 'cigLight', 'cigDrag', 'energy', 'zyn', 'bumCig', 'atm' in server.js).
-//   - a lit cigarette in your left hand for 2 minutes: smoke curls off the ember; F brings it to your mouth for a drag (the ember flares,
-//     then you breathe out a cloud). G lights one (the lighter comes up in your right hand).
-//   - the energy drink (X): the can comes up, you chug, crush it; for 60 s your fists are up in a guard, jittery, and punches land hard.
-//   - the pouch from the men's room toilet: your hand comes up from the bowl and puts it in. Steady hands (games.js dr()) for 90 s.
-//   - gas-station beer: same can move as the energy drink.
-//   - punches: a jab from alternating fists (world.js calls punch()).
+// The hands are Meshy models in Bub's style (public/models/hands/*.glb, one per grip; see blender/meshy_world.json "hands"):
+//   - cig: a lit cigarette in your left hand for 2 minutes, smoke curling off the ember; F brings it to your mouth for a drag (the ember
+//     flares, then you breathe out a cloud). G lights one: it goes to your lips and the lighter hand flicks a flame under it.
+//   - energy (OVERTIME) / beer (Budget Lite): the can comes up, tilts, you chug. Wired for 60 s: fists up in a jittery guard, punches land hard.
+//   - pouch: the hand comes up from the toilet bowl and puts it in your lip. Steady hands (games.js dr()) for 90 s.
+//   - fist: punches, a jab from alternating fists (world.js calls punch()).
 // Other people see a cigarette in the mouth of anyone smoking (and Dusty, once you've given him one), with smoke and a drag now and then.
-// The buff timers (luck / wired / steady) and what's in your pockets sit above the bottle counter.
+// The buff timers (luck / wired / steady) and what's in your pockets sit bottom left.
 import * as THREE from 'three';
 import { audio } from './audio.js';
+import { gltfLoader } from './loading.js';
 
-const SKIN = 0xd6a07c, SLEEVE = 0x2b3448;
 const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.75, ...o });
-const box = (w, h, d, m, x, y, z, parent) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); parent.add(b); return b; };
 const cyl = (r0, r1, h, m, parent, seg = 10) => { const c = new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, h, seg), m); parent.add(c); return c; };
 const ease = (k) => { k = Math.max(0, Math.min(1, k)); return k * k * (3 - 2 * k); };
+const D = Math.PI / 180;
 
 // ---------- smoke: soft world-space puffs from one pool ----------
 function createSmoke(scene) {
@@ -43,44 +43,37 @@ export function makeCig(len = 0.075) {
   const tip = new THREE.Object3D(); tip.position.z = -len - 0.012; g.add(tip);
   return { g, ember, emberM, tip, set lit(v) { ember.visible = ash.visible = v; } };
 }
-// a 12 oz can with a printed wrap
-function makeCan(kind) {
-  const c = document.createElement('canvas'); c.width = 256; c.height = 128; const g = c.getContext('2d');
-  if (kind === 'energy') { g.fillStyle = '#101418'; g.fillRect(0, 0, 256, 128); g.fillStyle = '#39ff6a'; g.font = '900 54px Bungee, Impact, sans-serif'; g.textAlign = 'center'; g.fillText('VOLT', 64, 82); g.fillText('VOLT', 192, 82); g.strokeStyle = '#39ff6a'; g.lineWidth = 6; g.beginPath(); for (let x = 0; x <= 256; x += 16) g.lineTo(x, 104 + (x / 16 % 2 ? 8 : -8)); g.stroke(); }
-  else { g.fillStyle = '#d8dde4'; g.fillRect(0, 0, 256, 128); g.fillStyle = '#1d4fa8'; g.fillRect(0, 34, 256, 58); g.fillStyle = '#fff'; g.font = '800 30px "Barlow Condensed", Arial, sans-serif'; g.textAlign = 'center'; g.fillText('BUDGET LITE', 64, 74); g.fillText('BUDGET LITE', 192, 74); }
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
-  const grp = new THREE.Group(); const body = cyl(0.033, 0.033, 0.122, new THREE.MeshStandardMaterial({ map: t, metalness: 0.5, roughness: 0.35 }), grp, 20);
-  const top = cyl(0.029, 0.033, 0.008, M(0xc8ccd2, { metalness: 0.9, roughness: 0.25 }), grp, 20); top.position.y = 0.065; body.userData.can = true; return grp;
-}
-// first-person hands: an open hand (fingers forward along -z) and a fist; each on a forearm in a sleeve
-function makeHand(side, fist) {
-  const g = new THREE.Group(), skin = M(SKIN, { roughness: 0.6 }), sl = M(SLEEVE, { roughness: 0.9 });
-  if (fist) { const kn = M(0xc48c68, { roughness: 0.6 }); box(0.08, 0.06, 0.07, skin, 0, 0, 0, g); // back of the hand, four knuckles, curled fingers, the thumb across the front
-    for (let i = 0; i < 4; i++) { box(0.018, 0.02, 0.022, kn, (i - 1.5) * 0.02, 0.026, -0.04, g); box(0.018, 0.034, 0.02, skin, (i - 1.5) * 0.02, 0.0, -0.05, g); }
-    box(0.05, 0.018, 0.02, kn, -side * 0.012, -0.024, -0.052, g); }
-  else { box(0.074, 0.026, 0.08, skin, 0, 0, 0, g); for (let i = 0; i < 4; i++) { const f = box(0.016, 0.017, 0.052, skin, (i - 1.5) * 0.019, 0.002, -0.064, g); f.rotation.x = -0.25 - i * 0.04; }
-    const th = box(0.018, 0.018, 0.045, skin, -side * 0.046, -0.004, -0.018, g); th.rotation.y = side * 0.7; }
-  box(0.062, 0.05, 0.05, skin, 0, -0.002, 0.058, g); box(0.078, 0.07, 0.36, sl, 0, -0.004, 0.25, g); // wrist, forearm
-  g.visible = false; return g;
-}
-// poses: [x, y, z, rx, ry, rz] in camera space; keyframes [[t, pose], ...] eased between
+// The hand models (each normalised by Meshy to ~1.9 units tall, the front of the hand facing +z) are placed in camera space by poses:
+// [x, y, z, rx, ry, rz] (metres, degrees; Euler order YXZ). Tuned in a first-person preview at the game's fov; the forearm's cut end
+// always leaves the screen. HANDS: file, scale, mirror (the left hand is the right model flipped), marks in model space.
+const HANDS = {
+  cig: { s: 0.22, mirror: true, tip: [-0.98, 0.35, 0.05] }, lighter: { s: 0.2, flame: [-0.22, 1.02, 0] }, energy: { s: 0.22 }, beer: { s: 0.22 }, pouch: { s: 0.2 },
+  fistR: { file: 'fist', s: 0.28 }, fistL: { file: 'fist', s: 0.28, mirror: true },
+};
 const lerpPose = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
 function at(keys, t) { if (t <= keys[0][0]) return keys[0][1]; for (let i = 1; i < keys.length; i++) if (t <= keys[i][0]) { const [t0, a] = keys[i - 1], [t1, b] = keys[i]; return lerpPose(a, b, ease((t - t0) / (t1 - t0))); } return keys[keys.length - 1][1]; }
-const put = (o, p) => { o.position.set(p[0], p[1], p[2]); o.rotation.set(p[3], p[4], p[5]); };
+const put = (o, p) => { o.position.set(p[0], p[1], p[2]); o.rotation.set(p[3] * D, p[4] * D, p[5] * D, 'YXZ'); };
 
-const CIG_REST = [-0.24, -0.26, -0.5, 0.35, 0.35, 0.25], CIG_MOUTH = [-0.07, -0.135, -0.22, 0.9, 0.25, 0.95], CIG_OFF = [-0.32, -0.62, -0.42, 0.35, 0.35, 0.25];
-const R_OFF = [0.3, -0.62, -0.42, 0, 0, 0];
+const CIG_REST = [-0.3, -0.3, -0.55, 0, 0, 0], CIG_MOUTH = [-0.1, -0.27, -0.32, 20, -10, -20], CIG_OFF = [-0.36, -0.75, -0.5, 0, 0, 0], CIG_GIVE = [-0.12, -0.22, -0.7, 0, 30, -60];
+const LIGHT_UP = [0.1, -0.24, -0.36, 0, 20, 10], R_OFF = [0.32, -0.75, -0.5, 0, 0, 0];
+const CAN_HOLD = [0.2, -0.2, -0.48, -10, 0, 10], CAN_SIP = [0.08, -0.1, -0.36, -65, 0, 20], CAN_TIP = [0.07, -0.08, -0.35, -75, 0, 20];
+const POUCH_LOW = [0.15, -0.6, -0.4, 30, 0, 0], POUCH_UP = [0.1, -0.3, -0.4, 10, 0, 0], POUCH_LIP = [0.08, -0.18, -0.34, 15, 0, 0];
+const guard = (side) => [side * 0.24, -0.26, -0.48, -10, 180, -25 * side], jabAt = (side) => [side * 0.04, -0.17, -0.52, -40, 180 + 10 * side, -45 * side], fistOff = (side) => [side * 0.3, -0.75, -0.45, -10, 180, -25 * side];
 
 export function createItems({ scene, camera, BK, me, games, getAvatars, bumView }) {
   const smoke = createSmoke(scene);
-  // ---- first person rig
-  const lh = makeHand(-1, false), rh = makeHand(1, false), lf = makeHand(-1, true), rf = makeHand(1, true); for (const h of [lh, rh, lf, rf]) camera.add(h);
-  const myCig = makeCig(); myCig.g.position.set(0.012, 0.016, -0.075); myCig.g.rotation.set(0, 1.25, 0); myCig.g.scale.setScalar(1.15); lh.add(myCig.g); // between the first two fingers, pointing out to the side
-  const lighter = new THREE.Group(); box(0.026, 0.06, 0.014, M(0xc81e3a, { roughness: 0.35 }), 0, 0.035, 0, lighter); box(0.024, 0.012, 0.012, M(0xbfc4c8, { metalness: 0.9, roughness: 0.3 }), 0, 0.071, 0, lighter);
-  const flame = new THREE.Mesh(new THREE.SphereGeometry(0.008, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffb040, toneMapped: false, transparent: true, opacity: 0.9 })); flame.scale.set(1, 2.2, 1); flame.position.y = 0.092; lighter.add(flame);
-  lighter.position.set(0, 0.02, -0.05); lighter.visible = false; rh.add(lighter);
-  const cans = { energy: makeCan('energy'), beer: makeCan('beer') }; for (const c of Object.values(cans)) { c.position.set(0, 0.03, -0.035); c.rotation.x = 0; c.visible = false; rh.add(c); }
-  const pouch = box(0.03, 0.007, 0.02, M(0xe8ead8, { roughness: 0.4, metalness: 0.05 }), 0.0, 0.012, -0.075, rh); pouch.visible = false;
+  // ---- first person rig: one holder per grip, filled when its model arrives (nothing shows until then)
+  const H = {}, tmpEmber = new THREE.Vector3();
+  const emberM = new THREE.MeshBasicMaterial({ color: 0xff5a1a, toneMapped: false }), flameM = new THREE.MeshBasicMaterial({ color: 0xffb040, toneMapped: false, transparent: true, opacity: 0.9 });
+  for (const [k, h] of Object.entries(HANDS)) {
+    const o = new THREE.Group(); o.visible = false; camera.add(o); H[k] = o;
+    gltfLoader().loadAsync('models/hands/' + (h.file || k) + '.glb').then((g) => {
+      const m = g.scene; m.scale.set(h.s * (h.mirror ? -1 : 1), h.s, h.s); m.traverse((c) => { if (c.isMesh) { c.frustumCulled = false; c.renderOrder = 6; } }); o.add(m);
+      if (h.tip) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), emberM); e.position.set(...h.tip); m.add(e); o.userData.ember = e; } // the glowing end, in model units
+      if (h.flame) { const f = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), flameM); f.position.set(...h.flame); f.scale.set(1, 2.2, 1); f.visible = false; m.add(f); o.userData.flame = f; }
+    }).catch(() => {});
+  }
+  const myTip = () => (H.cig.userData.ember ? H.cig.userData.ember.getWorldPosition(tmpEmber) : null);
 
   let act = null; // the current one-shot: { kind, t0, dur }
   let jab = null, jabSide = 1;
@@ -148,47 +141,44 @@ export function createItems({ scene, camera, BK, me, games, getAvatars, bumView 
         if ((w.next -= dt) <= 0) { w.next = 0.18; w.cig.tip.getWorldPosition(tmp); smoke.emit(tmp, new THREE.Vector3((Math.random() - 0.5) * 0.04, 0.22, (Math.random() - 0.5) * 0.04), 0.035, 2.4, 0.3, 0.09); } }
 
       // --- first person
-      for (const h of [lh, rh, lf, rf]) h.visible = false; lighter.visible = false; pouch.visible = false; cans.energy.visible = cans.beer.visible = false;
+      for (const o of Object.values(H)) o.visible = false;
       if (hidden) { act = null; return paintHud(); }
       const smoking = lit();
       if (act && t - act.t0 > act.dur) act = null;
-      const k = act ? t - act.t0 : 0;
+      const k = act ? t - act.t0 : 0, ember = H.cig.userData.ember, flame = H.lighter.userData.flame;
       // the cigarette hand (left)
-      myCig.lit = smoking || (act && act.kind === 'light' && k > 1.0);
-      if (act && act.kind === 'light') { // cigarette up to your mouth, lighter flicks, a first puff
-        lh.visible = rh.visible = true; put(lh, at([[0, CIG_OFF], [0.35, CIG_MOUTH], [1.25, CIG_MOUTH], [1.7, CIG_REST]], k));
-        put(rh, at([[0, R_OFF], [0.45, [0.06, -0.2, -0.27, 0.15, -0.5, 0]], [1.1, [0.06, -0.2, -0.27, 0.15, -0.5, 0]], [1.5, R_OFF]], k)); lighter.visible = k > 0.3 && k < 1.4;
-        flame.visible = k > 0.55 && k < 1.15; flame.scale.set(1, 2 + Math.sin(t * 40) * 0.4, 1);
+      let litNow = smoking || (act && act.kind === 'light' && k > 1.0);
+      if (act && act.kind === 'light') { // the cigarette goes to your lips, the lighter comes up under it and flicks, a first puff
+        H.cig.visible = H.lighter.visible = true; put(H.cig, at([[0, CIG_OFF], [0.35, CIG_MOUTH], [1.25, CIG_MOUTH], [1.7, CIG_REST]], k));
+        put(H.lighter, at([[0, R_OFF], [0.45, LIGHT_UP], [1.1, LIGHT_UP], [1.5, R_OFF]], k));
+        if (flame) { flame.visible = k > 0.55 && k < 1.15; flame.scale.set(1, 2 + Math.sin(t * 40) * 0.4, 1); }
         if (k > 0.55 && !act.click) { act.click = true; audio.sfx('lighter'); } if (k > 0.9 && !act.dr) { act.dr = true; audio.sfx('drag', { v: 0.6 }); }
       } else if (act && act.kind === 'drag') { // up to the lips, the ember flares, down, and out comes the smoke
-        lh.visible = true; put(lh, at([[0, CIG_REST], [0.4, CIG_MOUTH], [1.3, CIG_MOUTH], [1.75, CIG_REST]], k));
+        H.cig.visible = true; put(H.cig, at([[0, CIG_REST], [0.4, CIG_MOUTH], [1.3, CIG_MOUTH], [1.75, CIG_REST]], k));
         if (k > 0.35 && !act.dr) { act.dr = true; audio.sfx('drag'); }
         if (k > 1.75 && !act.ex) { act.ex = true; audio.sfx('exhale'); }
         if (k > 1.75 && k < 2.45) { camera.getWorldPosition(tmp); camera.getWorldDirection(fwd); tmp.addScaledVector(fwd, 0.42); tmp.y -= 0.1; // breathe it out in a stream
           for (let i = 0; i < 2; i++) smoke.emit(tmp, fwd.clone().multiplyScalar(0.9 + Math.random() * 0.6).add(new THREE.Vector3((Math.random() - 0.5) * 0.35, 0.05 + Math.random() * 0.12, (Math.random() - 0.5) * 0.35)), 0.03 + Math.random() * 0.03, 1.4 + Math.random(), 0.17, 0.38); }
-      } else if (act && act.kind === 'give') { lh.visible = true; put(lh, at([[0, CIG_REST], [0.35, [-0.08, -0.2, -0.62, 0.1, 0.6, 0.2]], [0.7, [-0.08, -0.2, -0.62, 0.1, 0.6, 0.2]], [1.0, CIG_OFF]], k)); myCig.lit = false; myCig.g.visible = k < 0.75; }
-      else if (smoking) { lh.visible = true; put(lh, CIG_REST); lh.position.y += Math.sin(t * 1.3) * 0.004; }
-      if (!(act && act.kind === 'give')) myCig.g.visible = true;
-      const flare = act && ((act.kind === 'drag' && k > 0.4 && k < 1.35) || (act.kind === 'light' && k > 0.9 && k < 1.25)); myCig.emberM.color.setHex(flare ? 0xffd060 : 0xff5a1a); myCig.ember.scale.setScalar(flare ? 1.25 : 1);
-      if (myCig.lit && lh.visible && !flare && Math.random() < dt * 7) { myCig.tip.getWorldPosition(tmp); smoke.emit(tmp, new THREE.Vector3((Math.random() - 0.5) * 0.03, 0.2, (Math.random() - 0.5) * 0.03), 0.02, 1.6, 0.25, 0.07); }
-      // the right hand: a can (energy drink / beer), the pouch
+      } else if (act && act.kind === 'give') { H.cig.visible = true; put(H.cig, at([[0, smoking ? CIG_REST : CIG_OFF], [0.35, CIG_GIVE], [0.7, CIG_GIVE], [1.0, CIG_OFF]], k)); litNow = false; }
+      else if (smoking) { H.cig.visible = true; put(H.cig, CIG_REST); H.cig.position.y += Math.sin(t * 1.3) * 0.004; }
+      const flare = act && ((act.kind === 'drag' && k > 0.4 && k < 1.35) || (act.kind === 'light' && k > 0.9 && k < 1.25));
+      if (ember) { ember.visible = litNow; emberM.color.setHex(flare ? 0xffd060 : 0xff5a1a); ember.scale.setScalar(flare ? 1.35 : 1); }
+      if (litNow && H.cig.visible && !flare && Math.random() < dt * 7) { const tp = myTip(); if (tp) smoke.emit(tp, new THREE.Vector3((Math.random() - 0.5) * 0.03, 0.2, (Math.random() - 0.5) * 0.03), 0.02, 1.6, 0.25, 0.07); }
+      // the right hand: a can (OVERTIME / Budget Lite), the pouch
       if (act && (act.kind === 'energy' || act.kind === 'beer')) {
-        rh.visible = true; const can = cans[act.kind]; can.visible = k < 2.0;
-        put(rh, at([[0, R_OFF], [0.35, [0.2, -0.25, -0.42, 0, -0.3, 0]], [0.6, [0.2, -0.25, -0.42, 0, -0.3, 0]], [0.95, [0.06, -0.16, -0.36, 0.85, -0.2, 0.15]], [1.75, [0.05, -0.13, -0.34, 1.25, -0.2, 0.15]], [2.05, [0.24, -0.3, -0.45, 0.2, -0.3, 0]], [2.4, R_OFF]], k));
-        can.scale.set(1, k > 1.85 ? 0.55 : 1, 1); camera.rotation.x += Math.sin(Math.min(1, Math.max(0, (k - 0.9) / 0.9)) * Math.PI) * 0.12;
+        const o = H[act.kind]; o.visible = true; put(o, at([[0, R_OFF], [0.35, CAN_HOLD], [0.6, CAN_HOLD], [0.95, CAN_SIP], [1.75, CAN_TIP], [2.05, CAN_HOLD], [2.4, R_OFF]], k));
+        camera.rotation.x += Math.sin(Math.min(1, Math.max(0, (k - 0.9) / 0.9)) * Math.PI) * 0.12; // head tips back with it
         if (k > 0.45 && !act.op) { act.op = true; audio.sfx('canOpen'); } if (k > 1.0 && !act.gl) { act.gl = true; audio.sfx('gulp'); } if (k > 1.85 && !act.cr) { act.cr = true; audio.sfx(act.kind === 'energy' ? 'canCrush' : 'burp'); }
-      } else if (act && act.kind === 'zyn') {
-        rh.visible = true; pouch.visible = k < 1.5; put(rh, at([[0, [0.12, -0.55, -0.38, -0.9, 0, 0]], [0.45, [0.12, -0.36, -0.36, -0.5, 0, 0]], [1.05, [0.05, -0.2, -0.34, 0.45, -0.3, 0.3]], [1.5, [0.05, -0.2, -0.34, 0.45, -0.3, 0.3]], [2.2, R_OFF]], k));
-      }
+      } else if (act && act.kind === 'zyn') { H.pouch.visible = true; put(H.pouch, at([[0, POUCH_LOW], [0.45, POUCH_UP], [1.05, POUCH_LIP], [1.5, POUCH_LIP], [2.2, R_OFF]], k)); }
       // fists: up in a guard while you're wired; a jab whenever you swing
-      const jk = jab ? t - jab.t0 : 9, guard = wired() && !(act && (act.kind === 'energy' || act.kind === 'beer' || act.kind === 'zyn'));
-      for (const [f, side] of [[lf, -1], [rf, 1]]) {
-        const busy = side < 0 ? lh.visible : rh.visible; if (busy) continue;
-        const shake = guard ? Math.sin(t * 31 + side) * 0.004 : 0;
-        const G = [side * 0.17, -0.18 + Math.sin(t * 7 + side) * 0.008 + shake, -0.4, 0.35, side * -0.2, side * -0.25], low = [side * 0.26, -0.55, -0.4, 0.2, 0, 0];
-        const base = guard ? G : low, hit = [side * 0.04, -0.09, -0.72, 0.1, side * -0.05, side * -1.4];
+      const jk = jab ? t - jab.t0 : 9, up = wired() && !(act && (act.kind === 'energy' || act.kind === 'beer' || act.kind === 'zyn'));
+      const rightBusy = H.lighter.visible || H.energy.visible || H.beer.visible || H.pouch.visible;
+      for (const [f, side] of [[H.fistL, -1], [H.fistR, 1]]) {
+        if (side < 0 ? H.cig.visible : rightBusy) continue;
+        const G = guard(side); G[1] += Math.sin(t * 7 + side) * 0.008 + (up ? Math.sin(t * 31 + side) * 0.004 : 0); // bob, and the caffeine jitter
+        const base = up ? G : fistOff(side), hit = jabAt(side);
         if (jab && jab.side === side && jk < 0.42) { f.visible = true; put(f, at([[0, base], [0.09, hit], [0.16, hit], [0.42, base]], jk)); }
-        else if (guard) { f.visible = true; put(f, G); }
+        else if (up) { f.visible = true; put(f, G); }
       }
       // wired: the screen pulses with your heartbeat
       const w = wired(); wiredFx.classList.toggle('on', w); if (w) { if ((api._hb = (api._hb || 0) - dt) <= 0) { api._hb = 0.62; audio.sfx('heart', { v: 0.4 }); } }

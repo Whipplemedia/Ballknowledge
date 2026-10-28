@@ -4,7 +4,7 @@ import { buildBar, ROOM } from './bar.js';
 import { createTV } from './tv.js';
 import { createRoulette } from './roulette.js';
 import { createZones } from './zones.js';
-import { onPlace } from './props.js';
+import { onPlace, place } from './props.js';
 import { createOutside, OUT, drawSym } from './outside.js';
 import { createFX } from './fx.js';
 import { makePreset, animate } from './people.js';
@@ -198,7 +198,8 @@ const drops = new Map(), chipGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.009,
 function syncDrops() {
   const want = new Set(((BK.S && BK.S.drops) || []).map((d) => d.id));
   for (const [id, o] of drops) if (!want.has(id)) { scene.remove(o.g); drops.delete(id); audio.sfx('chip', { pos: { x: o.x, y: 0.1, z: o.z } }); }
-  for (const d of (BK.S && BK.S.drops) || []) if (!drops.has(d.id)) { const g = new THREE.Group(); for (let k = 0; k < Math.min(8, Math.ceil(d.amt / 6)); k++) { const m = new THREE.Mesh(chipGeo, chipMats[k % 4]); m.position.set((k % 3) * 0.05 - 0.05, 0.006 + Math.floor(k / 3) * 0.0095, (k % 2) * 0.04); g.add(m); } g.position.set(d.x, 0, d.z); scene.add(g); drops.set(d.id, { g, x: d.x, z: d.z, asked: 0 }); }
+  for (const d of (BK.S && BK.S.drops) || []) if (!drops.has(d.id)) { const g = new THREE.Group(); for (let k = 0; k < Math.min(8, Math.ceil(d.amt / 6)); k++) { const m = new THREE.Mesh(chipGeo, chipMats[k % 4]); m.position.set((k % 3) * 0.05 - 0.05, 0.006 + Math.floor(k / 3) * 0.0095, (k % 2) * 0.04); g.add(m); } g.position.set(d.x, 0, d.z); scene.add(g); drops.set(d.id, { g, x: d.x, z: d.z, asked: 0 });
+    place(g, 'cash', { w: d.amt >= 100 ? 0.2 : 0.16 }, 0, 0.002, 0, (c) => { for (const m of [...g.children]) if (m !== c) g.remove(m); }); } // the Meshy cash stack replaces the chip pile once it's in
 }
 function grabDrops() { for (const [id, o] of drops) if (Math.hypot(o.x - me.x, o.z - me.z) < 1.1 && performance.now() - o.asked > 800) { o.asked = performance.now(); BK.send({ type: 'pickup', id }); } }
 // ---------- Sal's muscle: hitmen + collectors are simulated on the server (goons.js) and streamed here ----------

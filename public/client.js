@@ -591,10 +591,10 @@ function gasView() {
     ${row('🍺', 'Budget Lite tallboy', `Same buzz as the bar's beer for a quarter of the price.`, G.beer, 'beer')}
     ${row('🚬', 'A single (loosie)', `G lights it: 2 minutes of +15% luck on roulette, slots and scratchers. F takes a drag. Or hand one to ${esc(S.story && S.story.bum ? S.story.bum.name : 'Dusty')} and he skips you next time.`, G.cig, 'cig')}
     ${row('📦', 'Pack of five', 'Five cigarettes. Cheaper by the pack.', G.pack, 'pack')}
-    ${row('⚡', 'VOLT energy drink', `X cracks it: 60 seconds wired. Your punches drop Sal's collectors in a few hits, and you move faster.`, G.energy, 'energy')}
+    ${row('⚡', 'OVERTIME energy drink', `X cracks it: 60 seconds wired. Your punches drop Sal's collectors in a few hits, and you move faster.`, G.energy, 'energy')}
     <div class="gash">🎟️ Scratch-offs <span class="muted">· match three amounts to win it</span></div>
     <div class="row" style="gap:8px">${(G.tiers || [5, 20]).map((t) => `<button class="cta" ${me.money < t ? 'disabled' : ''} onclick="send({type:'gas',item:'scratch',tier:${t}})">${t === 5 ? 'Lucky Lager' : 'Big Money Bowl'} · ${$$(t)}</button>`).join('')}</div>
-    <div class="muted" style="font-size:13px">In your pockets: 🚬 ${inv.cigs || 0}${lit ? ' (one lit)' : ''} · ⚡ ${inv.cans || 0}. G light a cigarette · X drink a VOLT.</div></div>`;
+    <div class="muted" style="font-size:13px">In your pockets: 🚬 ${inv.cigs || 0}${lit ? ' (one lit)' : ''} · ⚡ ${inv.cans || 0}. G light a cigarette · X drink an OVERTIME.</div></div>`;
 }
 function atmView() {
   const G = S.gas || {}, out = S.me.atm || 0, left = Math.max(0, (G.atmMax || 100) - out), bum = esc(S.story && S.story.bum ? S.story.bum.name : 'Dusty');

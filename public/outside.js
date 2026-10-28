@@ -179,6 +179,9 @@ export function createOutside({ scene, BK, stations, obstacles, bar, ROOM }) {
     obstacles.push({ x: CA.x1 - 1.2, z: cz0 + 0.5, r: 0.55 }, { x: CA.x1 - 1.2, z: cz0 + 1.4, r: 0.55 }, { x: CA.x1 - 1.2, z: cz0 + 2.3, r: 0.55 });
     const clerk = bar.spawn(makePreset('rookie', { beard: 'stubble', outfit: 'tee', shirt: 0xc8102e, hat: { color: 0xc8102e, backwards: false } }), CA.x1 - 0.62, cz0 + 1.4, Math.PI / 2, 'idle', ['Pump number?', 'Slots are in the back.', 'No, the lotto machine is broken.', 'You buying something?'], 'Gas clerk');
     clerk.who = 'Gas clerk';
+    // on the counter: a stack of Last Call packs by the register, a row of OVERTIME cans at the other end (props cig_pack, overtime_can)
+    for (const [dx, dz, ry] of [[0, 0, 0.2], [0.07, 0.1, -0.15], [0.02, 0.2, 0.4]]) place(scene, 'cig_pack', { h: 0.12, rotY: Math.PI / 2 + ry }, 28.62 + dx, 1.0, cz0 + 2.35 + dz);
+    for (const dz of [0, 0.085, 0.17, 0.255]) place(scene, 'overtime_can', { h: 0.16, rotY: Math.PI / 2 }, 28.66, 1.0, cz0 + 0.12 + dz);
     stations.push({ x: CA.x1 - 1.75, z: cz0 + 1.4, r: 1.3, prio: 1, text: 'E - Counter: cheap beer, smokes, energy drinks, scratch-offs', act: () => BK.openPanel('gas') }); }
   // the shop floor (Meshy props, see blender/meshy_world.json "store"): drink coolers down the left wall, a candy gondola, coffee, ATM, chips, crates of empties;
   // glass bottles stand on the surfaces (bar.bottleSpots, picked up like the bar's) and the coolers hand out a few at a time

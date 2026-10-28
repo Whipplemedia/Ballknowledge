@@ -219,7 +219,7 @@ Second batch (Oct 2026), all game scores and home teams checked against web sear
     - It burns for 2 minutes in your left hand with smoke off the ember. F takes a drag: up to the lips, the ember flares, then you breathe out a cloud. F only throws a bottle when you're not smoking; click still throws.
     - While it's lit you're **lucky: +15% on the odds of a winning roulette spin, slot pull or scratch-off.** The server flips a losing result with chance `0.15·p/(1−p)`, where p is the base chance of coming out ahead, so the win chance becomes p × 1.15 (`lucky` / `luckQ`). It does nothing for sports bets.
     - In a sim, red hit 55% of 400 spins with a cigarette lit vs 45% without (expected 56% / 49%).
-  - **VOLT energy drink, $25:** X chugs it (the can comes up, a gulp, it gets crushed).
+  - **OVERTIME energy drink, $25:** X chugs it (the can comes up, tips back, a gulp, a crushed-can crunch).
     - For 60 seconds you're **wired**: fists up in a jittery guard, a heartbeat pulse on the screen, 18% faster on your feet.
     - Punches do 6 damage instead of 1 to Sal's collectors and stagger them, which makes them let go. Hitmen are still bottles only.
   - **Scratch-offs:** Lucky Lager ($5) and Big Money Bowl ($20). Three matching amounts on the 3×3 card wins that amount.
@@ -241,6 +241,16 @@ Second batch (Oct 2026), all game scores and home teams checked against web sear
   - Either way he smokes it for 2 minutes, and other players see a cigarette in the mouth of anyone smoking, with smoke and the odd drag.
 - **The HUD** (bottom left): a timer bar for each buff (🚬 lucky, ⚡ wired, 🟢 Zyn) and what's in your pockets (🚬 ×n, ⚡ ×n).
 - **Punches:** every swing now shows a jab from alternating fists. While you're smoking, the right hand throws them.
+- **First-person hands (Meshy, in Bub's style):** `public/models/hands/` has one model per grip: fist, cigarette, OVERTIME can, Budget Lite can, lighter, and the pouch pinch.
+  - Every player is the Bub model, so the hands match the character the others see.
+  - Meshy rigs have no finger bones, so each grip is its own model. Each began as a Meshy concept image made from Bub's source image, plus your item references for the can, the cigarette and the pouch.
+  - `items.js` moves whole hand models between poses (`HANDS` and the pose constants: camera-space metres and degrees). Each pose keeps the forearm's cut end off screen. The left hand is the right model mirrored.
+  - The ember and the lighter flame are small glowing meshes placed on the models.
+  - Task ids are in `blender/meshy_world.json` under "hands".
+- **Props from your references** (prop GLBs in `public/models/props`):
+  - `overtime_can` and `cig_pack` (Last Call) are on display on the counter.
+  - `cash` is the money people drop when they're knocked out, or when Dusty drops his loot. It replaces the poker chips.
+  - `pouch` (hair included) floats in the stall toilet.
 
 ## Type
 - **Bungee:** titles, big buttons (`.cta`), promo graphics, TV headlines, slot symbols and splashes.
