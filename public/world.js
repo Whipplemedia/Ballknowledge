@@ -16,6 +16,7 @@ import { label } from './textures.js';
 import { makeDizzy, headPos } from './dizzy.js';
 import { createGoonsView } from './goonsview.js';
 import { createBumView } from './bumview.js';
+import { createBrawl } from './brawl.js';
 import { createCine } from './cine.js';
 import { createVO } from './vo.js';
 import { CATALOG, BY_ID, RARITY, SLOTS, rollCrate, createPreview, applyCosmetics, tickCosmetics } from './cosmetics.js';
@@ -66,7 +67,7 @@ const sfxAt = (n, x, z, y = 1.2, o = {}) => audio.sfx(n, { pos: { x, y, z }, ...
 BK.sfxAt = sfxAt;
 // ---------- bottles + knockouts ----------
 const koNow = () => !!(me.koUntil && BK.now() < me.koUntil);
-const bottles = createBottles({ scene, camera, BK, me, obstacles, getAvatars: () => avatars, getNpcs: () => bar.npcs, getGoons: () => [...goons.list(), ...bumView.list()], getBrawlers: () => brawlers.map((b) => ({ P: b.P, side: b.i ? 'blue' : 'red' })), ROOM, busy: () => games.active() || BK.ui.open || BK.ui.shop || koNow() });
+const bottles = createBottles({ scene, camera, BK, me, obstacles, getAvatars: () => avatars, getNpcs: () => bar.npcs, getGoons: () => [...goons.list(), ...bumView.list()], getBrawlers: () => brawl.list(), ROOM, busy: () => games.active() || BK.ui.open || BK.ui.shop || koNow() });
 BK.bottles = bottles; BK.onBottle = (m) => bottles.remote(m); bottles.addSpots(bar.bottleSpots, stations);
 // small or see-through static things (bottles, chips, glasses, little decor) don't need to cast shadows: fewer objects in the shadow pass
 { const _s = new THREE.Vector3(); scene.updateMatrixWorld(true);
@@ -202,17 +203,9 @@ BK.guideSay = (who, text, vo) => { const n = bar.say(who, text, 7); if (n) { con
 BK.onGoonDodge = (m) => { goons.dodge(m.id); const o = goons.get(m.id); if (o) audio.sfx('whoosh', { pos: { x: o.P.group.position.x, y: 1.3, z: o.P.group.position.z } }); };
 BK.onGoons = (m) => { goons.onMsg(m); const h = goons.held[BK.S && BK.S.you] || null; if (h !== wasHeld) { wasHeld = h; if (h) { if (me.sit) BK.stand(); games.leave(); audio.sfx('groan'); } window.render && window.render(); } };
 const heldBy = () => (BK.S && goons.held[BK.S.you]) || null, draggedBy = () => (BK.S && goons.drag[BK.S.you]) || null;
-// ---------- bar-fight brawlers ----------
-const brawlers = [];
-function syncBrawlers() {
-  const be = BK.S && BK.S.barEvent, on = be && be.kind === 'fight';
-  if (on && !brawlers.length) {
-    [['jock', { shirt: 0xb02a2a, number: '1' }, 0.4, be.red], ['dieHard', { shirt: 0x2a5aa8, number: 'B' }, 1.6, be.blue]].forEach(([pre, over, x, nm], i) => {
-      const P = makePreset(pre, over); P.group.position.set(x, 0, -2.2); P.group.rotation.y = i ? Math.PI / 2 : -Math.PI / 2; const l = label(nm, i ? '#7ab0ff' : '#ff7a88', 0.9); l.position.y = 2.35; P.group.add(l); scene.add(P.group); brawlers.push({ P, x, i });
-    });
-  }
-  if (!on && brawlers.length) { brawlers.forEach((b) => scene.remove(b.P.group)); brawlers.length = 0; }
-}
+// ---------- bar-fight brawlers (public/brawl.js: choreographed exchanges, the knockout) ----------
+const brawl = createBrawl({ scene, audio });
+const syncBrawlers = () => brawl.sync(BK.S);
 // lights: remember base intensities so blackouts can dim everything
 const lightList = []; scene.traverse((o) => { if (o.isLight && !o.userData.noDim) lightList.push([o, o.intensity]); });
 const party = new THREE.PointLight(0xff40d0, 0, 14, 2); party.position.set(0, 3.6, 1); scene.add(party);
@@ -348,7 +341,7 @@ function frame(now) {
   camera.rotation.set(me.pitch + off.p + Math.sin(t * 0.7) * drunkAmt * 0.03, me.yaw + off.y + Math.sin(t * 0.5) * drunkAmt * 0.05, Math.sin(t * 0.9) * drunkAmt * 0.07);
   { const f = (BK.settings && BK.settings.fov) || 72; if (Math.abs(camera.fov - f) > 0.01) { camera.fov = f; camera.updateProjectionMatrix(); } }
   games.update(dt); games.rig(camera);
-  { const cOn = !!(BK.S && BK.S.cine && BK.now() < BK.S.cine.until), gOn = games.active() || cOn; for (const n of bar.npcs) { if (n.cine) continue; /* cine.js shows/hides the developer */ const g = n.P.group, hide = gOn && !(cOn && /^(opening|checkIn|verdict)$/.test(BK.S.cine.kind)) && Math.hypot(g.position.x - camera.position.x, g.position.z - camera.position.z) < (cOn ? 2.6 : 1.1) && !n.seated; /* the story's scenes frame their own close-ups */ if (g.visible === hide) g.visible = !hide; } }
+  { const cOn = !!(BK.S && BK.S.cine && BK.now() < BK.S.cine.until), gOn = games.active() || cOn; const ring = brawl.spot(); for (const n of bar.npcs) { if (n.cine) continue; /* cine.js shows/hides the developer */ const g = n.P.group, hide = (ring && !n.seated && Math.hypot(g.position.x - ring.x, g.position.z - ring.z) < 1.5) || gOn && !(cOn && /^(opening|checkIn|verdict)$/.test(BK.S.cine.kind)) && Math.hypot(g.position.x - camera.position.x, g.position.z - camera.position.z) < (cOn ? 2.6 : 1.1) && !n.seated; /* the story's scenes frame their own close-ups */ if (g.visible === hide) g.visible = !hide; } }
   // ---- audio frame: listener, footsteps, bar-event cues, voice
   audio.update(dt, camera); audioUI.show(active()); voice.update(dt, avatars);
   grabDrops(); for (const o of drops.values()) o.g.rotation.y += dt * 0.6;
@@ -374,11 +367,11 @@ function frame(now) {
   tv.blackout = blackout;
   { const cn = BK.S && BK.S.cine, ce = cn ? BK.now() - cn.start : 1e9, flick = cn && /Intro$/.test(cn.kind) && ce > 400 && ce < 1500;
     const tgt = blackout ? (Math.random() < 0.06 ? 0.5 : 0.05) : flick ? (Math.random() < 0.35 ? 0.45 : 0.95) : 1; for (const [l, base] of lightList) l.intensity += (base * tgt - l.intensity) * Math.min(1, dt * 9); party.intensity += ((happy ? 26 : 0) - party.intensity) * Math.min(1, dt * 4); party.color.setHSL((t * 0.25) % 1, 1, 0.55); }
-  brawlers.forEach((b, k) => { const g = b.P.group, sway = Math.sin(t * 3 + k) * 0.35; g.position.x = b.x + sway * (k ? -1 : 1) * 0.6; g.position.z = -2.2 + Math.sin(t * 2.3 + k * 2) * 0.35; animate(b.P, 'fight', t + k, 1); });
+  brawl.update(dt, t, BK.now());
   for (const n of bar.npcs) n.offscreen = !(zones.mask & n.P.group.layers.mask);
   if ((shadowPick -= dt) <= 0) { shadowPick = 0.5; // characters only cast shadows near you, where they show: skinning every one of them into the shadow map costs a lot
     const c = camera.position, near = (g) => Math.hypot(g.position.x - c.x, g.position.z - c.z) < 9;
-    for (const g of [...bar.npcs.map((n) => n.P.group), ...[...avatars.values()].map((a) => a.P.group), ...goons.list().map((o) => o.P.group), ...brawlers.map((b) => b.P.group)]) { const on = near(g); g.traverse((o) => { if (!o.isMesh) return; if (o.userData.cs0 === undefined) o.userData.cs0 = o.castShadow; o.castShadow = on && o.userData.cs0; }); } }
+    for (const g of [...bar.npcs.map((n) => n.P.group), ...[...avatars.values()].map((a) => a.P.group), ...goons.list().map((o) => o.P.group), ...brawl.list().map((b) => b.P.group)]) { const on = near(g); g.traverse((o) => { if (!o.isMesh) return; if (o.userData.cs0 === undefined) o.userData.cs0 = o.castShadow; o.castShadow = on && o.userData.cs0; }); } }
   roulette.update(dt); bar.update(t, dt, me); if (zones.barOn) tv.draw(BK.S, now); // the TVs are all in the bar
   { const c = BK.S && BK.S.cine, killOn = !!(c && c.kind === 'kill' && BK.now() < c.until + 200), dn = (x, z) => Math.hypot(x - ROOM.x, z + 6.6) < 1.8; // restroom door: opens for anyone near it (the kill scene drives it itself)
     const near = openOut() && (dn(me.x, me.z) || [...avatars.values()].some((a) => dn(a.P.group.position.x, a.P.group.position.z))); bar.backroom.tick(dt, t, killOn ? null : near);
@@ -430,6 +423,6 @@ const zones = (() => { const B = bar.backroom.bounds, C = OUT.casino, V = (x, y,
     store: new THREE.Box3(V(C.x0, -1, C.z0), V(C.x1, 12, C.z1)), frontDoor: { x: OUT.door.x, z: ROOM.z }, backDoor: { x: ROOM.x, z: (B.dz0 + B.dz1) / 2 }, storeDoor: { x: C.door.x, z: C.z0 },
     frontOpen: () => Math.abs(fd.rotation.y - (fd.userData.base ?? fBase)) > 0.03, backOpen: () => Math.abs(bd.rotation.y - (bd.userData.base ?? bBase)) > 0.03 }); })();
 zones.tagAll(); onPlace(zones.tag);
-window.__dbg = { zones, renderer, scene, camera, me, games, roulette, bar, fx, tv, avatars, bottles, voice, keys };
+window.__dbg = { zones, brawl, renderer, scene, camera, me, games, roulette, bar, fx, tv, avatars, bottles, voice, keys };
 requestAnimationFrame(frame);
 window.__worldReady = true; if (typeof window.render === 'function') window.render(); // drop the loading bar / loading screen

@@ -443,7 +443,9 @@ function startBarEvent(room) {
 function endBarEvent(room) {
   const be = room.barEvent; room.barEvent = null; room.nextBarEvent = Date.now() + dur(65000 + rnd(50000));
   if (be.kind === 'fight') {
-    const h = be.hits || { red: 0, blue: 0 }, pRed = clamp(0.5 + 0.12 * (h.blue - h.red), 0.15, 0.85), win = Math.random() < pRed ? 'red' : 'blue'; /* every bottle on a fighter tips it against him */ feed(room, `🥊 ${win === 'red' ? be.red : be.blue} wins the bar fight!`);
+    const h = be.hits || { red: 0, blue: 0 }, pRed = clamp(0.5 + 0.12 * (h.blue - h.red), 0.15, 0.85), win = Math.random() < pRed ? 'red' : 'blue'; /* every bottle on a fighter tips it against him */
+    const now = Date.now(); room.fightOver = { winner: win, red: be.red, blue: be.blue, start: now, until: now + 6000, seed: be.until }; // clients play the knockout (public/brawl.js)
+    feed(room, `🥊 ${win === 'red' ? be.red : be.blue} wins the bar fight!`);
     for (const [pid, b] of Object.entries(be.bets)) { const p = room.players.get(pid); if (!p) continue; if (b.side === win) { p.money += b.stake * 1.9; toast(p, `Your fighter won! +${money(b.stake * 0.9)}`, 'win'); award(room, p, 'fightWin'); } else toast(p, `Your fighter got flattened. -${money(b.stake)}`, 'err'); }
   }
 }
@@ -678,6 +680,7 @@ function view(room, p) {
     v.crewNow = Math.round(plist(room).reduce((a, q) => a + networth(room, q), 0));
     v.barEvent = room.barEvent ? { kind: room.barEvent.kind, until: room.barEvent.until, betUntil: room.barEvent.betUntil, red: room.barEvent.red, blue: room.barEvent.blue, hits: room.barEvent.hits || null, title: room.barEvent.title, text: room.barEvent.text, mine: room.barEvent.bets ? room.barEvent.bets[p.id] || null : null } : null;
     v.shake = room.shake ? { training: !!room.shake.training, tax: room.shake.tax, paid: room.shake.paid, hp: goons.hpLeft(room), maxHp: goons.hpMax(room), until: room.shake.until } : null;
+    v.fightOver = room.fightOver && Date.now() < room.fightOver.until ? room.fightOver : null;
     v.bum = room.bum ? { training: !!room.bum.training, target: room.bum.target, state: room.bum.state, loot: room.bum.loot } : null;
     v.spinning = room.spin ? { by: room.spin.name, until: room.spin.until } : null;
     const cur = room.events.find((e) => e.status === 'open');
