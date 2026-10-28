@@ -69,8 +69,10 @@ function retryLater() {
 const send = (m) => ws && ws.readyState === 1 && ws.send(JSON.stringify(m));
 function toast(text, kind = 'info') {
   const B = window.BK; if (B && B.sfx) B.sfx(kind === 'win' ? 'win' : kind === 'err' ? 'buzz' : kind === 'mob' ? 'knock' : 'tick');
-  const d = document.createElement('div'); d.className = 'toast ' + kind; d.textContent = text;
-  $('#toasts').appendChild(d); setTimeout(() => d.remove(), 5000);
+  const d = document.createElement('div'); d.className = 'toast ' + kind;
+  const tag = document.createElement('i'); tag.textContent = { win: '✔', err: '!', mob: '$', info: '•' }[kind] || '•'; const tx = document.createElement('span'); tx.textContent = text; d.append(tag, tx);
+  const box = $('#toasts'); box.prepend(d); while (box.children.length > 4) box.lastChild.remove(); // newest on top, at most four
+  setTimeout(() => { d.classList.add('out'); setTimeout(() => d.remove(), 450); }, 5200);
 }
 
 // ---------- panels / pointer lock ----------
@@ -109,7 +111,7 @@ let lastPhase = null;
 // so every visible HUD button gets a number key (1-9) and Tab frees the cursor to click instead
 // compact HUD: things that just changed show in full, then step back after a few seconds
 function hudCompact() {
-  document.body.classList.toggle('compact', !!settings.compact);
+  document.body.classList.toggle('compact', !!settings.compact); document.body.classList.toggle('hascrew', !!(S && S.players && S.players.length > 1));
   if (!S || !S.me || !['play', 'hunt'].includes(S.phase) || !S.events) return;
   const g = goalText(); if (g !== ui.goalText) { ui.goalText = g; ui.goalAt = Date.now(); }
   const bs = JSON.stringify((S.me.bounties || []).map((b) => b.done)); if (bs !== ui.bSig) { ui.bSig = bs; ui.bAt = Date.now(); }
@@ -233,16 +235,16 @@ function lobbyView() {
 function phaseInfo() {
   const t = now(), ev = S.events;
   const open = ev.find((e) => e.status === 'open');
-  if (open) return { text: `GAME ${open.idx + 1}/${ev.length} · BETS CLOSE IN`, ms: open.closeAt - t, urgent: open.closeAt - t < 20000 };
+  if (open) return { text: `GAME ${open.idx + 1} OF ${ev.length} · BETS CLOSE`, ms: open.closeAt - t, urgent: open.closeAt - t < 20000 };
   const up = ev.find((e) => e.status === 'upcoming');
-  if (up) return { text: 'NEXT GAME OPENS IN', ms: up.openAt - t };
+  if (up) return { text: 'NEXT GAME OPENS', ms: up.openAt - t };
   const air = ev.filter((e) => e.status === 'airing');
-  if (air.length) return { text: 'LAST GAME ON TV · FINAL IN', ms: Math.max(...air.map((e) => e.resolveAt)) - t };
+  if (air.length) return { text: 'LAST GAME ON TV · FINAL', ms: Math.max(...air.map((e) => e.resolveAt)) - t };
   return { text: '', ms: 0 };
 }
 function tick() {
   if (!S) return;
-  const el = $('#timer'); if (el && S.events) { const p = phaseInfo(); el.innerHTML = `${p.text} <b>${mmss(p.ms)}</b>`; el.classList.toggle('urgent', !!p.urgent); }
+  const el = $('#timer'); if (el && S.events) { const p = phaseInfo(), h = `<span>${p.text}</span><b>${mmss(p.ms)}</b>`; if (el.innerHTML !== h) el.innerHTML = h; el.classList.toggle('urgent', !!p.urgent); }
   const t2 = $('#tl2'); if (t2 && S.cur) { const e = S.events[S.cur.idx]; t2.textContent = mmss(e.closeAt - now()); t2.classList.toggle('urgent', e.closeAt - now() < 20000); const bar = $('#tlbar'); if (bar) bar.style.width = Math.max(0, Math.min(100, (e.closeAt - now()) / (e.closeAt - e.openAt) * 100)) + '%'; }
   const h = $('#huntt'); if (h && S.hunt) h.textContent = mmss(S.hunt.until - now());
   const st = $('#shaket'); if (st && S.shake) st.textContent = mmss(S.shake.until - now());
@@ -383,21 +385,22 @@ function gameView() {
   const tabs = [['book', '📱 Sportsbook'], ['bets', '🧾 My Bets'], ['mob', '🕴️ The Mob'], ['crew', '👥 Crew'], ...extra];
   const body = { book: bookView, bets: betsView, mob: mobView, crew: crewView, bar: barView, vinnie: vinnieView, paper: paperView, wheel: wheelView, challenge: challengeView, slot: slotView, gas: gasView, atm: atmView, scratch: scratchView, pool: typeof poolView === 'function' ? poolView : () => '' }[ui.tab]();
   if (!window.__worldReady) return `<div class="center"><div class="card col" style="width:min(420px,100%)"><div class="big">Getting the bar ready...</div>${loadBar()}<div class="muted">Your crew can already see you. The game has started - you'll be dropped in as soon as the bar finishes loading.</div></div></div>`;
+  const crew = S.players.length > 1, f = S.fund;
   return `<div class="hud">
-    <div class="hud-top">
-      <div class="row" style="gap:8px;justify-content:flex-start"><span class="pill">Room ${S.code}</span>${S.camp ? `<span class="pill">📖 Night ${S.camp.night}/${S.camp.nights}</span>` : ''}</div>
-      <div class="strip">${strip()}</div>
-      <div class="row" style="gap:8px;justify-content:flex-end"><span class="pill money">${$$(me.money)}</span>${me.debt > 0 ? `<span class="pill debt" title="Sal collects this at closing time">Sal's tab ${$$(me.debt)}</span>` : ''}
-      <span class="pill drunkp" title="Drunk confidence">🍺<span class="dm"><span id="drunkfill" style="width:${me.drunk}%"></span></span></span></div>
+    <div class="bug">
+      <div class="bug-l"><b>${esc(ST().bar.toUpperCase())}</b><span>${S.camp ? `NIGHT ${S.camp.night} OF ${S.camp.nights}` : 'ONE NIGHT'} · ROOM ${S.code}</span></div>
+      <div class="bug-c" id="timer"></div>
+      ${quotaHud()}
     </div>
+    <div class="bug-strip">${strip()}</div>
+    <div class="objective" id="goal">${goalText() || ''}</div>
+    <div class="wallet"><b class="w-cash">${$$(me.money)}</b>${me.debt > 0 ? `<span class="w-tab" title="Sal collects this at closing time">SAL'S TAB ${$$(me.debt)}</span>` : ''}
+      <span class="w-buzz" title="Drunk confidence">🍺<span class="dm"><span id="drunkfill" style="width:${me.drunk}%"></span></span></span></div>
+    ${crew ? `<div class="hud-crew">${playerList()}</div>` : ''}
     ${ui.reconnecting ? '<div class="reconn">📶 Connection lost - reconnecting...</div>' : ''}
-    <div class="hud-clock"><span class="pill time" id="timer"></span></div>
-    <div class="hud-goal" id="goal">${goalText()}</div>
-    ${quotaHud()}${eventBanner()}${napkinOn() ? napkinHud() : bountyHud()}${jobHud()}${shakeBanner()}
+    ${eventBanner()}${napkinOn() ? napkinHud() : bountyHud()}${jobHud()}${shakeBanner()}
     ${hunt ? huntBanner() : ''}
-    <div class="hud-crew">${playerList()}</div>
-    <div class="hud-feed">${[...S.feed].slice(-4).reverse().map((f) => `<div data-t="${f.t}">${esc(f.text)}</div>`).join('')}</div>
-    <div class="hud-help">WASD move · Mouse look · E interact · C crew/wire · P phone · Esc menu</div>
+    ${tickerHtml()}
   </div>
   ${ui.open ? `<div class="overlay"><div class="panel">
     <div class="tabs">${tabs.map(([id, l]) => `<button class="${id === 'mob' ? 'mob ' : ''}${ui.tab === id ? 'on' : ''}" onclick="ui.tab='${id}';render()">${l}</button>`).join('')}
@@ -791,13 +794,20 @@ function campEnd(s) {
     <div class="muted">Bankrolls carry over (under $250? ${esc(ST().owner.name)} slips you the rest from the till). Anything you still owe Sal carries over at 50% interest.</div>
     ${c.players.map((p) => `<div class="pl"><span>${esc(p.name)}${p.dead ? ' 💀' : ''}</span><span>brings ${$$(p.cash)}${p.fronted ? ` (+${$$(p.fronted)} from ${esc(ST().owner.name)})` : ''}${p.rollover ? ` · <b class="bad">owes Sal ${$$(p.rollover)}</b>` : ''}</span></div>`).join('')}</div>`;
 }
+// ---------- the live ticker (the bar's TV graphics): the latest thing that happened; when it's quiet, the controls ----------
+function tickerHtml() {
+  const last = S.feed[S.feed.length - 1], fresh = last && now() - last.t < 15000;
+  const keys = 'WASD move · Space jump · E use · G smoke · F drag/throw · X energy drink · C crew · P phone · H HUD · Esc menu';
+  return `<div class="ticker"><span class="tk-live">LIVE</span><span class="tk-brand">${esc(ST().bar.toUpperCase())}</span><div class="tk-txt ${fresh ? 'news' : 'keys'}${fresh && now() - last.t < 800 ? ' in' : ''}" data-t="${fresh ? last.t : 0}">${fresh ? esc(last.text) : keys}</div></div>`;
+}
 // ---------- quota / bounties / events ----------
 function quotaHud() { // the Save the Bar fund, and tonight's pace for the developer's check-ins (S.quota: crew net worth targets)
   if (!S.quota || !S.fund) return '';
   const f = S.fund, nxt = S.quota.find((q) => q.status === 'pending'), tonight = (S.crewNow || 0) - (f.start || 0), D = esc(ST().dev.name);
   const chips = S.quota.map((q) => `<span class="qc ${q.status}" title="${q.kind === 'final' ? 'Tonight\'s goal' : D + ' checks in'} after game ${q.idx + 1}">${q.status === 'met' ? '✓' : q.status === 'missed' ? '✗' : q.idx + 1}</span>`).join('');
   const pct = Math.max(0, Math.min(100, (Math.max(0, tonight) / Math.max(1, f.goal)) * 100)), ok = nxt ? S.crewNow >= nxt.target : tonight >= f.goal;
-  return `<div class="hud-quota"><div class="qt">SAVE ${esc(ST().bar.toUpperCase())} <span class="qchips">${chips}</span></div><div class="qbar ${ok ? 'ok' : ''}"><div style="width:${pct}%"></div></div><div class="muted">Tonight <b>${tonight >= 0 ? '+' : ''}${$$(tonight)}</b> / ${$$(f.goal)}${nxt && nxt.kind === 'mid' ? ` · ${D} checks in after game ${nxt.idx + 1} (+${$$(nxt.target - f.start)})` : ''} · fund ${$$(f.banked)}/${$$(f.buyout)}</div></div>`;
+  return `<div class="bug-r" title="${nxt && nxt.kind === 'mid' ? `${D} checks in after game ${nxt.idx + 1}: the crew needs to be up ${$$(nxt.target - f.start)} by then` : 'Tonight\'s goal'}"><div class="br-top"><span>SAVE THE BAR</span><b>${$$(f.banked)}<i> / ${$$(f.buyout)}</i></b></div>
+    <div class="qbar ${ok ? 'ok' : ''}"><div style="width:${pct}%"></div></div><div class="br-bot"><span>TONIGHT <b class="${tonight >= 0 ? 'up' : 'down'}">${tonight >= 0 ? '+' : ''}${$$(tonight)}</b> / ${$$(f.goal)}</span><span class="qchips">${chips}</span></div></div>`;
 }
 function bountyHud() {
   const b = S.me.bounties || []; if (!b.length) return '';

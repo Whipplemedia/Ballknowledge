@@ -426,11 +426,15 @@ function frame(now) {
   bumView.update(dt, t);
   goons.update(dt, t, BK.S && BK.S.cine && BK.now() < BK.S.cine.until ? BK.S.cine.kind : null);
   const st = nearest();
-  if (st && !cineOn && !BK.ui.open && !BK.ui.shop && !BK.ui.menu && !me.sit && !games.active()) { promptEl.textContent = st.text; promptEl.classList.remove('hidden'); } else promptEl.classList.add('hidden');
-  if (!st && !cineOn && !games.active() && !BK.ui.open && !BK.ui.shop && !BK.ui.menu && document.pointerLockElement !== canvas) { promptEl.textContent = 'Click to look around'; promptEl.classList.remove('hidden'); }
+  if (st && !cineOn && !BK.ui.open && !BK.ui.shop && !BK.ui.menu && !me.sit && !games.active()) { setPrompt(st.text); promptEl.classList.remove('hidden'); } else promptEl.classList.add('hidden');
+  if (!st && !cineOn && !games.active() && !BK.ui.open && !BK.ui.shop && !BK.ui.menu && document.pointerLockElement !== canvas) { setPrompt('Click to look around'); promptEl.classList.remove('hidden'); }
   fx.setDrunk(drunkAmt, t);
   zones.update(); fx.render();
 }
+// the use prompt: "E - Bartender (drinks...)" shows as a keycap and its label (built only when the text changes)
+let promptTxt = null;
+function setPrompt(t) { if (t === promptTxt) return; promptTxt = t; const m = /^([A-Z0-9]) - (.*)$/.exec(t); promptEl.textContent = '';
+  if (m) { const k = document.createElement('kbd'); k.textContent = m[1]; const s = document.createElement('span'); s.textContent = m[2]; promptEl.append(k, s); } else promptEl.textContent = t; }
 // ---------- zone culling + light pool (zones.js): only draw the parts of the map the camera can see into ----------
 for (const d of [bar.doors.front, bar.doors.back]) d.traverse((o) => { o.userData.zone = 'all'; });
 const zones = (() => { const B = bar.backroom.bounds, C = OUT.casino, V = (x, y, z) => new THREE.Vector3(x, y, z), fd = bar.doors.front, bd = bar.doors.back, fBase = fd.rotation.y, bBase = bd.rotation.y;

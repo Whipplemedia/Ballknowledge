@@ -442,3 +442,99 @@ body.cine #buffs, body.cine #wiredfx { opacity: 0; }
 .atm .atmfine { font-size: 12px; color: #c8e8d4; opacity: .85; }
 .scratch .scratchwrap { display: flex; justify-content: center; }
 .scratch canvas { width: min(330px, 70vw, 46vh); aspect-ratio: 1; border-radius: 10px; cursor: crosshair; touch-action: none; box-shadow: 0 6px 24px #0008; }
+
+/* =====================================================================================================
+   In-game HUD as the bar's own TV broadcast package: a score bug across the top, an objective line, the wallet,
+   lower-thirds for personal news, a "breaking" graphic for bar events and a live ticker along the bottom.
+   No floating cards: slabs, skewed tags, condensed type with shadows.
+   ===================================================================================================== */
+:root{--bc-ink:#f4f6ff;--bc-navy:#0d1630;--bc-navy2:#16244a;--bc-red:#e8283c;--bc-gold:#ffc83d;--bc-green:#2ee08a;--bc-blue:#2f7de1;--bc-font:"Barlow Condensed",system-ui,sans-serif;--bc-disp:Bungee,"Arial Black",system-ui}
+.hud{font-family:var(--bc-font)}
+/* the score bug */
+.bug{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;align-items:stretch;height:58px;filter:drop-shadow(0 6px 18px #000a)}
+.bug>div{display:flex;flex-direction:column;justify-content:center}
+.bug-l{background:var(--bc-red);color:#fff;padding:0 18px 0 16px;clip-path:polygon(0 0,100% 0,calc(100% - 12px) 100%,0 100%);margin-right:-12px;z-index:2}
+.bug-l b{font:400 19px/1 var(--bc-disp);letter-spacing:.02em}.bug-l span{font-size:11px;font-weight:700;letter-spacing:.12em;opacity:.9;margin-top:3px;white-space:nowrap}
+.bug-c{background:linear-gradient(180deg,#1d2c5a,var(--bc-navy));color:var(--bc-ink);padding:0 22px 0 26px;align-items:center;min-width:190px;clip-path:polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%);margin-right:-12px;z-index:1}
+.bug-c span{font-size:13px;font-weight:700;letter-spacing:.14em;color:#9fb0d8;white-space:nowrap}.bug-c b{font:400 27px/1 var(--bc-disp);color:var(--bc-gold);font-variant-numeric:tabular-nums;margin-top:2px}
+.bug-c.urgent b{color:#ff5a6a;animation:bcpulse .6s infinite alternate}@keyframes bcpulse{to{opacity:.55}}
+.bug-r{background:var(--bc-navy2);color:var(--bc-ink);padding:0 16px 0 24px;min-width:230px;clip-path:polygon(12px 0,100% 0,100% 100%,0 100%);gap:2px}
+.br-top{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;font-weight:800;letter-spacing:.12em;color:#9fb0d8}.br-top b{font-size:16px;color:var(--bc-ink);letter-spacing:.02em}.br-top i{font-style:normal;color:#9fb0d8;font-size:12px}
+.bug-r .qbar{height:5px;margin:1px 0;background:#05080f;border-radius:0}.bug-r .qbar div{background:linear-gradient(90deg,#ff7a3d,var(--bc-gold))}.bug-r .qbar.ok div{background:linear-gradient(90deg,#1fbf73,var(--bc-green))}
+.br-bot{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;letter-spacing:.06em;color:#c8d2ee}.br-bot b.up{color:var(--bc-green)}.br-bot b.down{color:#ff6a78}
+.bug-r .qc{border-radius:2px;min-width:16px;font-size:10px;padding:0 3px;background:#0b1428;border-color:#2a3a66}
+.bug-strip{position:absolute;top:72px;left:50%;transform:translateX(-50%);display:flex;gap:2px;filter:drop-shadow(0 2px 6px #000c)}
+.bug-strip .chip{border-radius:0;min-width:22px;padding:1px 4px;font:700 11px var(--bc-font);background:#0d1630e0;border:0;border-bottom:2px solid #2a3a66;color:#8f9bc7;clip-path:polygon(4px 0,100% 0,calc(100% - 4px) 100%,0 100%)}
+.bug-strip .chip.open{border-bottom-color:var(--bc-green);color:var(--bc-green);animation:none;background:#103a26}.bug-strip .chip.airing{border-bottom-color:var(--bc-gold);color:var(--bc-gold)}
+.bug-strip .chip.win{border-bottom-color:var(--bc-green);color:var(--bc-green)}.bug-strip .chip.loss{border-bottom-color:#ff4d5e;color:#ff6a78}.bug-strip .chip.fin{color:var(--bc-ink)}
+/* the objective: plain text under the bug, like a mission line */
+.objective{position:absolute;top:98px;left:50%;transform:translateX(-50%);max-width:min(620px,80vw);text-align:center;font-size:17px;font-weight:600;color:#fff;text-shadow:0 1px 2px #000,0 0 14px #000c;letter-spacing:.01em;transition:opacity .4s}
+.objective:empty{display:none}
+body.compact .objective.mini{opacity:.55;font-size:14px}
+/* the wallet, top right */
+.wallet{position:absolute;top:10px;right:14px;display:flex;flex-direction:column;align-items:flex-end;gap:3px;text-shadow:0 2px 8px #000c}
+.w-cash{font:400 26px/1 var(--bc-disp);color:var(--bc-green);letter-spacing:.01em}
+.w-tab{font-size:13px;font-weight:800;letter-spacing:.1em;color:#fff;background:var(--bc-red);padding:1px 8px;clip-path:polygon(6px 0,100% 0,100% 100%,0 100%)}
+.w-buzz{display:flex;align-items:center;gap:6px;font-size:15px}.w-buzz .dm{width:74px;height:6px;border-radius:0;background:#0009;box-shadow:0 0 0 1px #fff3}
+.hud .hud-crew{top:96px;right:14px;width:200px;opacity:1}.hud .hud-crew .pl{background:linear-gradient(90deg,#0d1630d8,#0d163000);border-radius:0;padding:3px 8px;margin-bottom:2px;font-weight:600}
+/* the live ticker */
+.ticker{position:absolute;left:0;right:0;bottom:0;height:30px;display:flex;align-items:center;background:linear-gradient(0deg,#060a16f2,#0d1630e6);border-top:2px solid var(--bc-red);font-size:15px;color:#e8ecff;overflow:hidden}
+.tk-live{align-self:stretch;display:flex;align-items:center;background:var(--bc-red);color:#fff;font:400 13px var(--bc-disp);padding:0 12px 0 14px;letter-spacing:.06em;clip-path:polygon(0 0,100% 0,calc(100% - 8px) 100%,0 100%)}
+.tk-live::before{content:"";width:7px;height:7px;border-radius:50%;background:#fff;margin-right:7px;animation:bcpulse 1s infinite alternate}
+.tk-brand{font-weight:800;letter-spacing:.14em;color:var(--bc-gold);padding:0 12px;font-size:13px;white-space:nowrap}
+.tk-txt{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:110px;font-weight:600}.tk-txt.keys{color:#9fb0d8;font-weight:500;font-size:14px;letter-spacing:.02em}
+.tk-txt.in{animation:tkin .5s ease-out}@keyframes tkin{from{transform:translateY(100%);opacity:0}}
+.hud-feed,.hud-help,.hud-top,.hud-clock,.hud-goal{display:none!important}
+/* personal news: broadcast lower-thirds, left side */
+#toasts{left:0;right:auto;top:auto;bottom:150px;gap:6px;flex-direction:column;align-items:flex-start;width:min(520px,70vw);z-index:20}
+.toast{display:flex;align-items:stretch;background:none;border:0;border-radius:0;padding:0;max-width:none;animation:ltin .38s cubic-bezier(.2,.8,.2,1) both;filter:drop-shadow(0 4px 10px #0009)}
+.toast i{flex:none;display:grid;place-items:center;width:34px;font:400 16px var(--bc-disp);font-style:normal;color:#fff;background:var(--bc-blue);clip-path:polygon(0 0,100% 0,calc(100% - 8px) 100%,0 100%)}
+.toast span{padding:7px 40px 7px 12px;margin-left:-8px;background:linear-gradient(90deg,#0d1630f2 0%,#0d1630d0 70%,#0d163000 100%);color:#fff;font:600 16px/1.25 var(--bc-font);letter-spacing:.01em;clip-path:polygon(8px 0,100% 0,100% 100%,0 100%);padding-left:18px}
+.toast.win i{background:#18a865}.toast.err i{background:var(--bc-red)}.toast.mob i{background:#c99417;color:#1a1200}.toast.info i{background:var(--bc-blue)}
+.toast.out{animation:ltout .45s ease-in forwards}
+@keyframes ltin{from{clip-path:inset(0 100% 0 0);transform:translateX(-12px)}to{clip-path:inset(0 0 0 0)}}
+@keyframes ltout{to{clip-path:inset(0 100% 0 0);opacity:.2}}
+/* bar events: a "breaking" graphic under the score bug */
+.hud .hud-event{top:128px;width:min(520px,80vw);background:none;border:0;border-radius:0;padding:0;text-align:left;font-weight:600;filter:drop-shadow(0 6px 16px #000b)}
+.hud-event .et{justify-content:flex-start;gap:0;margin:0;letter-spacing:.04em}
+.hud-event .et{font:400 18px var(--bc-disp);color:#fff;background:var(--bc-red);padding:5px 30px 5px 14px;clip-path:polygon(0 0,100% 0,calc(100% - 14px) 100%,0 100%);display:inline-flex;align-items:center}
+.hud-event .et .pill.time{background:none;border:0;color:#fff;font:400 16px var(--bc-disp);padding:0 0 0 14px;margin:0;opacity:.85}
+.hud-event>div:not(.et):not(.row){background:linear-gradient(90deg,#0d1630f0,#0d1630c8 80%,#0d163000);padding:6px 14px;font-size:16px;color:#fff}
+.hud-event .muted{color:#b8c4e4!important;font-size:14px!important}
+.hud-event .row{background:linear-gradient(90deg,#0d1630f0,#0d1630c8 80%,#0d163000);padding:6px 14px 8px;margin:0;gap:6px}
+.hud-event .row button{white-space:nowrap;flex:0 1 auto;border-radius:0;font:700 15px var(--bc-font);letter-spacing:.03em;padding:7px 12px;clip-path:polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%)}
+.hud-event.happy .et{background:#c2289a}.hud-event.blackout .et{background:#3a4258}.hud-event.tip .et{background:#b78a10;color:#1a1200}
+/* collectors / hitmen: an alert panel at the left */
+.hud .hunt{background:linear-gradient(90deg,#1a0a10f0,#1a0a10cc 80%,#1a0a1000)!important;border:0!important;border-radius:0!important;border-left:0!important;padding:10px 16px!important;font-family:var(--bc-font)}
+.hud .hunt .big{font:400 17px var(--bc-disp)!important;color:#fff}.hud .hunt .pill.time{background:var(--bc-red);border:0;border-radius:0;color:#fff;font:400 14px var(--bc-disp)}
+.hud .hunt .muted{color:#e8c8cc;font-size:14px}.hud .hunt .hp{border-radius:0;height:10px}.hud .hunt button{border-radius:0;font:700 14px var(--bc-font)}
+/* paper things stay paper: the napkin (already), the bounty list as a torn betting slip, the side job as a bar ticket */
+.hud-bounty{right:14px!important;bottom:76px!important;background:#f3efe4!important;color:#2a2418;border:0!important;border-radius:0!important;padding:10px 12px 14px!important;font:600 14px var(--bc-font)!important;transform:rotate(.8deg);box-shadow:0 8px 20px #0008;clip-path:polygon(0 0,100% 0,100% calc(100% - 6px),94% 100%,88% calc(100% - 6px),82% 100%,76% calc(100% - 6px),70% 100%,64% calc(100% - 6px),58% 100%,52% calc(100% - 6px),46% 100%,40% calc(100% - 6px),34% 100%,28% calc(100% - 6px),22% 100%,16% calc(100% - 6px),10% 100%,4% calc(100% - 6px),0 100%)}
+.hud-bounty .qt{color:#8a1f1a;font:400 14px var(--bc-disp);border-bottom:1px dashed #2a241866;padding-bottom:4px;margin-bottom:4px}.hud-bounty .bn b{color:#1d6a3a}.hud-bounty .muted{color:#6a5a40}
+.hud-napkin{bottom:76px!important}
+.hud-job{top:auto!important;bottom:150px;left:auto!important;right:14px;background:#f6e7c4!important;color:#3a2a10!important;border:0!important;border-radius:0!important;font:600 14px var(--bc-font)!important;transform:rotate(-1deg);box-shadow:0 6px 16px #0008;max-width:280px}
+.hud-job .muted{color:#6a5020!important}
+/* the use prompt and the bottle count: keycaps, no boxes */
+#prompt{background:none!important;border:0!important;padding:0!important;display:flex;align-items:center;gap:10px;font:600 19px var(--bc-font)!important;color:#fff;text-shadow:0 1px 3px #000,0 0 16px #000c;white-space:nowrap}
+#prompt kbd,#bottlehud kbd{display:inline-grid;place-items:center;min-width:30px;height:30px;padding:0 7px;background:linear-gradient(180deg,#fdfdfd,#cfd4de);color:#141a2a;border-radius:6px;font:400 15px var(--bc-disp);box-shadow:0 3px 0 #7a8296,0 4px 8px #0008;text-shadow:none}
+#bottlehud{background:none!important;border:0!important;font:600 16px var(--bc-font)!important;color:#fff;text-shadow:0 1px 3px #000;display:flex;align-items:center;gap:8px;bottom:84px!important}
+#bottlehud kbd{min-width:24px;height:24px;font-size:12px}
+/* status effects (public/items.js): round icons with a draining ring, under the wallet */
+#buffs{left:auto!important;right:14px;top:96px;bottom:auto!important;flex-direction:row!important;align-items:flex-start!important;gap:10px!important}
+body.hascrew #buffs{top:auto;bottom:44px;right:auto;left:14px}
+#buffs .sfx{position:relative;width:44px;display:flex;flex-direction:column;align-items:center;gap:2px;font:700 12px var(--bc-font);color:#fff;text-shadow:0 1px 3px #000}
+#buffs .sfx .ring{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--c) calc(var(--p) * 1%),#ffffff22 0);box-shadow:0 2px 10px #000a}
+#buffs .sfx .ring b{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:#0d1630;font-size:17px}
+#buffs .sfx.luck{--c:#ffb040}#buffs .sfx.wired{--c:#39ff6a}#buffs .sfx.zyn{--c:#7fd8ff}
+#buffs .sfx em{font-style:normal;font-size:10px;letter-spacing:.08em;color:#c8d2ee;white-space:nowrap}
+#buffs .pockets{align-self:center;background:none;padding:0;font:600 15px var(--bc-font);color:#fff;text-shadow:0 1px 3px #000;display:flex;gap:10px;align-items:center}
+#buffs .pockets kbd{min-width:20px;height:20px;display:inline-grid;place-items:center;background:linear-gradient(180deg,#fdfdfd,#cfd4de);color:#141a2a;border-radius:4px;font:400 11px var(--bc-disp);box-shadow:0 2px 0 #7a8296;margin-left:4px}
+/* phone + sound buttons sit above the ticker */
+#phonepill,#audiobtn{bottom:36px!important;background:#0d1630d8!important;border-color:#ffffff22!important;border-radius:4px!important}
+#phone{bottom:72px!important}
+#voicehud{bottom:84px}
+/* smaller screens: the score bug and the paper things shrink, the fund segment drops out first */
+@media (max-width:1180px){.bug{transform:translateX(-50%) scale(.84);transform-origin:top center}.bug-strip{top:64px}.objective{top:86px;font-size:15px}.hud .hud-event{top:112px}.w-cash{font-size:21px}}
+@media (max-width:940px){.bug .bug-r{display:none}.bug-c{clip-path:polygon(12px 0,100% 0,100% 100%,0 100%);margin-right:0}.bug{left:12px;transform:scale(.84);transform-origin:top left}.bug-strip,.objective{left:12px;transform:none;text-align:left}.hud .hud-event{left:12px;transform:none}}
+@media (max-height:820px){.hud-napkin,.hud-bounty{transform:scale(.82) rotate(-1deg)!important;transform-origin:bottom right}}
+@media (max-height:600px){.hud-napkin,.hud-bounty{transform:scale(.64) rotate(-1deg)!important}#toasts{bottom:96px}}

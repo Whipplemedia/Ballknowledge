@@ -47,35 +47,37 @@ export function makeCig(len = 0.075) {
 // [x, y, z, rx, ry, rz] (metres, degrees; Euler order YXZ). Tuned in a first-person preview at the game's fov; the forearm's cut end
 // always leaves the screen. HANDS: file, scale, mirror (the left hand is the right model flipped), marks in model space.
 const HANDS = {
-  cig: { s: 0.22, mirror: true, tip: [-0.98, 0.35, 0.05] }, lighter: { s: 0.2, flame: [-0.22, 1.02, 0] }, energy: { s: 0.22 }, beer: { s: 0.22 }, pouch: { s: 0.2 },
-  fistR: { file: 'fist', s: 0.28 }, fistL: { file: 'fist', s: 0.28, mirror: true },
+  cig: { s: 0.16, mirror: true, tip: [-0.89, 0.385, 0.03] }, lighter: { s: 0.16, flame: [-0.22, 1.02, 0] }, energy: { s: 0.18 }, beer: { s: 0.18 }, pouch: { s: 0.16 },
+  fistR: { file: 'fist', s: 0.21 }, fistL: { file: 'fist', s: 0.21, mirror: true },
 };
 const lerpPose = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
 function at(keys, t) { if (t <= keys[0][0]) return keys[0][1]; for (let i = 1; i < keys.length; i++) if (t <= keys[i][0]) { const [t0, a] = keys[i - 1], [t1, b] = keys[i]; return lerpPose(a, b, ease((t - t0) / (t1 - t0))); } return keys[keys.length - 1][1]; }
 const put = (o, p) => { o.position.set(p[0], p[1], p[2]); o.rotation.set(p[3] * D, p[4] * D, p[5] * D, 'YXZ'); };
 
-const CIG_REST = [-0.3, -0.3, -0.55, 0, 0, 0], CIG_MOUTH = [-0.1, -0.27, -0.32, 20, -10, -20], CIG_OFF = [-0.36, -0.75, -0.5, 0, 0, 0], CIG_GIVE = [-0.12, -0.22, -0.7, 0, 30, -60];
+const CIG_REST = [-0.32, -0.31, -0.6, 0, 0, 0], CIG_MOUTH = [-0.09, -0.25, -0.31, 20, -10, -20], CIG_OFF = [-0.36, -0.72, -0.5, 0, 0, 0], CIG_GIVE = [-0.12, -0.22, -0.7, 0, 30, -60];
 const LIGHT_UP = [0.1, -0.24, -0.36, 0, 20, 10], R_OFF = [0.32, -0.75, -0.5, 0, 0, 0];
-const CAN_HOLD = [0.2, -0.2, -0.48, -10, 0, 10], CAN_SIP = [0.08, -0.1, -0.36, -65, 0, 20], CAN_TIP = [0.07, -0.08, -0.35, -75, 0, 20];
+const CAN_HOLD = [0.22, -0.22, -0.52, -10, 0, 10], CAN_SIP = [0.08, -0.1, -0.36, -65, 0, 20], CAN_TIP = [0.07, -0.08, -0.35, -75, 0, 20];
 const POUCH_LOW = [0.15, -0.6, -0.4, 30, 0, 0], POUCH_UP = [0.1, -0.3, -0.4, 10, 0, 0], POUCH_LIP = [0.08, -0.18, -0.34, 15, 0, 0];
-const guard = (side) => [side * 0.24, -0.26, -0.48, -10, 180, -25 * side], jabAt = (side) => [side * 0.04, -0.17, -0.52, -40, 180 + 10 * side, -45 * side], fistOff = (side) => [side * 0.3, -0.75, -0.45, -10, 180, -25 * side];
+const guard = (side) => [side * 0.27, -0.29, -0.52, -10, 180, -25 * side], jabAt = (side) => [side * 0.04, -0.17, -0.52, -40, 180 + 10 * side, -45 * side], fistOff = (side) => [side * 0.3, -0.72, -0.45, -10, 180, -25 * side];
+const windup = (side) => { const g = guard(side); return [g[0] + side * 0.02, g[1] - 0.02, g[2] + 0.05, g[3] - 6, g[4], g[5] - side * 6]; }; // the fist draws back a touch before it goes
 
 export function createItems({ scene, camera, BK, me, games, getAvatars, bumView }) {
   const smoke = createSmoke(scene);
   // ---- first person rig: one holder per grip, filled when its model arrives (nothing shows until then)
-  const H = {}, tmpEmber = new THREE.Vector3();
+  const H = {}, tmpEmber = new THREE.Vector3(), rig = new THREE.Group(); camera.add(rig); // rig: sway when you look around, bob when you walk
   const emberM = new THREE.MeshBasicMaterial({ color: 0xff5a1a, toneMapped: false }), flameM = new THREE.MeshBasicMaterial({ color: 0xffb040, toneMapped: false, transparent: true, opacity: 0.9 });
   for (const [k, h] of Object.entries(HANDS)) {
-    const o = new THREE.Group(); o.visible = false; camera.add(o); H[k] = o;
+    const o = new THREE.Group(); o.visible = false; rig.add(o); H[k] = o;
     gltfLoader().loadAsync('models/hands/' + (h.file || k) + '.glb').then((g) => {
       const m = g.scene; m.scale.set(h.s * (h.mirror ? -1 : 1), h.s, h.s); m.traverse((c) => { if (c.isMesh) { c.frustumCulled = false; c.renderOrder = 6; } }); o.add(m);
-      if (h.tip) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), emberM); e.position.set(...h.tip); m.add(e); o.userData.ember = e; } // the glowing end, in model units
+      if (h.tip) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.02, 10, 8), emberM); e.position.set(...h.tip); m.add(e); o.userData.ember = e; } // the glowing end, in model units
       if (h.flame) { const f = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), flameM); f.position.set(...h.flame); f.scale.set(1, 2.2, 1); f.visible = false; m.add(f); o.userData.flame = f; }
     }).catch(() => {});
   }
   const myTip = () => (H.cig.userData.ember ? H.cig.userData.ember.getWorldPosition(tmpEmber) : null);
 
   let act = null; // the current one-shot: { kind, t0, dur }
+  const pres = { cig: 0, guard: 0 }, sw = { yaw: null, pitch: 0, x: 0, y: 0, ph: 0, px: null, pz: 0, spd: 0 }; // pres: the smoking hand and the guard ease in and out (0..1)
   let jab = null, jabSide = 1;
   const now = () => performance.now() / 1000;
   const S = () => BK.S && BK.S.me;
@@ -91,10 +93,11 @@ export function createItems({ scene, camera, BK, me, games, getAvatars, bumView 
   let hudSig = '';
   function paintHud() {
     const s = S(); if (!s || !BK.S || !['play', 'hunt'].includes(BK.S.phase)) { if (hudSig) { hud.innerHTML = ''; hudSig = ''; } return; }
-    const n = BK.now(), row = (on, until, total, icon, label, cls) => on ? `<div class="buff ${cls}"><b>${icon}</b><span>${label}</span><i>${Math.ceil((until - n) / 1000)}s</i><u style="width:${Math.max(0, Math.min(100, (until - n) / total * 100))}%"></u></div>` : '';
+    // status effects as round icons with a draining ring (the % is redrawn each second), then what's in your pockets with its key
+    const n = BK.now(), ring = (on, until, total, icon, label, cls, tip) => on ? `<div class="sfx ${cls}" title="${tip}"><div class="ring" style="--p:${Math.max(0, Math.min(100, Math.round((until - n) / total * 100)))}"><b>${icon}</b></div><span>${Math.ceil((until - n) / 1000)}s</span><em>${label}</em></div>` : '';
     const inv = s.inv || {};
-    const html = row(lit(), s.cigUntil, 120000, '🚬', 'LUCKY +15% · F drag', 'luck') + row(wired(), s.wiredUntil, 60000, '⚡', 'WIRED · punches hit hard', 'wired') + row(steady(), s.zynUntil, 90000, '🟢', 'ZYN · steady hands', 'zyn')
-      + ((inv.cigs || inv.cans) ? `<div class="pockets">${inv.cigs ? `🚬 ×${inv.cigs} <kbd>${lit() ? '' : 'G'}</kbd>` : ''}${inv.cans ? ` ⚡ ×${inv.cans} <kbd>X</kbd>` : ''}${s.bumPass ? ' · 🥫 Dusty owes you' : ''}</div>` : s.bumPass ? '<div class="pockets">🥫 Dusty owes you one</div>' : '');
+    const html = ring(lit(), s.cigUntil, 120000, '🚬', 'LUCKY', 'luck', '+15% on roulette, slots and scratch-offs. F takes a drag.') + ring(wired(), s.wiredUntil, 60000, '⚡', 'WIRED', 'wired', 'Your punches drop Sal\'s collectors.') + ring(steady(), s.zynUntil, 90000, '🟢', 'STEADY', 'zyn', 'Steady hands at darts, bowling and cornhole.')
+      + ((inv.cigs || inv.cans || s.bumPass) ? `<div class="pockets">${inv.cigs ? `<span>🚬 ${inv.cigs}${lit() ? '' : '<kbd>G</kbd>'}</span>` : ''}${inv.cans ? `<span>⚡ ${inv.cans}<kbd>X</kbd></span>` : ''}${s.bumPass ? '<span title="Dusty skips you next time">🥫 Dusty owes you</span>' : ''}</div>` : '');
     if (html !== hudSig) { hudSig = html; hud.innerHTML = html; }
   }
 
@@ -142,7 +145,17 @@ export function createItems({ scene, camera, BK, me, games, getAvatars, bumView 
 
       // --- first person
       for (const o of Object.values(H)) o.visible = false;
-      if (hidden) { act = null; return paintHud(); }
+      if (hidden) { act = null; pres.cig = pres.guard = 0; sw.yaw = null; return paintHud(); }
+      { // the hands lag a little behind the view when you turn, and bob with your steps
+        if (sw.yaw === null) { sw.yaw = me.yaw; sw.pitch = me.pitch; sw.px = me.x; sw.pz = me.z; }
+        let dy = me.yaw - sw.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); const dp = me.pitch - sw.pitch; sw.yaw = me.yaw; sw.pitch = me.pitch;
+        const id = 1 / Math.max(dt, 1 / 240), kx = Math.max(-0.035, Math.min(0.035, dy * id * 0.006)), ky = Math.max(-0.025, Math.min(0.025, -dp * id * 0.005));
+        sw.x += (kx - sw.x) * Math.min(1, dt * 9); sw.y += (ky - sw.y) * Math.min(1, dt * 9);
+        const v = Math.hypot(me.x - sw.px, me.z - sw.pz) * id; sw.px = me.x; sw.pz = me.z; sw.spd += (Math.min(v, 7) - sw.spd) * Math.min(1, dt * 6);
+        const wk = Math.min(1, sw.spd / 3.8); sw.ph += dt * (4 + sw.spd * 1.6);
+        rig.position.set(sw.x + Math.cos(sw.ph) * 0.007 * wk, sw.y - Math.abs(Math.sin(sw.ph)) * 0.009 * wk + Math.sin(t * 1.6) * 0.0018, 0);
+        rig.rotation.set(sw.y * 0.6, sw.x * 0.8, sw.x * -0.5);
+      }
       const smoking = lit();
       if (act && t - act.t0 > act.dur) act = null;
       const k = act ? t - act.t0 : 0, ember = H.cig.userData.ember, flame = H.lighter.userData.flame;
@@ -160,7 +173,9 @@ export function createItems({ scene, camera, BK, me, games, getAvatars, bumView 
         if (k > 1.75 && k < 2.45) { camera.getWorldPosition(tmp); camera.getWorldDirection(fwd); tmp.addScaledVector(fwd, 0.42); tmp.y -= 0.1; // breathe it out in a stream
           for (let i = 0; i < 2; i++) smoke.emit(tmp, fwd.clone().multiplyScalar(0.9 + Math.random() * 0.6).add(new THREE.Vector3((Math.random() - 0.5) * 0.35, 0.05 + Math.random() * 0.12, (Math.random() - 0.5) * 0.35)), 0.03 + Math.random() * 0.03, 1.4 + Math.random(), 0.17, 0.38); }
       } else if (act && act.kind === 'give') { H.cig.visible = true; put(H.cig, at([[0, smoking ? CIG_REST : CIG_OFF], [0.35, CIG_GIVE], [0.7, CIG_GIVE], [1.0, CIG_OFF]], k)); litNow = false; }
-      else if (smoking) { H.cig.visible = true; put(H.cig, CIG_REST); H.cig.position.y += Math.sin(t * 1.3) * 0.004; }
+      pres.cig += ((smoking && !act ? 1 : 0) - pres.cig) * Math.min(1, dt * 5);
+      if (!act && pres.cig > 0.01) { H.cig.visible = true; put(H.cig, lerpPose(CIG_OFF, CIG_REST, ease(pres.cig))); H.cig.position.y += Math.sin(t * 1.3) * 0.004; } // raised when you light up, lowered when it burns out
+      if (act && (act.kind === 'drag' || act.kind === 'light')) pres.cig = 1;
       const flare = act && ((act.kind === 'drag' && k > 0.4 && k < 1.35) || (act.kind === 'light' && k > 0.9 && k < 1.25));
       if (ember) { ember.visible = litNow; emberM.color.setHex(flare ? 0xffd060 : 0xff5a1a); ember.scale.setScalar(flare ? 1.35 : 1); }
       if (litNow && H.cig.visible && !flare && Math.random() < dt * 7) { const tp = myTip(); if (tp) smoke.emit(tp, new THREE.Vector3((Math.random() - 0.5) * 0.03, 0.2, (Math.random() - 0.5) * 0.03), 0.02, 1.6, 0.25, 0.07); }
@@ -172,13 +187,14 @@ export function createItems({ scene, camera, BK, me, games, getAvatars, bumView 
       } else if (act && act.kind === 'zyn') { H.pouch.visible = true; put(H.pouch, at([[0, POUCH_LOW], [0.45, POUCH_UP], [1.05, POUCH_LIP], [1.5, POUCH_LIP], [2.2, R_OFF]], k)); }
       // fists: up in a guard while you're wired; a jab whenever you swing
       const jk = jab ? t - jab.t0 : 9, up = wired() && !(act && (act.kind === 'energy' || act.kind === 'beer' || act.kind === 'zyn'));
+      pres.guard += ((up ? 1 : 0) - pres.guard) * Math.min(1, dt * 6);
       const rightBusy = H.lighter.visible || H.energy.visible || H.beer.visible || H.pouch.visible;
       for (const [f, side] of [[H.fistL, -1], [H.fistR, 1]]) {
         if (side < 0 ? H.cig.visible : rightBusy) continue;
         const G = guard(side); G[1] += Math.sin(t * 7 + side) * 0.008 + (up ? Math.sin(t * 31 + side) * 0.004 : 0); // bob, and the caffeine jitter
-        const base = up ? G : fistOff(side), hit = jabAt(side);
-        if (jab && jab.side === side && jk < 0.42) { f.visible = true; put(f, at([[0, base], [0.09, hit], [0.16, hit], [0.42, base]], jk)); }
-        else if (up) { f.visible = true; put(f, G); }
+        const base = lerpPose(fistOff(side), G, ease(pres.guard)), hit = jabAt(side), back = lerpPose(base, windup(side), 0.8);
+        if (jab && jab.side === side && jk < 0.48) { f.visible = true; put(f, at([[0, base], [0.05, back], [0.13, hit], [0.19, hit], [0.48, base]], jk)); }
+        else if (pres.guard > 0.01) { f.visible = true; put(f, base); }
       }
       // wired: the screen pulses with your heartbeat
       const w = wired(); wiredFx.classList.toggle('on', w); if (w) { if ((api._hb = (api._hb || 0) - dt) <= 0) { api._hb = 0.62; audio.sfx('heart', { v: 0.4 }); } }

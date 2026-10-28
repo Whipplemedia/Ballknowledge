@@ -266,6 +266,15 @@ Second batch (Oct 2026), all game scores and home teams checked against web sear
 - Code: the `phone*` functions and `betSplash` in client.js, and the `#phone` / `#betsplash` styles. The phone lives outside `#app`, so `render()` doesn't wipe it.
 
 ## HUD, speech bubbles & Esc menu
+- **The HUD is the bar's own TV graphics package** (CSS at the end of `public/style.css`). There are no floating cards:
+  - **Score bug** (top center): the bar and night in a red slab, the game clock, then the Save the Bar fund with tonight's progress and the developer's check-in chips. Hover the fund for when he checks in next. The game strip and the objective line sit under it as plain text.
+  - **Wallet** (top right): cash, Sal's tab as a red tag, the drunk meter. Under it the status icons (`#buffs`, public/items.js) are round icons with a draining ring (lucky, wired, steady), plus your pockets with their keys.
+  - **Lower-thirds** (left): personal news (`toast()` in client.js) wipes in as a broadcast caption with an icon tag per kind. Newest on top, at most four.
+  - **Breaking graphic:** bar events (fight, happy hour, blackout, tip) come in under the bug with a red tag and the timer. Their bet buttons are slanted and work with 1-9 as before.
+  - **Alert panel** (left): Sal's collectors and the hitmen.
+  - **Live ticker** (bottom): the latest thing that happened in the bar. When it's quiet, it shows the controls.
+  - Prompts and the bottle count are **keycaps**. The napkin, bounties (a torn betting slip) and side jobs (a bar ticket) stay paper.
+  - The score bug and the paper things shrink on smaller screens.
 - Compact HUD (default; H toggles, also in the menu): the objective banner shrinks to one line 9 s after it changes, feed lines fade after 12 s, and the bounties card collapses to a "0/3 done" line 12 s after a bounty changes.
 - NPC speech bubbles are smaller, scaled with distance (never screen-filling up close), hidden behind walls (depth tested), only from NPCs within 6 m in front of you, and at most two at once. They can be turned off in the menu.
 - Esc menu (`menuView` in client.js): opens whenever the mouse is released during play (Esc or clicking away), except when a panel, the shop, the sound panel or Tab released it. Resume, mouse sensitivity, invert Y, field of view, graphics Auto/High/Low (`BK.setQuality`), compact HUD, speech bubbles, sound & voice, full controls list, leave game. Settings are saved in `localStorage` (`bk_settings_v1`) and read by world.js each frame.

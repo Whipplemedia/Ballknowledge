@@ -18,7 +18,7 @@ export function createBottles({ scene, camera, BK, me, obstacles, getAvatars, ge
   const hand = make(); hand.position.set(0.26, -0.27, -0.62); hand.rotation.set(0.35, 0, -0.25); hand.scale.setScalar(0.8); hand.visible = false; camera.add(hand);
   const hud = document.createElement('div'); hud.id = 'bottlehud'; hud.className = 'hidden'; document.body.appendChild(hud);
   const ko = document.createElement('div'); ko.id = 'kooverlay'; ko.className = 'hidden'; document.body.appendChild(ko);
-  const paint = () => { hand.visible = st.held > 0; hud.classList.toggle('hidden', st.held <= 0); hud.textContent = `🍾 ×${st.held}  ·  click to throw`; };
+  const paint = () => { hand.visible = st.held > 0; hud.classList.toggle('hidden', st.held <= 0); hud.innerHTML = `🍾 ×${st.held} <kbd>CLICK</kbd> throw`; };
 
   const shatter = (p) => {
     audio.sfx('glassBreak', { pos: { x: p.x, y: p.y, z: p.z }, ref: 3 });
