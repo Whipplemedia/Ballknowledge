@@ -39,9 +39,9 @@ const DRINKS = [
   { id: 'whiskey', name: 'Top-Shelf Whiskey', emoji: '🥂', price: 120, add: 42, blurb: 'The expensive stuff. Confidence in a glass.' },
   { id: 'mystery', name: 'Bartender\'s Special', emoji: '🧪', price: 90, add: 55, blurb: 'Ingredients: unknown. Side effects: yes.' },
 ];
-const MG = { darts: { max: 180 }, bowling: { max: 20 }, cornhole: { max: 12 } };
+const MG = { darts: { max: 180 }, bowling: { max: 20 }, cornhole: { max: 12 }, golf: { max: 24 } }; // golf: Stableford points over 3 holes (public/golf.js)
 const OPPS = { rookie: { label: 'Rookie', mult: 1.6 }, regular: { label: 'Regular', mult: 2.0 }, shark: { label: 'The Shark', mult: 2.8 } };
-const NPC_SKILL = { darts: { rookie: [45, 18], regular: [70, 22], shark: [98, 26] }, bowling: { rookie: [9, 3], regular: [12.5, 3.2], shark: [16, 3] }, cornhole: { rookie: [3, 1.8], regular: [5, 2], shark: [7.5, 2] } };
+const NPC_SKILL = { golf: { rookie: [6, 2], regular: [9, 2], shark: [11.5, 2] }, darts: { rookie: [45, 18], regular: [70, 22], shark: [98, 26] }, bowling: { rookie: [9, 3], regular: [12.5, 3.2], shark: [16, 3] }, cornhole: { rookie: [3, 1.8], regular: [5, 2], shark: [7.5, 2] } };
 const POOL_MULT = { rookie: 1.7, shark: 2.6 };
 // ---------- the story: save the bar (names and the developer's plan live in public/story.json) ----------
 // The developer holds the bar's lease and wants it gone; the owner can buy him out. Each night the crew's winnings above
@@ -62,6 +62,7 @@ const BOUNTIES = [
   { id: 'darts_reg', text: 'Beat the Regular or Shark at darts', reward: 12, on: 'challengeWin', test: (d) => d.game === 'darts' && d.opp !== 'rookie' },
   { id: 'bowl_win', text: 'Win a bowling challenge', reward: 10, on: 'challengeWin', test: (d) => d.game === 'bowling' },
   { id: 'corn_win', text: 'Win a cornhole challenge', reward: 10, on: 'challengeWin', test: (d) => d.game === 'cornhole' },
+  { id: 'golf_win', text: 'Win a Golden Tee-Off challenge', reward: 10, on: 'challengeWin', test: (d) => d.game === 'golf' },
   { id: 'shark', text: 'Beat The Shark at anything', reward: 18, on: 'challengeWin', test: (d) => d.opp === 'shark' },
   { id: 'pool', text: 'Win a game of pool', reward: 12, on: 'poolWin' },
   { id: 'spread', text: 'Win a spread bet', reward: 8, on: 'betWin', test: (d) => d.mk === 'spread' },

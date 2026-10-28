@@ -156,6 +156,7 @@ document.addEventListener('pointerlockchange', () => {
 addEventListener('mousemove', (e) => {
   if (document.pointerLockElement !== canvas || roulette.lookTarget() || performance.now() - lockAt < 250 || koNow()) return;
   const mx = Math.max(-150, Math.min(150, e.movementX)), my = Math.max(-150, Math.min(150, e.movementY)); // ignore bogus jumps when the lock is (re)acquired
+  if (games.active() && games.move(mx, my)) return; // the golf trackball
   const ks = 0.0022 * ((BK.settings && BK.settings.sens) || 1), inv = BK.settings && BK.settings.invert ? -1 : 1; me.yaw -= mx * ks; me.pitch = Math.max(-1.3, Math.min(1.3, me.pitch - my * ks * inv));
   if (me.sit) { const d = Math.atan2(Math.sin(me.yaw - me.sit.yaw), Math.cos(me.yaw - me.sit.yaw)); if (Math.abs(d) > 1.75) me.yaw = me.sit.yaw + Math.sign(d) * 1.75; me.pitch = Math.max(-0.9, Math.min(0.8, me.pitch)); }
   games.clampLook();
@@ -218,9 +219,10 @@ canvas.addEventListener('mousedown', (e) => {
   if (games.active()) return games.down();
   const S = BK.S;
   if (bottles.held > 0 && bottles.throw()) return; // left click throws when you're holding bottles
-  if (goons.active() || bumView.list().length) { // punch: whatever goon (or the bum) is under the crosshair, if he's within reach
+  const bumNear = bumView.list().filter((o) => Math.hypot(o.P.group.position.x - me.x, o.P.group.position.z - me.z) < 3); // Dusty is around all night: only a punch when he's in reach
+  if (goons.active() || bumNear.length) { // punch: whatever goon (or the bum) is under the crosshair, if he's within reach
     ray.setFromCamera({ x: 0, y: 0 }, camera);
-    const hit = ray.intersectObjects([...goons.list(), ...bumView.list()].map((o) => o.P.group), true)[0], id = hit && hit.object.userData.goonId, o = id && (goons.get(id) || bumView.get(id));
+    const hit = ray.intersectObjects([...goons.list(), ...bumNear].map((o) => o.P.group), true)[0], id = hit && hit.object.userData.goonId, o = id && (goons.get(id) || bumView.get(id));
     if (o && hit.distance < 2.8 && o.state !== 'down') { BK.send({ type: 'attack', g: id }); audio.sfx('punch', { pos: { x: o.P.group.position.x, y: 1.3, z: o.P.group.position.z } }); me.punch = 1; }
     else audio.sfx('whoosh', { v: 0.4 });
   }
@@ -375,6 +377,7 @@ function frame(now) {
     const c = camera.position, near = (g) => Math.hypot(g.position.x - c.x, g.position.z - c.z) < 9;
     for (const g of [...bar.npcs.map((n) => n.P.group), ...[...avatars.values()].map((a) => a.P.group), ...goons.list().map((o) => o.P.group), ...brawl.list().map((b) => b.P.group)]) { const on = near(g); g.traverse((o) => { if (!o.isMesh) return; if (o.userData.cs0 === undefined) o.userData.cs0 = o.castShadow; o.castShadow = on && o.userData.cs0; }); } }
   roulette.update(dt); bar.update(t, dt, me); if (zones.barOn) tv.draw(BK.S, now); // the TVs are all in the bar
+  games.idle(t, zones.barOn); // the golf cabinet's attract screen
   { const c = BK.S && BK.S.cine, killOn = !!(c && c.kind === 'kill' && BK.now() < c.until + 200), dn = (x, z) => Math.hypot(x - ROOM.x, z + 6.6) < 1.8; // restroom door: opens for anyone near it (the kill scene drives it itself)
     const near = openRest() && (dn(me.x, me.z) || [...avatars.values()].some((a) => dn(a.P.group.position.x, a.P.group.position.z))); bar.backroom.tick(dt, t, killOn ? null : near);
     const cineOnNow = !!(c && BK.now() < c.until + 200), fn = (x, z) => Math.hypot(x - OUT.door.x, z - ROOM.z) < 2.0; // the street door: same, unless a cutscene is using it

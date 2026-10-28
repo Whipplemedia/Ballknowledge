@@ -769,7 +769,7 @@ function shakeBanner() {
 // ---------- arcade challenge board ----------
 window.BK.openChallenge = (g) => { ui.chGame = g; openPanel('challenge'); };
 function challengeView() {
-  const g = ui.chGame || 'darts', title = { darts: '🎯 Darts', bowling: '🎳 Bowling', cornhole: '🌽 Cornhole' }[g];
+  const g = ui.chGame || 'darts', title = { darts: '🎯 Darts', bowling: '🎳 Bowling', cornhole: '🌽 Cornhole', golf: '⛳ Golden Tee-Off' }[g];
   const open = S.me.challenge && S.me.challenge.game === g ? S.me.challenge : null, streak = (S.me.streak || {})[g] || 0;
   if (open) return `<div class="card col"><div class="big">${title} - open challenge</div>
     <div class="muted"><b>${esc({ rookie: 'The Rookie', regular: 'The Regular', shark: 'The Shark' }[open.opp])}</b> posted a score of <b class="gold">${open.target}</b>. Beat it to win <b class="ok">${$$(open.stake * open.mult)}</b> (stake ${$$(open.stake)}).</div>

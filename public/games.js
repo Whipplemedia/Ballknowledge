@@ -2,10 +2,11 @@ import * as THREE from 'three';
 import { makeHand } from './people.js';
 import { canvasTex, neon } from './textures.js';
 import { createPool } from './pool.js';
+import { createGolf } from './golf.js';
 import { hasProp, prop } from './props.js';
 import { audio } from './audio.js';
 
-// In-world arcade: darts, bowling, cornhole. Physical throwing in first person.
+// In-world arcade: darts, bowling, cornhole (physical throwing in first person), pool, and the Golden Tee-Off cabinet (golf.js).
 // Scores are reported to the server as {type:'mg', game, pts}; the server caps and pays out.
 export function createGames({ scene, camera, BK, me, keys, helpers, stations, obstacles }) {
   const { box, cyl, label, mat } = helpers;
@@ -301,9 +302,10 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
   })();
 
   const pool = createPool({ scene, camera, BK, me, stations, obstacles, hud, V });
+  const golf = createGolf({ scene, camera, BK, me, stations, obstacles, hud, keys, submit: (g, p) => submit(g, p), verdict, tgt });
 
   // ---------- controller ----------
-  const all = { darts, bowling, cornhole, pool };
+  const all = { darts, bowling, cornhole, pool, golf };
   let cur = null, acc = 0;
   function submit(game, pts) { const ch = challenge; BK.send({ type: 'mg', game, pts }); challenge = null; return ch; }
   function start(name, ch = null) {
@@ -316,6 +318,8 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
   return {
     start, leave, active: () => !!cur, current: () => cur && cur.name,
     down: () => cur && cur.down(), up: () => cur && cur.up(),
+    move: (dx, dy) => !!(cur && cur.move && cur.move(dx, dy)), // a game that takes raw mouse movement (the golf trackball)
+    idle: (t, visible) => golf.idle(t, visible),
     camOffset: (now) => (cur ? cur.camOffset(now) : { y: 0, p: 0 }),
     update(dt) { if (!cur) return; acc += Math.min(dt, 0.1); while (acc >= STEP) { cur.step(STEP); acc -= STEP; } kick.v = Math.max(0, kick.v - dt * 3.5); if (cur.handAnim) cur.handAnim(kick.v); },
     rig(cam) { if (cur && cur.rig) cur.rig(cam); },
