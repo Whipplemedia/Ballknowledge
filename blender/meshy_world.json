@@ -1,52 +1,57 @@
 {
-  "_note": "Meshy image-to-3d tasks (meshy-7.1, textured, remeshed) behind public/models/props/<name>.glb for the restroom, street and gas station. Reference images were made in ChatGPT from the asset brief.",
-  "props": {
-    "urinal": "01a17e32-7b0e-71c3-9b4d-dbdb0c37eac8",
-    "toilet": "01a17e32-7ff8-7122-99b6-2df1dbad7449",
-    "stalls": "01a17e32-84f3-740e-9efc-cff0f688bf38",
-    "sink_vanity": "01a17e32-89c7-7492-9afc-f77d65a88f53",
-    "mop_bucket": "01a17e32-dde1-7111-99d7-89cde0475756",
-    "wet_floor_sign": "01a17e32-e2c1-7436-9739-de7211158a56",
-    "slot_machine": "01a17e32-e763-7622-8861-4e285bb950f2",
-    "gas_pump": "01a17e32-ec27-70a0-b9d2-8882502f074c",
-    "store_counter": "01a17e32-f149-768e-ba1e-d045451752e9",
-    "el_track": "01a17e32-f77c-7492-9619-0a9efa09b52d",
-    "street_lamp": "01a17e33-5210-7024-b537-7d76cbc6d6e2",
-    "hydrant": "01a17e33-56bf-778d-be6f-bd327b105971",
-    "mailbox": "01a17e33-5be2-74aa-bdee-d99f1c4a3bfd",
-    "newsbox": "01a17e33-60a5-74a3-9fb5-1c08fe41bf14",
-    "dumpster": "01a17e33-659c-76e8-804f-1277435d060b",
-    "sedan": "01a17e33-6ae8-74e8-8c8a-644abca0baf7"
+ "_note": "Meshy image-to-3d tasks (meshy-7.1, textured, remeshed) behind public/models/props/<name>.glb for the restroom, street and gas station. Reference images were made in ChatGPT from the asset brief.",
+ "props": {
+  "urinal": "01a17e32-7b0e-71c3-9b4d-dbdb0c37eac8",
+  "toilet": "01a17e32-7ff8-7122-99b6-2df1dbad7449",
+  "stalls": "01a17e32-84f3-740e-9efc-cff0f688bf38",
+  "sink_vanity": "01a17e32-89c7-7492-9afc-f77d65a88f53",
+  "mop_bucket": "01a17e32-dde1-7111-99d7-89cde0475756",
+  "wet_floor_sign": "01a17e32-e2c1-7436-9739-de7211158a56",
+  "slot_machine": "01a17e32-e763-7622-8861-4e285bb950f2",
+  "gas_pump": "01a17e32-ec27-70a0-b9d2-8882502f074c",
+  "store_counter": "01a17e32-f149-768e-ba1e-d045451752e9",
+  "el_track": "01a17e32-f77c-7492-9619-0a9efa09b52d",
+  "street_lamp": "01a17e33-5210-7024-b537-7d76cbc6d6e2",
+  "hydrant": "01a17e33-56bf-778d-be6f-bd327b105971",
+  "mailbox": "01a17e33-5be2-74aa-bdee-d99f1c4a3bfd",
+  "newsbox": "01a17e33-60a5-74a3-9fb5-1c08fe41bf14",
+  "dumpster": "01a17e33-659c-76e8-804f-1277435d060b",
+  "sedan": "01a17e33-6ae8-74e8-8c8a-644abca0baf7"
+ },
+ "store": {
+  "_note": "Gas-station store fill: Meshy text-to-image (nano-banana) reference -> image-to-3d (meshy-7.1)",
+  "cooler": {
+   "img": "01a17e4c-1d73-7339-af68-71b8ad9672f0",
+   "gen": "01a17e4d-1a9f-77f4-984b-12592f6b5706"
   },
-  "store": {
-    "_note": "Gas-station store fill: Meshy text-to-image (nano-banana) reference -> image-to-3d (meshy-7.1)",
-    "cooler": {
-      "img": "01a17e4c-1d73-7339-af68-71b8ad9672f0",
-      "gen": "01a17e4d-1a9f-77f4-984b-12592f6b5706"
-    },
-    "gondola": {
-      "img": "01a17e4c-1e69-75ad-b931-8fb4262f0cae",
-      "gen": "01a17e4d-1ed5-75df-a71c-a9b2307da226"
-    },
-    "chip_rack": {
-      "img": "01a17e4c-1f45-74ec-b6a0-7593d3fcc409",
-      "gen": "01a17e4d-22c4-72ad-a8b1-e797ba573e5f"
-    },
-    "coffee_bar": {
-      "img": "01a17e4c-2029-708f-886d-735a8f2a21db",
-      "gen": "01a17e4d-2636-703c-92b7-2c57f81b29bc"
-    },
-    "atm": {
-      "img": "01a17e4c-2115-731d-9ba4-b01e4481a078",
-      "gen": "01a17e4d-2958-725d-97cc-0db3135b649a"
-    },
-    "ice_chest": {
-      "img": "01a17e4c-21f8-728e-89bb-ada7ff7c4c12",
-      "gen": "01a17e4d-2c2b-71b4-9756-0b720c650b05"
-    },
-    "bottle_crate": {
-      "img": "01a17e4c-22df-77ff-b398-f5d97c244755",
-      "gen": "01a17e4d-2ee1-7792-97ff-4f6571c4b5a4"
-    }
+  "gondola": {
+   "img": "01a17e4c-1e69-75ad-b931-8fb4262f0cae",
+   "gen": "01a17e4d-1ed5-75df-a71c-a9b2307da226"
+  },
+  "chip_rack": {
+   "img": "01a17e4c-1f45-74ec-b6a0-7593d3fcc409",
+   "gen": "01a17e4d-22c4-72ad-a8b1-e797ba573e5f"
+  },
+  "coffee_bar": {
+   "img": "01a17e4c-2029-708f-886d-735a8f2a21db",
+   "gen": "01a17e4d-2636-703c-92b7-2c57f81b29bc"
+  },
+  "atm": {
+   "img": "01a17e4c-2115-731d-9ba4-b01e4481a078",
+   "gen": "01a17e4d-2958-725d-97cc-0db3135b649a"
+  },
+  "ice_chest": {
+   "img": "01a17e4c-21f8-728e-89bb-ada7ff7c4c12",
+   "gen": "01a17e4d-2c2b-71b4-9756-0b720c650b05"
+  },
+  "bottle_crate": {
+   "img": "01a17e4c-22df-77ff-b398-f5d97c244755",
+   "gen": "01a17e4d-2ee1-7792-97ff-4f6571c4b5a4"
   }
+ },
+ "golf_cabinet": {
+  "img": "01a18041-2a64-74a2-bb13-17c847dcac28",
+  "gen": "01a18042-0713-76e9-9a9d-de61cfa0e090",
+  "note": "Golden Tee-Off cabinet: Meshy text-to-image (nano-banana) recreating the user reference with the parody marquee, then image-to-3d meshy-7.1, 12k tris"
+ }
 }

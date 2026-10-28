@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { canvasTex, neon } from './textures.js';
 import { audio } from './audio.js';
+import { place } from './props.js';
 
 // Golden Tee-Off: the bar's trackball golf cabinet (a parody of the classic). Three holes drawn live on the cabinet's screen:
 // a behind-the-ball 3D view (ground shapes projected with a simple pinhole camera) plus a top-down minimap. The mouse is the
@@ -35,7 +36,7 @@ function course() {
 
 export function createGolf({ scene, camera, BK, me, stations, obstacles, hud, keys, submit, verdict, tgt }) {
   const HOLES = course(), PAR = HOLES.reduce((a, h) => a + h.par, 0);
-  // ---------- the cabinet: a placeholder built from boxes until the Meshy model lands (the live screen plane stays on top of it) ----------
+  // ---------- the cabinet: boxes first, swapped for the Meshy model below when it loads (the live screen plane stays on top) ----------
   const CX = -5.5, CZ = -7.5, cab = new THREE.Group(); cab.position.set(CX, 0, CZ); scene.add(cab);
   const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, ...o });
   const bx = (w, h, d, m, x, y, z, rx = 0) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.rotation.x = rx; o.castShadow = o.receiveShadow = true; cab.add(o); return o; };
@@ -55,7 +56,11 @@ export function createGolf({ scene, camera, BK, me, stations, obstacles, hud, ke
   screen.position.set(0, 1.43, 0.215); screen.rotation.x = -0.2; /* tilted back, standing proud of the housing so its top edge isn't buried */ cab.add(screen);
   bx(0.68, 0.24, 0.4, dark, 0, 1.87, -0.12); // marquee box
   const mq = neon('GOLDEN TEE-OFF', '#ffcf3a', { w: 640, h: 128, size: 76 }).t; const mqm = new THREE.Mesh(new THREE.PlaneGeometry(0.64, 0.17), new THREE.MeshBasicMaterial({ map: mq, transparent: true, toneMapped: false })); mqm.position.set(0, 1.88, 0.085); cab.add(mqm);
-  obstacles.push({ x: CX, z: CZ, r: 0.5 });
+  // the Meshy cabinet (models/props/golf_cabinet.glb, blender/meshy_world.json): once it arrives the boxes hide and the live screen moves onto its painted CRT
+  const placeholder = cab.children.filter((o) => o !== screen);
+  place(cab, 'golf_cabinet', { h: 1.9 }, 0, 0, 0, () => { for (const o of placeholder) o.visible = false;
+    screen.rotation.x = -0.33; screen.scale.set(0.46 / 0.56, 0.345 / 0.42, 1); screen.position.set(-0.033, 1.28, 0.035).addScaledVector(new THREE.Vector3(0, Math.sin(0.33), Math.cos(0.33)), 0.012); });
+  obstacles.push({ x: CX, z: CZ, r: 0.55 });
   const spot = { x: CX, z: CZ + 0.95, yaw: 0, pitch: -0.1 };
   stations.push({ x: spot.x, z: spot.z, r: 1.3, text: 'E - Golden Tee-Off (challenge board)', act: () => BK.openChallenge('golf') });
 
@@ -220,8 +225,8 @@ export function createGolf({ scene, camera, BK, me, stations, obstacles, hud, ke
     down, up, move,
     camOffset: () => ({ y: 0, p: 0 }),
     rig(cam) { // square on to the (tilted) screen, a narrow lens so the game fills the view (world.js puts the normal FOV back every frame)
-      cam.fov = 40; cam.updateProjectionMatrix(); const c = new THREE.Vector3(0, 1.43, 0.215), n = new THREE.Vector3(0, Math.sin(0.2), Math.cos(0.2));
-      cam.position.copy(cab.localToWorld(c.clone().addScaledVector(n, 0.74))); cam.lookAt(cab.localToWorld(c)); },
+      cam.fov = 40; cam.updateProjectionMatrix(); const c = screen.position.clone(), n = new THREE.Vector3(0, Math.sin(-screen.rotation.x), Math.cos(screen.rotation.x));
+      cam.position.copy(cab.localToWorld(c.clone().addScaledVector(n, 0.84 * screen.scale.y))); cam.lookAt(cab.localToWorld(c)); },
     canvas: scr.c,
     step(dt) {
       if (!st || st.attract) return;
