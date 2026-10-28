@@ -414,7 +414,8 @@ function startShake(room) {
   const debt = owing(room).reduce((a, p) => a + p.debt, 0); if (debt <= 0) return;
   const tax = clamp(Math.round(debt * 0.4 / 50) * 50, 200, 3000);
   const fightAt = goons.spawn(room, 'shake', 2, 60 + tax / 30, { amount: tax, names: owing(room).map((p) => p.name) });
-  room.shake = { tax, paid: 0, until: fightAt + dur(32000) };
+  const walk = Math.max(0, ...owing(room).map((p) => Math.hypot((p.x || 0) - 5, (p.z || 0) - 8))) / 2.2 * 1000; // they follow debtors out to the street or the gas station: give them the walk
+  room.shake = { tax, paid: 0, until: fightAt + dur(32000) + walk };
   feed(room, `🔫 Sal's collectors walk in for an installment: ${money(tax)} from ${owing(room).map((p) => p.name).join(', ')}. Pay it - or throw them out.`);
 }
 function endShake(room, beaten) {

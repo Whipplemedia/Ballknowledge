@@ -28,23 +28,8 @@ module.exports = function createBum({ feed, toast, broadcast, plist, money, send
     if (inStore(p.x, p.z)) return { x: STORE.door, z: STORE.z0 - 3.5 };
     const side = p.x < 10 ? 1 : -1; return { x: p.x + side * 13, z: Math.max(9.4, Math.min(p.z, 21.5)) };
   }
-  // the next point to walk to on the way from b to (gx, gz): doors first when one of them is inside and the other isn't
-  function waypoint(b, gx, gz) {
-    const bIn = inBar(b.x, b.z), gIn = inBar(gx, gz), bS = inStore(b.x, b.z), gS = inStore(gx, gz);
-    if (gIn && !bIn) return { x: nav.FRONT_OUT.x, z: nav.FRONT_OUT.z, door: true };
-    if (!gIn && bIn) return { x: nav.FRONT_OUT.x, z: nav.FRONT_OUT.z, grid: true };
-    if (gS && !bS) return { x: STORE.door, z: STORE.z0 - 0.8, door: true };
-    if (!gS && bS) return { x: STORE.door, z: STORE.z0 + 0.6 };
-    return { x: gx, z: gz, grid: bIn };
-  }
-  function walk(room, b, gx, gz, speed, dt) {
-    let w = waypoint(b, gx, gz);
-    if (w.door && Math.hypot(w.x - b.x, w.z - b.z) < 0.4) { /* at the doorway: step through it */ w = { x: gx, z: gz, grid: inBar(gx, gz) }; }
-    b.moving = true;
-    if (w.grid) return nav.stepToward(b, fieldTo(room, w.x, w.z), w.x, w.z, speed, dt);
-    const dx = w.x - b.x, dz = w.z - b.z, l = Math.hypot(dx, dz) || 1, s = Math.min(l, speed * dt);
-    b.x += (dx / l) * s; b.z += (dz / l) * s; b.ry = Math.atan2(-dx, -dz); return l < 0.15;
-  }
+  // getting there: goons.js route() - the bar's grid indoors, straight lines outside, through the doors without bouncing on the threshold
+  const walk = (room, b, gx, gz, speed, dt) => { b.moving = true; return nav.route((x, z) => fieldTo(room, x, z), b, gx, gz, speed, dt); };
 
   const farSpot = (x, z) => { const s = [...SPOTS].sort((a, b) => Math.hypot(b[0] - x, b[1] - z) - Math.hypot(a[0] - x, a[1] - z))[Math.floor(Math.random() * 3)]; return { x: s[0], z: s[1] }; };
   // the night starts with him out on the street

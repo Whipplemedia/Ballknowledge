@@ -230,23 +230,25 @@ canvas.addEventListener('mousedown', (e) => {
 // the bar, plus the restroom through the door past Sal's booth (open while the bar is: no hiding in there from collectors or hitmen)
 // where you can be: the bar, plus (while the bar is open, i.e. no collectors or hitmen) the restroom, the street, the gas-station lot and its casino,
 // joined by doorway lanes. px/pz: how close to a space's edges you can walk; h: its ceiling (bottles shatter on it)
-const openOut = () => !!(BK.S && BK.S.phase === 'play' && !BK.S.shake);
+const openOut = () => !!(BK.S && BK.S.phase === 'play'); // the street, the lot and the store stay open when Sal's collectors come (they follow you out there); the hitmen at closing time pull everyone in
+const openRest = () => openOut() && !BK.S.shake; // no hiding in the men's room from the collectors
 const SPACES = (() => { const B = bar.backroom.bounds, D = OUT.door, C = OUT.casino, S = OUT.street, L = OUT.lot;
   return [
     { x0: -ROOM.x, x1: ROOM.x, z0: -ROOM.z, z1: ROOM.z, px: 0.6, pz: 0.6, h: ROOM.h },
-    { x0: ROOM.x - 0.7, x1: ROOM.x + 0.5, z0: B.dz0, z1: B.dz1, px: 0, pz: 0.28, h: 2.34, gated: true },              // restroom doorway
-    { x0: B.x0, x1: B.x1, z0: B.z0, z1: B.z1, px: 0.32, pz: 0.32, h: 3, gated: true },                                   // restroom
+    { x0: ROOM.x - 0.7, x1: ROOM.x + 0.5, z0: B.dz0, z1: B.dz1, px: 0, pz: 0.28, h: 2.34, gated: 'rest' },            // restroom doorway
+    { x0: B.x0, x1: B.x1, z0: B.z0, z1: B.z1, px: 0.32, pz: 0.32, h: 3, gated: 'rest' },                                 // restroom
     { x0: D.x - D.w / 2, x1: D.x + D.w / 2, z0: ROOM.z - 0.7, z1: ROOM.z + 0.9, px: 0.28, pz: 0, h: D.h, gated: true },  // front door
     { x0: -36, x1: 40, z0: ROOM.z + 0.3, z1: S.z1 + 4, px: 0.3, pz: 0.3, h: 60, gated: true },                           // sidewalks + street
     { x0: L.x0, x1: L.x1, z0: S.z1 + 3, z1: C.z0, px: 0.3, pz: 0.3, h: 60, gated: true },                                // gas-station lot
     { x0: C.door.x - C.door.w / 2, x1: C.door.x + C.door.w / 2, z0: C.z0 - 0.5, z1: C.z0 + 0.5, px: 0.28, pz: 0, h: C.door.h, gated: true },
     { x0: C.x0 + 0.06, x1: C.x1 - 0.06, z0: C.z0 + 0.06, z1: C.z1 - 0.06, px: 0.32, pz: 0.32, h: C.h, gated: true },   // casino
   ]; })();
-const spaceAt = (x, z, walk = true) => { for (const s of SPACES) { if (walk && s.gated && !openOut()) continue; const px = walk ? s.px : 0, pz = walk ? s.pz : 0; if (x >= s.x0 + px && x <= s.x1 - px && z >= s.z0 + pz && z <= s.z1 - pz) return s; } return null; };
+const spaceAt = (x, z, walk = true) => { for (const s of SPACES) { if (walk && s.gated && !(s.gated === 'rest' ? openRest() : openOut())) continue; const px = walk ? s.px : 0, pz = walk ? s.pz : 0; if (x >= s.x0 + px && x <= s.x1 - px && z >= s.z0 + pz && z <= s.z1 - pz) return s; } return null; };
 BK.spaceAt = spaceAt;
 function walkClamp(ox, oz) { // slide along whichever axis still lands somewhere walkable
   if (spaceAt(me.x, me.z)) return; if (spaceAt(me.x, oz)) { me.z = oz; return; } if (spaceAt(ox, me.z)) { me.x = ox; return; } if (spaceAt(ox, oz)) { me.x = ox; me.z = oz; return; }
-  if (me.x > ROOM.x - 0.6 && me.z < 0) { me.x = ROOM.x - 0.9; me.z = -6.6; } else { me.x = OUT.door.x; me.z = ROOM.z - 1.4; } // a space closed with you in it: you're shown back into the bar
+  if (me.x > ROOM.x - 0.6 && me.z < 0) { me.x = ROOM.x - 0.9; me.z = -6.6; return; } // a space closed with you in it: you're shown back into the bar
+  const spot = [[-6.5, -3.5], [-3, -5.5], [-8.5, 1], [3, -5.5], [-1, 2]].find(([x, z]) => clearAt(x, z)) || [-6.5, -3.5]; me.x = spot[0]; me.z = spot[1]; // the far side of the room, away from the front door Sal's men come in by
 }
 function move(dt, t, drunkAmt) {
   if (kissLook(dt)) return;
@@ -374,9 +376,9 @@ function frame(now) {
     for (const g of [...bar.npcs.map((n) => n.P.group), ...[...avatars.values()].map((a) => a.P.group), ...goons.list().map((o) => o.P.group), ...brawl.list().map((b) => b.P.group)]) { const on = near(g); g.traverse((o) => { if (!o.isMesh) return; if (o.userData.cs0 === undefined) o.userData.cs0 = o.castShadow; o.castShadow = on && o.userData.cs0; }); } }
   roulette.update(dt); bar.update(t, dt, me); if (zones.barOn) tv.draw(BK.S, now); // the TVs are all in the bar
   { const c = BK.S && BK.S.cine, killOn = !!(c && c.kind === 'kill' && BK.now() < c.until + 200), dn = (x, z) => Math.hypot(x - ROOM.x, z + 6.6) < 1.8; // restroom door: opens for anyone near it (the kill scene drives it itself)
-    const near = openOut() && (dn(me.x, me.z) || [...avatars.values()].some((a) => dn(a.P.group.position.x, a.P.group.position.z))); bar.backroom.tick(dt, t, killOn ? null : near);
+    const near = openRest() && (dn(me.x, me.z) || [...avatars.values()].some((a) => dn(a.P.group.position.x, a.P.group.position.z))); bar.backroom.tick(dt, t, killOn ? null : near);
     const cineOnNow = !!(c && BK.now() < c.until + 200), fn = (x, z) => Math.hypot(x - OUT.door.x, z - ROOM.z) < 2.0; // the street door: same, unless a cutscene is using it
-    bar.frontDoor(dt, cineOnNow ? null : openOut() && (fn(me.x, me.z) || [...avatars.values()].some((a) => fn(a.P.group.position.x, a.P.group.position.z))));
+    bar.frontDoor(dt, cineOnNow ? null : (fn(me.x, me.z) && openOut()) || [...avatars.values(), ...bumView.list(), ...goons.list()].some((a) => fn(a.P.group.position.x, a.P.group.position.z))); // it swings for players, the bum and Sal's men
     if (!spaceAt(me.x, me.z) && !cineOnNow && !me.sit) walkClamp(me.x, me.z); // outside when collectors or hitmen showed up: back in the bar
     outside.update(dt, BK.now()); }
 

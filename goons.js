@@ -58,6 +58,25 @@ function stepToward(g, D, gx, gz, speed, dt) {
   return d < 0.15;
 }
 
+// ---- getting anywhere: the bar's grid indoors, straight lines outside (the street, the lot, the store floor), through the doors.
+// Each doorway has a band on the inside and a deeper one on the outside, so nobody flip-flops on the threshold.
+const STORE = { x0: 18, x1: 30, z0: 36, z1: 48, door: 24.07 }; // public/outside.js OUT.casino
+const DOOR_IN = { x: FRONT.x, z: RZ + 1.3 }; // the bar's doorstep, outside
+const barSide = (x, z) => (Math.abs(x) < RX && z > -RZ && z < RZ + 0.2) || (Math.abs(x - FRONT.x) < 0.6 && z < RZ + 0.9 && z > RZ - 1.5);
+const storeSide = (x, z) => (x > STORE.x0 && x < STORE.x1 && z > STORE.z0 - 0.2 && z < STORE.z1) || (Math.abs(x - STORE.door) < 0.7 && z > STORE.z0 - 0.5 && z < STORE.z0 + 1);
+function straight(g, tx, tz, speed, dt) { const dx = tx - g.x, dz = tz - g.z, l = Math.hypot(dx, dz) || 1, s = Math.min(l, speed * dt); g.x += (dx / l) * s; g.z += (dz / l) * s; g.ry = Math.atan2(-dx, -dz); g.moving = true; return l < 0.15; }
+// fieldAt(x, z) -> a distance field to (x, z) on the bar grid. Returns true on arrival.
+function route(fieldAt, g, gx, gz, speed, dt) {
+  const tIn = barSide(gx, gz), gIn = barSide(g.x, g.z) || (tIn && Math.abs(g.x - FRONT.x) < 0.5 && g.z < RZ + 1.7); // coming in: the doorstep already counts as inside
+  if (gIn && tIn) return stepToward(g, fieldAt(gx, gz), gx, gz, speed, dt);
+  if (gIn) { stepToward(g, fieldAt(DOOR_IN.x, DOOR_IN.z), DOOR_IN.x, DOOR_IN.z, speed, dt); return false; } // out the front door first
+  if (tIn) { straight(g, DOOR_IN.x, DOOR_IN.z, speed, dt); return false; }                                // to the bar's doorstep
+  const sT = storeSide(gx, gz), sG = storeSide(g.x, g.z) || (sT && Math.abs(g.x - STORE.door) < 0.6 && g.z > STORE.z0 - 1.4);
+  if (sT && !sG) { straight(g, STORE.door, STORE.z0 - 1.0, speed, dt); return false; }                    // to the store's doorway
+  if (sG && !sT) { straight(g, STORE.door, STORE.z0 - 0.9, speed, dt); return false; }                    // and back out of it
+  return straight(g, gx, gz, speed, dt);
+}
+
 module.exports = function createGoons({ feed, toast, broadcast, plist, money, send, onDone }) {
   const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
   const alive = (g) => g.state !== 'down' && g.state !== 'gone';
@@ -140,7 +159,7 @@ module.exports = function createGoons({ feed, toast, broadcast, plist, money, se
     const now = Date.now(), dt = STEP_MS / 1000;
     for (const g of G.list) g.moving = false;
     if (G.phase === 'intro') {
-      for (const g of G.list) { const D = fieldFor(room, 'spot' + g.id, g.spot[0], g.spot[1]); if (stepToward(g, D, g.spot[0], g.spot[1], SPEED.enter, dt)) { g.ry = Math.atan2(0, 1); g.state = 'idle'; } }
+      for (const g of G.list) { if (g.state === 'idle') continue; if (route((x, z) => fieldFor(room, 'spot' + g.id + Math.round(x) + ',' + Math.round(z), x, z), g, g.spot[0], g.spot[1], SPEED.enter, dt) || Math.hypot(g.x - g.spot[0], g.z - g.spot[1]) < 0.2) { g.ry = Math.atan2(0, 1); g.state = 'idle'; } }
       if (now >= room.cine.until) { G.phase = 'fight'; room.cine = null; for (const g of G.list) { g.state = 'chase'; g.target = pickTarget(room, g); } broadcast(room); }
     } else if (G.phase === 'fight') {
       for (const g of G.list) {
@@ -154,8 +173,7 @@ module.exports = function createGoons({ feed, toast, broadcast, plist, money, se
         if (done) { if (p && p.heldBy === g.id) p.heldBy = null; g.target = pickTarget(room, g); g.state = g.target ? 'chase' : 'idle'; p = g.target && room.players.get(g.target); }
         if (!p) continue;
         if (g.state === 'chase') {
-          const D = fieldFor(room, 'p' + p.id, p.x, p.z);
-          if (dist(g, p) > 1.05) stepToward(g, D, p.x, p.z, G.kind === 'hunt' ? SPEED.hitman : SPEED.collector, dt);
+          if (dist(g, p) > 1.05) route((x, z) => fieldFor(room, 'f' + Math.round(x * 2) + ',' + Math.round(z * 2), x, z), g, p.x, p.z, G.kind === 'hunt' ? SPEED.hitman : SPEED.collector, dt); // wherever you are: the street, the gas station
           else if (now >= g.cool && !p.heldBy && !(p.slippery > now) && !(p.koUntil > now && G.kind !== 'hunt')) { g.state = 'grab'; p.heldBy = g.id; g.until = now + (G.kind === 'hunt' ? T.grabTake : T.patDown); g.ry = Math.atan2(-(p.x - g.x), -(p.z - g.z)); toast(p, G.kind === 'hunt' ? 'A hitman has you! Mash SPACE to break free - crew, bottle him now.' : 'A collector is going through your pockets... mash SPACE to shake him off.', 'mob'); }
           else g.ry = Math.atan2(-(p.x - g.x), -(p.z - g.z));
         } else if (g.state === 'grab') {
@@ -180,7 +198,7 @@ module.exports = function createGoons({ feed, toast, broadcast, plist, money, se
     } else if (G.phase === 'outro') {
       for (const g of G.list) {
         if (g.state === 'down') { if (g.until && now >= g.until) g.state = 'leave'; else continue; }
-        if (g.state === 'leave') { const D = fieldFor(room, 'front', FRONT_OUT.x, FRONT_OUT.z); if (stepToward(g, D, FRONT_OUT.x, FRONT_OUT.z, SPEED.leave, dt)) g.state = 'gone'; }
+        if (g.state === 'leave') { if (route((x, z) => fieldFor(room, 'front', x, z), g, FRONT_OUT.x, FRONT_OUT.z + 0.4, SPEED.leave, dt) || Math.hypot(g.x - FRONT_OUT.x, g.z - FRONT_OUT.z - 0.4) < 0.4) g.state = 'gone'; }
         if (g.state === 'drag') { const D = fieldFor(room, 'back', BACK_OUT.x, BACK_OUT.z); if (stepToward(g, D, BACK_OUT.x, BACK_OUT.z, SPEED.drag, dt)) g.state = 'gone'; const p = room.players.get(g.target); if (p) { p.x = g.x - Math.sin(g.ry + Math.PI) * 0.75; p.z = g.z - Math.cos(g.ry + Math.PI) * 0.75; } }
       }
       if (room.cine ? now >= room.cine.until : now >= G.until || G.list.every((g) => g.state === 'gone'))  { /* a cutscene ending always plays out in full */ const kind = G.kind, how = G.outro; stop(room); onDone(room, kind, how); broadcast(room); return; }
@@ -195,4 +213,4 @@ module.exports = function createGoons({ feed, toast, broadcast, plist, money, se
 };
 module.exports.DOORS = { FRONT, BACK };
 module.exports.TUNE = TUNE;
-module.exports.nav = { field, stepToward, FRONT, FRONT_OUT }; // bum.js walks the same grid indoors
+module.exports.nav = { field, stepToward, route, FRONT, FRONT_OUT }; // bum.js walks the same way
