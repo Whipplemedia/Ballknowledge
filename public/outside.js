@@ -178,7 +178,8 @@ export function createOutside({ scene, BK, stations, obstacles, bar, ROOM }) {
   { const cz0 = CA.z0 + 1.0; place(scene, 'store_counter', { d: 2.8, rotY: -Math.PI / 2 }, CA.x1 - 0.85, 0, cz0 + 1.4); // counter facing the room, cigarette shelves against the wall
     obstacles.push({ x: CA.x1 - 1.2, z: cz0 + 0.5, r: 0.55 }, { x: CA.x1 - 1.2, z: cz0 + 1.4, r: 0.55 }, { x: CA.x1 - 1.2, z: cz0 + 2.3, r: 0.55 });
     const clerk = bar.spawn(makePreset('rookie', { beard: 'stubble', outfit: 'tee', shirt: 0xc8102e, hat: { color: 0xc8102e, backwards: false } }), CA.x1 - 0.62, cz0 + 1.4, Math.PI / 2, 'idle', ['Pump number?', 'Slots are in the back.', 'No, the lotto machine is broken.', 'You buying something?'], 'Gas clerk');
-    clerk.who = 'Gas clerk'; }
+    clerk.who = 'Gas clerk';
+    stations.push({ x: CA.x1 - 1.75, z: cz0 + 1.4, r: 1.3, prio: 1, text: 'E - Counter: cheap beer, smokes, energy drinks, scratch-offs', act: () => BK.openPanel('gas') }); }
   // the shop floor (Meshy props, see blender/meshy_world.json "store"): drink coolers down the left wall, a candy gondola, coffee, ATM, chips, crates of empties;
   // glass bottles stand on the surfaces (bar.bottleSpots, picked up like the bar's) and the coolers hand out a few at a time
   { const F = 0.06; // wall thickness inside the shell
@@ -187,7 +188,7 @@ export function createOutside({ scene, BK, stations, obstacles, bar, ROOM }) {
     place(scene, 'gondola', { h: 1.5, rotY: Math.PI / 2 }, 21.4, 0, 38.9); obstacles.push({ x: 21.4, z: 38.0, r: 0.6 }, { x: 21.4, z: 38.9, r: 0.6 }, { x: 21.4, z: 39.8, r: 0.6 });
     place(scene, 'coffee_bar', { w: 1.8 }, 20.2, 0, CA.z0 + F + 0.36); obstacles.push({ x: 19.75, z: CA.z0 + 0.4, r: 0.45 }, { x: 20.65, z: CA.z0 + 0.4, r: 0.45 });
     place(scene, 'atm', { h: 1.75 }, 22.35, 0, CA.z0 + F + 0.46); obstacles.push({ x: 22.35, z: CA.z0 + 0.5, r: 0.45 });
-    stations.push({ x: 22.35, z: CA.z0 + 1.3, r: 0.8, text: 'ATM · out of service', act: () => BK.toast && BK.toast('OUT OF SERVICE. Sal\'s guys emptied it.', 'info') });
+    stations.push({ x: 22.35, z: CA.z0 + 1.3, r: 0.8, text: 'E - ATM (up to $100 a night, $5 fee)', act: () => BK.openPanel('atm') });
     place(scene, 'chip_rack', { h: 1.6 }, 26.1, 0, CA.z0 + F + 0.27); obstacles.push({ x: 26.1, z: CA.z0 + 0.35, r: 0.4 });
     for (const [x, z, ry] of [[18.45, 41.35, 0.15], [27.75, 40.55, -0.2]]) { place(scene, 'bottle_crate', { h: 0.8, rotY: ry }, x, 0, z); obstacles.push({ x, z, r: 0.38 }); }
     place(scene, 'ice_chest', { w: 1.5, rotY: Math.PI / 2 }, 20.4, 0, CA.z0 - 0.55); obstacles.push({ x: 20.0, z: CA.z0 - 0.55, r: 0.5 }, { x: 20.8, z: CA.z0 - 0.55, r: 0.5 });

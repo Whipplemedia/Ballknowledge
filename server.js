@@ -39,6 +39,15 @@ const DRINKS = [
   { id: 'whiskey', name: 'Top-Shelf Whiskey', emoji: '🥂', price: 120, add: 42, blurb: 'The expensive stuff. Confidence in a glass.' },
   { id: 'mystery', name: 'Bartender\'s Special', emoji: '🧪', price: 90, add: 55, blurb: 'Ingredients: unknown. Side effects: yes.' },
 ];
+// the gas station: the counter (cheap beer, smokes, energy drinks, scratch-offs), the ATM, and the pouch in the men's room toilet
+const GAS = { beer: { price: 8, add: 18 }, cig: 12, pack: 50, energy: 25 }; // the bar's beer is $30
+const CIG_MS = 120000, ENERGY_MS = 60000, ZYN_MS = 90000, ZYN_RESPAWN_MS = 150000, LUCK = 0.15; // a lit cigarette: +15% on the odds of a winning roulette spin, slot pull or scratcher
+const ATM_MAX = 100, ATM_FEE = 5; // a night's withdrawals; at closing they come back out of what you put in the fund
+// scratch-offs: match three amounts. Prizes x the ticket tier ($5 / $20); ~29% of tickets win something, ~70% back
+const SCRATCH = { tiers: [5, 20], prizes: [[1, 0.16], [2, 0.08], [4, 0.04], [10, 0.012], [50, 0.002]], decoys: [1, 2, 4, 10, 50, 200] };
+const SCRATCH_PW = SCRATCH.prizes.reduce((a, [, w]) => a + w, 0);
+const lucky = (p) => (p.cigUntil || 0) > Date.now();
+const luckQ = (pw) => Math.min(1, LUCK * pw / Math.max(0.01, 1 - pw)); // flip a loss with this chance: the win chance becomes pw * 1.15
 const MG = { darts: { max: 180 }, bowling: { max: 20 }, cornhole: { max: 12 }, golf: { max: 24 } }; // golf: Stableford points over 3 holes (public/golf.js)
 const OPPS = { rookie: { label: 'Rookie', mult: 1.6 }, regular: { label: 'Regular', mult: 2.0 }, shark: { label: 'The Shark', mult: 2.8 } };
 const NPC_SKILL = { golf: { rookie: [6, 2], regular: [9, 2], shark: [11.5, 2] }, darts: { rookie: [45, 18], regular: [70, 22], shark: [98, 26] }, bowling: { rookie: [9, 3], regular: [12.5, 3.2], shark: [16, 3] }, cornhole: { rookie: [3, 1.8], regular: [5, 2], shark: [7.5, 2] } };
@@ -209,7 +218,7 @@ const drunkNow = (p) => { const now = Date.now(); if (p.drunk > 0) { p.drunk = M
 const band = (d) => (d < 15 ? 0 : d < 40 ? 1 : d < 65 ? 2 : d < 85 ? 3 : 4);
 
 function networth(room, p) {
-  let n = p.money - p.debt;
+  let n = p.money - p.debt - (p.atm || 0);
   for (const [idx, b] of Object.entries(p.bets)) { const ev = room.events[idx]; if (ev && ev.status !== 'final') for (const x of Object.values(b)) n += x.stake; }
   if (p.challenge) n += p.challenge.stake; if (p.pool) n += p.pool.stake;
   return n;
@@ -253,6 +262,7 @@ function startGame(room) {
     p.tol = Math.round((Math.random() * 2 - 1) * 10); p.tips = {}; p.over = false; p.hangUntil = 0; // hidden drink sweet spot for this season
     p.bounties = [...BOUNTIES].sort(() => Math.random() - 0.5).slice(0, 3).map((b) => ({ ...b, done: false }));
     p.job = null; p.jobNext = 0; p.jobsDone = 0; p.vinnie = {};
+    Object.assign(p, { atm: 0, atmMark: false, cigs: 0, cans: 0, cigUntil: 0, wiredUntil: 0, zynUntil: 0, bumPass: false, scratch: null });
   }
   const nE = room.events.length, start = plist(room).reduce((a, p) => a + p.startCash - p.tab, 0), crewN = Math.max(1, room.players.size);
   // the buyout (set on the first night) and tonight's share of what's left of it
@@ -260,7 +270,7 @@ function startGame(room) {
   room.fund = fund; room.crewStart = start; const nightsLeft = camp ? camp.nights - night + 1 : 1;
   room.goal = Math.max(0, Math.ceil((fund.buyout - fund.banked) / nightsLeft / 50) * 50);
   room.quota = [...CHECK_AT.map((f, i) => ({ kind: 'mid', idx: Math.max(i, Math.round(nE * f) - 1), frac: f })), { kind: 'final', idx: nE - 1, frac: 1 }].map((q) => ({ ...q, target: Math.round(start + room.goal * q.frac), status: 'pending', crew: 0 }));
-  room.verdictAt = 0; room.deposited = false; room.deposit = 0; room.nextBum = now + (process.env.BK_BUM_SOON ? 20000 : dur(55000 + rnd(35000))); /* BK_BUM_SOON: dev/testing only */ bum.stop(room); bum.ensure(room); // Dusty is out on the street all night room.pendingShake = 0;
+  room.verdictAt = 0; room.deposited = false; room.deposit = 0; room.nextBum = now + (process.env.BK_BUM_SOON ? 20000 : dur(55000 + rnd(35000))); /* BK_BUM_SOON: dev/testing only */ bum.stop(room); bum.ensure(room); /* Dusty is out on the street all night */ room.pendingShake = 0; room.zynAt = 0;
   room.shake = null; room.barEvent = null; room.nextBarEvent = now + dur(55000 + rnd(30000)); room.lastBarKind = null;
   room.altered = false; room.finalWinner = null; room.phase = 'play'; room.paper = paperFor(room);
   feed(room, season.fake ? `${sport.emoji} Welcome to the ${season.league}. None of these teams exist and nothing is written yet - every result is rolled live from the odds.` : `${sport.emoji} A season has been assigned. Nobody will tell you which one. Place your bets before the clock runs out.`);
@@ -301,7 +311,10 @@ function tick(room) {
   if (room.pendingShake && now >= room.pendingShake && !room.goons && !(room.cine && now < room.cine.until)) { room.pendingShake = 0; bum.scram(room); startShake(room); changed = true; }
   if (!room.bum) bum.ensure(room); // (after a restart)
   if (!bum.busy(room) && !room.shake && !room.goons && !(room.cine && now < room.cine.until) && now >= room.nextBum) { // chaos: the bum goes for somebody's wallet
-    room.nextBum = now + dur(80000 + rnd(60000)); const t = bum.pickTarget(room, false); if (t) { bum.spawn(room, t, false); changed = true; } }
+    room.nextBum = now + dur(80000 + rnd(60000)); const marked = plist(room).find((q) => q.atmMark && q.money >= 40 && q.connected !== false && !q.dead); if (marked) marked.atmMark = false;
+    const t = marked || bum.pickTarget(room, false);
+    if (t && t.bumPass) { t.bumPass = false; toast(t, `${STORY.bum ? STORY.bum.name : 'Dusty'} was coming your way - then he recognized you, nodded, and kept walking. That cigarette paid off.`, 'win'); changed = true; }
+    else if (t) { bum.spawn(room, t, false); changed = true; } }
   if (room.drops && room.drops.some((d) => now >= d.until)) { room.drops = room.drops.filter((d) => now < d.until); changed = true; }
   if (room.barEvent && now >= room.barEvent.until) { endBarEvent(room); changed = true; }
   else if (!room.barEvent && !room.shake && !room.goons && now >= room.nextBarEvent) { startBarEvent(room); changed = true; }
@@ -364,7 +377,9 @@ function settleBets(room, ev) {
 const SLOT_N = 6, SLOT_BETS = [10, 25, 50, 100], SLOT_SYMS = ['7', 'ball', 'bar', 'bell', 'lemon', 'cherry'], SLOT_W = [1, 2, 3, 4, 5, 5];
 const SLOT_PAY = { '7': 100, ball: 30, bar: 20, bell: 12, lemon: 8, cherry: 10 }; // three of a kind, times the bet
 const slotSym = () => { let x = Math.random() * 20; for (let k = 0; k < SLOT_SYMS.length; k++) { if ((x -= SLOT_W[k]) < 0) return SLOT_SYMS[k]; } return 'cherry'; };
-const slotPay = (r) => { if (r[0] === r[1] && r[1] === r[2]) return SLOT_PAY[r[0]]; const ch = r.filter((x) => x === 'cherry').length; return ch === 2 ? 1.5 : ch === 1 ? 0.5 : 0; };
+// share of pulls that pay more than the bet (for the cigarette's luck)
+const SLOT_PW = (() => { let w = 0; for (let i = 0; i < 200000; i++) if (slotPay([slotSym(), slotSym(), slotSym()]) > 1) w++; return w / 200000; })();
+function slotPay(r) { if (r[0] === r[1] && r[1] === r[2]) return SLOT_PAY[r[0]]; const ch = r.filter((x) => x === 'cherry').length; return ch === 2 ? 1.5 : ch === 1 ? 0.5 : 0; }
 
 // ---------- the crowd: bottles for big losers, Gina for whoever goes all in and hits ----------
 const PELT_LOSS = 500, PELT_MS = 4200, GINA_PRICE = 20;
@@ -501,7 +516,7 @@ function finish(room) {
   const ps = plist(room), camp = room.format === 'campaign' && room.camp;
   if (!room.deposited) { // closing time: everyone's winnings above tonight's bankroll go into the Save the Bar fund (the back room keeps a dead man's)
     room.deposited = true; let dep = 0;
-    for (const p of ps) { const prof = p.dead ? 0 : Math.floor(p.money - p.startCash); p.gave = Math.max(0, prof); if (prof > 0) { p.money -= prof; dep += prof; } }
+    for (const p of ps) { const prof = p.dead ? 0 : Math.floor(p.money - p.startCash - (p.atm || 0)); /* ATM cash goes back first */ p.gave = Math.max(0, prof); if (prof > 0) { p.money -= prof; dep += prof; } }
     room.fund.banked += dep; room.deposit = dep;
     feed(room, dep > 0 ? `🏦 The crew put ${money(dep)} in the Save the Bar fund: ${money(room.fund.banked)} of ${money(room.fund.buyout)}.` : `🏦 Nothing for the fund tonight. ${money(room.fund.banked)} of ${money(room.fund.buyout)}.`);
     const last = !camp || room.night >= camp.nights;
@@ -669,12 +684,14 @@ function view(room, p) {
     camp: room.camp ? { night: room.night && room.phase !== 'lobby' ? room.night : room.camp.night, nights: room.camp.nights, log: room.camp.log } : null, story: STORY, fund: room.fund && room.phase !== 'lobby' ? { banked: room.fund.banked, buyout: room.fund.buyout, goal: room.goal || 0, start: room.crewStart || 0 } : room.camp && room.camp.fund ? { banked: room.camp.fund.banked, buyout: room.camp.fund.buyout } : null, modes: Object.entries(MODES).map(([id, x]) => ({ id, label: x.label, blurb: x.blurb })),
     feed: room.feed.slice(-25), drinks: DRINKS, btaken: room.btaken, drops: (room.drops || []).map((d) => ({ id: d.id, x: d.x, z: d.z, amt: d.amt })), // bottle spots on tables: index -> respawn time
 
-    players: plist(room).map((q) => ({ id: q.id, name: q.name, color: q.color, cos: q.cos || {}, money: Math.round(q.money), connected: q.connected, fate: q.fate, drunk: Math.round(drunkNow(q)), campCash: q.campCash ?? null, rollover: q.rollover || 0,
+    players: plist(room).map((q) => ({ id: q.id, name: q.name, color: q.color, cos: q.cos || {}, money: Math.round(q.money), connected: q.connected, fate: q.fate, smoking: (q.cigUntil || 0) > Date.now() ? q.cigUntil : 0, drunk: Math.round(drunkNow(q)), campCash: q.campCash ?? null, rollover: q.rollover || 0,
       hunted: room.phase === 'hunt' && q.remaining > 0, finalCorrect: room.phase === 'ended' ? q.finalCorrect : null })),
     me: { money: Math.round(p.money), debt: Math.round(p.debt), tab: p.tab || 0, loans: p.loans, mobTied: p.mobTied, remaining: Math.round(p.remaining), drunk: d, decay: dur(DRUNK_DECAY_MS), band: band(d), bets: p.bets, fix: p.fix, results: p.results, tickets: p.tickets || 0, streak: p.streak || {}, challenge: p.challenge, pool: p.pool ? { opp: p.pool.opp, stake: p.pool.stake } : null,
       bounties: (p.bounties || []).map((b) => ({ id: b.id, text: b.text, reward: b.reward, done: b.done })),
       job: p.job && Date.now() < p.job.until ? { kind: p.job.kind, text: p.job.text, step: p.job.step, target: p.job.kind === 'collect' && p.job.stage === 'back' ? 'bar' : p.job.target, stage: p.job.stage, reward: p.job.reward || 0, tabCut: p.job.tabCut || 0, until: p.job.until } : null,
-      jobNext: p.jobNext || 0, jobsDone: p.jobsDone || 0, vinniePrice: VINNIE_PRICE } };
+      jobNext: p.jobNext || 0, jobsDone: p.jobsDone || 0, vinniePrice: VINNIE_PRICE,
+      inv: { cigs: p.cigs || 0, cans: p.cans || 0 }, cigUntil: p.cigUntil || 0, wiredUntil: p.wiredUntil || 0, zynUntil: p.zynUntil || 0, atm: p.atm || 0, bumPass: !!p.bumPass } };
+  v.gas = { beer: GAS.beer.price, cig: GAS.cig, pack: GAS.pack, energy: GAS.energy, tiers: SCRATCH.tiers, atmMax: ATM_MAX, atmFee: ATM_FEE }; v.zynAt = room.zynAt || 0;
   if (room.season && room.phase !== 'lobby') {
     v.events = room.events.map((e) => evSummary(e));
     v.teams = Object.fromEntries(Object.entries(room.season.teams).map(([n, t]) => [n, { short: t.short, color: t.color }]));
@@ -841,7 +858,9 @@ function handle(room, p, m) {
       const total = bets.reduce((a, b) => a + b.stake, 0);
       if (!bets.length || bets.length !== raw.length) { toast(p, 'Invalid wager.', 'err'); break; }
       if (total > p.money) { toast(p, `You only have ${money(p.money)}.`, 'err'); break; }
-      const n = rnd(37), color = colorOf(n); p.money -= total;
+      let n = rnd(37); const payAt = (k) => bets.reduce((a, b) => a + (rouletteWins(b.pick, k) ? b.stake * rouletteMult(b.pick) : 0), 0);
+      if (lucky(p) && payAt(n) <= total) { const good = [...Array(37).keys()].filter((k) => payAt(k) > total); if (good.length && Math.random() < luckQ(good.length / 37)) n = pick(good); } // the cigarette
+      const color = colorOf(n); p.money -= total;
       const ms = dur(SPIN_MS); room.spin = { pid: p.id, name: p.name, until: Date.now() + ms, n, color, bets, total };
       for (const q of room.players.values()) send(q, { type: 'spin', n, color, by: p.name, mine: q === p, ms, bets });
       broadcast(room); // resolved by tick() -> resolveSpin once the ball has landed
@@ -868,7 +887,9 @@ function handle(room, p, m) {
       const t = Date.now(), i = Math.floor(Number(m.m)), bet = Math.floor(Number(m.bet));
       if (room.phase !== 'play' || !(i >= 0 && i < SLOT_N) || !SLOT_BETS.includes(bet) || t - (p.lastSlot || 0) < 1800) break;
       if (p.money < bet) { toast(p, "Not enough cash for that bet.", 'err'); break; }
-      p.lastSlot = t; p.money -= bet; const reels = [0, 1, 2].map(() => slotSym()), win = Math.round(bet * slotPay(reels));
+      p.lastSlot = t; p.money -= bet; let reels = [0, 1, 2].map(() => slotSym());
+      if (lucky(p) && slotPay(reels) <= 1 && Math.random() < luckQ(SLOT_PW)) for (let k = 0; k < 200 && slotPay(reels) <= 1; k++) reels = [0, 1, 2].map(() => slotSym()); // the cigarette: a losing pull turns
+      const win = Math.round(bet * slotPay(reels));
       for (const q of room.players.values()) send(q, { type: 'slot', m: i, reels, bet, win, by: p.id });
       broadcast(room);
       if (win > 0) setTimeout(() => { p.money += win; if (win >= bet * 20) feed(room, `🎰 ${p.name} hit ${reels.join(' · ').toUpperCase()} on the slots for ${money(win)}!`); broadcast(room); }, 1650);
@@ -877,6 +898,57 @@ function handle(room, p, m) {
     case 'splash': { // restroom sink: cold water knocks the buzz down a notch
       const t = Date.now(); if (!inPlay(room)) break; if (t - (p.lastSplash || 0) < 20000) { toast(p, 'Give it a minute. Your face is still wet.', 'info'); break; }
       p.lastSplash = t; drunkNow(p); p.drunk = Math.max(0, p.drunk - 15); toast(p, '💦 Cold water. Things come back into focus a little.', 'info'); broadcast(room); break;
+    }
+    case 'atm': { // the gas station ATM: $20 / $50 / $100 a night, $5 a pop, and it all comes back out of your fund deposit at closing
+      const amt = Math.floor(Number(m.amount)); if (room.phase !== 'play' || ![20, 50, 100].includes(amt)) break;
+      if ((p.atm || 0) + amt > ATM_MAX) { toast(p, `DAILY LIMIT REACHED. ${money(ATM_MAX - (p.atm || 0))} left tonight.`, 'err'); break; }
+      p.atm = (p.atm || 0) + amt; p.money += amt - ATM_FEE; p.atmMark = true; // somebody on the street saw you flash it
+      toast(p, `🏧 ${money(amt)} out (${money(ATM_FEE)} fee). It comes back out of your fund money at closing - and ${STORY.bum ? STORY.bum.name : 'Dusty'} saw you count it.`, 'mob');
+      room.nextBum = Math.min(room.nextBum || Infinity, Date.now() + dur(20000)); send(p, { type: 'fx', kind: 'atm' }); broadcast(room); break;
+    }
+    case 'gas': { // the counter: m.item = beer | cig | pack | energy | scratch (m.tier 5 / 20)
+      if (!inPlay(room) || Date.now() - (p.lastGas || 0) < 600) break; p.lastGas = Date.now();
+      const it = String(m.item), price = it === 'beer' ? GAS.beer.price : it === 'cig' ? GAS.cig : it === 'pack' ? GAS.pack : it === 'energy' ? GAS.energy : it === 'scratch' && SCRATCH.tiers.includes(Number(m.tier)) ? Number(m.tier) : 0;
+      if (!price) break; if (p.money < price) { toast(p, 'Clerk: "Card\'s declined, chief. Cash only anyway."', 'err'); break; }
+      if (it === 'beer') { if (drunkNow(p) >= 100) { toast(p, 'Clerk: "I\'m not selling you anything else tonight."', 'err'); break; } p.drunk = Math.min(100, drunkNow(p) + GAS.beer.add); award(room, p, 'drunk', { level: p.drunk }); }
+      if (it === 'cig') p.cigs = (p.cigs || 0) + 1; if (it === 'pack') p.cigs = (p.cigs || 0) + 5; if (it === 'energy') p.cans = (p.cans || 0) + 1;
+      p.money -= price;
+      if (it === 'scratch') { // decided now; the panel lets you scratch it off. A lit cigarette helps here too
+        const tier = price; let prize = 0, r = Math.random(); for (const [x, w] of SCRATCH.prizes) { if ((r -= w) < 0) { prize = x; break; } }
+        if (!prize && lucky(p) && Math.random() < luckQ(SCRATCH_PW)) { let q = Math.random() * SCRATCH_PW; for (const [x, w] of SCRATCH.prizes) { if ((q -= w) < 0) { prize = x; break; } } prize = prize || 1; }
+        const cells = []; if (prize) cells.push(prize, prize, prize); const left = SCRATCH.decoys.filter((x) => x !== prize).flatMap((x) => [x, x]).sort(() => Math.random() - 0.5);
+        while (cells.length < 9) cells.push(left.pop()); cells.sort(() => Math.random() - 0.5);
+        p.scratch = { id: crypto.randomBytes(4).toString('hex'), tier, prize: prize * tier, cells: cells.map((x) => x * tier) };
+        send(p, { type: 'scratch', t: { id: p.scratch.id, tier, cells: p.scratch.cells } });
+      }
+      send(p, { type: 'fx', kind: 'buy', item: it }); broadcast(room); break;
+    }
+    case 'scratchDone': { // scratched enough to read: pay it
+      const sc = p.scratch; if (!sc || sc.id !== m.id) break; p.scratch = null;
+      if (sc.prize > 0) { p.money += sc.prize; toast(p, `🎟️ Three of a kind! +${money(sc.prize)}`, 'win'); if (sc.prize >= sc.tier * 10) feed(room, `🎟️ ${p.name} scratched a ${money(sc.prize)} winner at the gas station!`); } else toast(p, '🎟️ Nothing. The clerk has seen that face a thousand times.', 'info');
+      broadcast(room); break;
+    }
+    case 'cigLight': {
+      if (!inPlay(room) || !(p.cigs > 0) || lucky(p) || p.koUntil > Date.now()) break;
+      p.cigs--; p.cigUntil = Date.now() + CIG_MS; toast(p, '🚬 Lit. Lady Luck likes a smoker: +15% on roulette, slots and scratchers for 2 minutes. F takes a drag.', 'info'); broadcast(room); break;
+    }
+    case 'cigDrag': if (lucky(p) && Date.now() - (p.lastDrag || 0) > 1500) { p.lastDrag = Date.now(); for (const q of room.players.values()) if (q !== p) send(q, { type: 'drag', id: p.id }); } break;
+    case 'energy': {
+      if (!inPlay(room) || !(p.cans > 0) || (p.wiredUntil || 0) > Date.now() + 5000) break;
+      p.cans--; p.wiredUntil = Date.now() + ENERGY_MS; toast(p, '⚡ WIRED. Your punches hit like a truck for 60 seconds - go throw Sal\'s collectors out.', 'win'); broadcast(room); break;
+    }
+    case 'zyn': { // the men's room toilet: somebody keeps spitting them in there
+      const t = Date.now(); if (!inPlay(room) || room.shake) break;
+      if ((room.zynAt || 0) > t) { toast(p, 'Nothing in there but... no. Somebody already fished it out. Check back later.', 'info'); break; }
+      room.zynAt = t + ZYN_RESPAWN_MS; p.zynUntil = t + ZYN_MS; send(p, { type: 'fx', kind: 'zyn' });
+      toast(p, '🟢 You fished a pouch out of the toilet and put it in. Disgusting. Your hands are rock steady: darts, bowling and cornhole for 90 seconds.', 'win');
+      feed(room, `🤢 ${p.name} took a nicotine pouch out of the men's room toilet. And used it.`); broadcast(room); break;
+    }
+    case 'bumCig': { // hand Dusty a smoke: he leaves you alone the next time he'd have come for your wallet
+      if (!inPlay(room) || !(p.cigs > 0)) break; const r = bum.giveCig(room, p); if (!r) break; p.cigs--;
+      if (r === 'now') toast(p, `${STORY.bum ? STORY.bum.name : 'Dusty'}: "...Alright. Alright. We're good." He wanders off, smoking.`, 'win');
+      else { p.bumPass = true; toast(p, `${STORY.bum ? STORY.bum.name : 'Dusty'} tucks it behind his ear. "I'll remember you." He'll skip you next time.`, 'win'); }
+      feed(room, `🚬 ${p.name} gave ${STORY.bum ? STORY.bum.name : 'Dusty'} a cigarette.`); broadcast(room); break;
     }
     case 'ginaDrink': { // she takes the drink. She has a boyfriend.
       const t = Date.now(); if (!inPlay(room) || t - (p.lastGina || 0) < 8000) break;
@@ -927,7 +999,7 @@ function handle(room, p, m) {
     case 'attack': { // a punch at a named goon; the server checks reach
       if (m.g === 'bum') { if (room.bum && Date.now() - p.lastHit >= 140) { p.lastHit = Date.now(); bum.hit(room, p, false); } break; }
       if (!room.goons || Date.now() - p.lastHit < 140) break; p.lastHit = Date.now();
-      if (goons.hit(room, p, String(m.g || ''), 1, false)) broadcast(room); break;
+      const wired = (p.wiredUntil || 0) > Date.now(); if (goons.hit(room, p, String(m.g || ''), wired ? 6 : 1, false, wired)) broadcast(room); break; // the energy drink: a collector goes down in a few punches
     }
   }
 }

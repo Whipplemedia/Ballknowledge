@@ -19,7 +19,7 @@ Dev: `BK_SPEED=10 npm start` divides every timer by 10 (full game in about a min
 - **Pro Shop**: earn tickets (finishing games, crew wins, quotas, bounties) and open crates for ~50 wearable items (helmets, jerseys, golf clubs, and more) in four rarities. Cosmetics are visible to the whole crew. Saved in browser localStorage.
 
 ## Controls
-WASD move, mouse look, E interact, C crew/wire money, P phone (check your bets), Esc releases the mouse / closes menus.
+WASD move, mouse look, E interact, C crew/wire money, P phone (check your bets), Esc releases the mouse / closes menus. Click throws a bottle (or punches up close); G lights a cigarette, F takes a drag (or throws a bottle when you are not smoking), X drinks an energy drink.
 
 ## Bottles
 Grab 3 bottles at the bar (station near the stools, `E - Grab bottles`), throw with **F** or **right-click**. Bottles arc, spin and shatter on anything (glass-break sound + shards). A bottle that hits another player or an NPC knocks them out for 5 seconds (flat on their back / slumped if seated, stars overhead); the victim's controls lock and the camera drops to the floor. After waking there is 3 s of immunity. Flight is simulated on every client from the thrower's origin/velocity; only the thrower reports hits and the server accepts a hit only if the thrower really threw a bottle in the last 4 s (rate limited, one hit per throw).
@@ -190,6 +190,7 @@ Second batch (Oct 2026), all game scores and home teams checked against web sear
   - **Bottles to throw:** E at a cooler grabs a handful (like the bar's bottle station). Single bottles also stand on the counter, the coffee bar, the gondola, the crates, the ice chest and the roulette table. They are ordinary `bar.bottleSpots`, so they're taken and respawned for everyone.
   - **Gaming room:** the roulette table, moved here from the bar together with the Dealer (the Dealer's side job follows him), and six **slot machines** on the back wall. Two regulars feed their machines.
 - **Slots (functional):**
+  - A lit cigarette helps (see Gas-station goods).
   - Bets are $10 / $25 / $50 / $100, on three weighted reels (`SLOT_*` in server.js) that return about 91%: 7-7-7 pays 100x, three balls 30x, three BARs 20x, three bells 12x, three cherries 10x, three lemons 8x, two cherries 1.5x, one cherry 0.5x.
   - The server takes the stake and picks the reels. Every client rolls that machine's screen. The winnings land when the reels stop (1.65 s). Big hits go to the feed.
   - The panel (`slotView` in client.js) rolls the same reels. Space spins.
@@ -209,6 +210,37 @@ Second batch (Oct 2026), all game scores and home teams checked against web sear
   - the skyline, faded into the sky;
   - the restroom tiles, with mirrored repeat to hide seams.
   - Outside surfaces glow faintly with their own texture (`lit()`), so the street reads at night without dozens of lights.
+
+## Gas-station goods, the ATM, the toilet pouch (`public/items.js`, server `gas` / `atm` / `zyn` / `bumCig`)
+- **The counter** (E at the clerk; `gasView` in client.js; prices in `GAS` in server.js):
+  - **Budget Lite tallboy, $8:** the same buzz as the bar's $30 beer.
+  - **Cigarettes:** $12 for a single, $50 for a pack of five.
+    - G lights one: the cigarette comes up to your mouth and the lighter flicks.
+    - It burns for 2 minutes in your left hand with smoke off the ember. F takes a drag: up to the lips, the ember flares, then you breathe out a cloud. F only throws a bottle when you're not smoking; click still throws.
+    - While it's lit you're **lucky: +15% on the odds of a winning roulette spin, slot pull or scratch-off.** The server flips a losing result with chance `0.15·p/(1−p)`, where p is the base chance of coming out ahead, so the win chance becomes p × 1.15 (`lucky` / `luckQ`). It does nothing for sports bets.
+    - In a sim, red hit 55% of 400 spins with a cigarette lit vs 45% without (expected 56% / 49%).
+  - **VOLT energy drink, $25:** X chugs it (the can comes up, a gulp, it gets crushed).
+    - For 60 seconds you're **wired**: fists up in a jittery guard, a heartbeat pulse on the screen, 18% faster on your feet.
+    - Punches do 6 damage instead of 1 to Sal's collectors and stagger them, which makes them let go. Hitmen are still bottles only.
+  - **Scratch-offs:** Lucky Lager ($5) and Big Money Bowl ($20). Three matching amounts on the 3×3 card wins that amount.
+    - About 29% of tickets win something, and they return about 70%.
+    - The server decides the ticket when you buy it (`SCRATCH`). You scratch the coating off with the mouse; once 55% is clear, or you press Reveal all, it pays.
+- **The ATM** (E at the machine by the door; `atmView`):
+  - Withdraw $20, $50 or $100, up to $100 a night, with a $5 fee each time.
+  - The penalty, in three parts:
+    1. The fee.
+    2. Everything you take out comes back out of your fund deposit at closing (and out of the crew's check-in pace, via `networth`). It's your rent money.
+    3. Dusty saw you count it: his next robbery comes within about 20 seconds, and it's aimed at you (`atmMark`).
+- **The toilet pouch:** somebody keeps spitting nicotine pouches into the first stall's toilet (a little white pouch floats in the bowl while one's there).
+  - E fishes it out and puts it in: a hand comes up from the bowl to your lip, with a sick-green flash.
+  - **Steady hands for 90 seconds:** `dr()` in games.js drops to 0.3, so darts, bowling and cornhole hold still however drunk you are.
+  - A new pouch shows up 2.5 minutes later (`ZYN_RESPAWN_MS`, per room). It's closed while the collectors are in.
+- **Dusty and a cigarette:** with one in your pocket, walk up to him and press E to hand it over.
+  - If he was coming for your wallet, he takes it and walks off.
+  - Otherwise you get a pass (`bumPass`): the next time he picks you, he nods and keeps walking.
+  - Either way he smokes it for 2 minutes, and other players see a cigarette in the mouth of anyone smoking, with smoke and the odd drag.
+- **The HUD** (bottom left): a timer bar for each buff (🚬 lucky, ⚡ wired, 🟢 Zyn) and what's in your pockets (🚬 ×n, ⚡ ×n).
+- **Punches:** every swing now shows a jab from alternating fists. While you're smoking, the right hand throws them.
 
 ## Type
 - **Bungee:** titles, big buttons (`.cta`), promo graphics, TV headlines, slot symbols and splashes.

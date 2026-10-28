@@ -15,7 +15,7 @@ export function createGames({ scene, camera, BK, me, keys, helpers, stations, ob
   const hand = new THREE.Group(); camera.add(hand);
   const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
   const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 0.5;
-  const dr = () => 1 + (BK.drunk || 0) / 55; // drunk makes everything shakier
+  const dr = () => (BK.zyn && BK.zyn() ? 0.3 : 1 + (BK.drunk || 0) / 55); // drunk makes everything shakier; the toilet Zyn (public/items.js) steadies it, drunk or not
   const rate = { darts: 3, bowling: 25, cornhole: 35 };
   let challenge = null, resultMsg = '';
   const OPP_NAME = { rookie: 'the Rookie', regular: 'the Regular', shark: 'The Shark' };

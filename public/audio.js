@@ -54,6 +54,15 @@ export const SFX = {
   gulp: (c, o, t) => { for (let i = 0; i < 3; i++) T(c, o, t + i * 0.2, 0.12, { f: 190, f2: 110, g: 0.28 }); },
   burp: (c, o, t) => { const g = lp(c, o, 600); T(c, g, t, 0.45, { type: 'sawtooth', f: 90, f2: 60, g: 0.3 }); N(c, o, t, 0.4, { type: 'lowpass', f: 400, g: 0.1 }); },
   bell: (c, o, t) => { bell(c, o, t, 1568, 1.1, 0.3, [1, 2.4, 4.8]); },
+  // ---- gas station goods (public/items.js)
+  lighter: (c, o, t) => { N(c, o, t, 0.02, { f: 5200, q: 4, g: 0.3 }); N(c, o, t + 0.03, 0.05, { f: 3000, q: 2, g: 0.18 }); N(c, o, t + 0.06, 0.5, { type: 'lowpass', f: 900, g: 0.12, at: 0.05 }); }, // flint wheel, then the flame
+  drag: (c, o, t) => { N(c, o, t, 0.9, { type: 'highpass', f: 2800, g: 0.1, at: 0.2 }); for (let i = 0; i < 9; i++) N(c, o, t + 0.1 + i * 0.08 + rnd(0, 0.04), 0.012, { f: rnd(3500, 6500), q: 3, g: 0.1 }); }, // the inhale + the paper crackling
+  exhale: (c, o, t) => { N(c, o, t, 1.1, { type: 'bandpass', f: 1100, f2: 500, q: 0.6, g: 0.16, at: 0.12 }); },
+  canOpen: (c, o, t) => { N(c, o, t, 0.03, { f: 2400, q: 2, g: 0.35 }); N(c, o, t + 0.02, 0.5, { type: 'highpass', f: 4000, f2: 7000, g: 0.16, at: 0.01 }); T(c, o, t, 0.05, { f: 900, f2: 500, g: 0.12 }); }, // the tab, then the fizz
+  canCrush: (c, o, t) => { for (let i = 0; i < 5; i++) N(c, o, t + i * 0.03 + rnd(0, 0.02), 0.04, { f: rnd(1500, 3500), q: 2, g: 0.22 }); T(c, o, t, 0.12, { type: 'triangle', f: 300, f2: 180, g: 0.15 }); },
+  squelch: (c, o, t) => { N(c, o, t, 0.25, { type: 'lowpass', f: 700, f2: 250, q: 3, g: 0.35 }); T(c, o, t + 0.05, 0.15, { f: 240, f2: 120, g: 0.12 }); },
+  scratch: (c, o, t) => { N(c, o, t, 0.07, { type: 'highpass', f: 3000, q: 1, g: 0.12 }); },
+  heart: (c, o, t) => { T(c, o, t, 0.1, { f: 70, f2: 45, g: 0.3 }); T(c, o, t + 0.16, 0.1, { f: 62, f2: 42, g: 0.22 }); },
   step: (c, o, t, p) => { const v = p.v ?? 0.6; N(c, o, t, 0.07, { type: 'lowpass', f: 380 * rnd(0.85, 1.2), q: 0.5, g: 0.18 * v }); T(c, o, t, 0.07, { f: 95 * rnd(0.9, 1.1), f2: 55, g: 0.2 * v }); },
   sit: (c, o, t) => { N(c, o, t, 0.25, { type: 'lowpass', f: 320, f2: 120, g: 0.3 }); T(c, o, t, 0.15, { f: 75, f2: 45, g: 0.25 }); },
   stand: (c, o, t) => { N(c, o, t, 0.18, { type: 'lowpass', f: 260, f2: 400, g: 0.16 }); },

@@ -112,7 +112,7 @@ module.exports = function createGoons({ feed, toast, broadcast, plist, money, se
   const release = (room, g) => { if (g.target) { const p = room.players.get(g.target); if (p && p.heldBy === g.id) p.heldBy = null; } if (g.state === 'grab') g.state = 'chase'; g.cool = Date.now() + T.regrab; };
 
   // damage from a punch (in reach) or a bottle (stun)
-  function hit(room, p, gid, dmg, stun) {
+  function hit(room, p, gid, dmg, stun, heavy) { // heavy: a wired (energy drink) punch staggers a collector and makes him let go
     const G = room.goons; if (!G || G.phase !== 'fight') return false; const g = G.list.find((o) => o.id === gid); if (!g || !alive(g)) return false;
     if (!stun && dist(p, g) > 2.6) return false;
     const now = Date.now();
@@ -126,6 +126,7 @@ module.exports = function createGoons({ feed, toast, broadcast, plist, money, se
     }
     g.hp -= dmg; g.hit = now;
     if (stun) { release(room, g); g.state = 'stun'; g.until = now + T.stun; }
+    else if (heavy) { release(room, g); g.state = 'stun'; g.until = now + 650; }
     if (g.hp <= 0) { g.hp = 0; release(room, g); g.state = 'down'; g.until = G.kind === 'hunt' ? now + TUNE.getUp : 0; const up = G.list.filter(alive).length; feed(room, `👊 ${p.name} dropped one of Sal's ${G.kind === 'hunt' ? 'hitmen' : 'collectors'}${G.kind === 'hunt' && up ? ` - ${up} still standing. Drop them all before he gets up!` : '.'}`); }
     if (G.list.every((o) => !alive(o))) outro(room, 'beaten');
     return true;

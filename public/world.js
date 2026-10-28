@@ -16,6 +16,8 @@ import { label } from './textures.js';
 import { makeDizzy, headPos } from './dizzy.js';
 import { createGoonsView } from './goonsview.js';
 import { createBumView } from './bumview.js';
+import { createItems } from './items.js';
+import { STORY } from './story.js';
 import { createBrawl } from './brawl.js';
 import { createCine } from './cine.js';
 import { createVO } from './vo.js';
@@ -118,7 +120,12 @@ function kissLook(dt) {
   const dx = h.x - me.x, dz = h.z - me.z, want = Math.atan2(-dx, -dz), wp = Math.atan2(h.y - EYE, Math.hypot(dx, dz)); let d = want - me.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
   me.yaw += d * Math.min(1, dt * 6); me.pitch += (wp - me.pitch) * Math.min(1, dt * 6); return true;
 }
-addEventListener('keydown', (e) => { if (e.code === 'KeyF' && !e.repeat && active() && !/INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '')) bottles.throw(); });
+addEventListener('keydown', (e) => { // F: a drag when you're smoking, otherwise a bottle. G lights a cigarette, X cracks an energy drink (public/items.js)
+  if (e.repeat || !active() || BK.ui.open || BK.ui.shop || koNow() || /INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '')) return;
+  if (e.code === 'KeyF') { if (!(items.lit() && items.drag())) bottles.throw(); }
+  if (e.code === 'KeyG' && !items.light() && BK.S && BK.S.me && !(BK.S.me.inv && BK.S.me.inv.cigs > 0) && !items.lit()) BK.toast && BK.toast('No cigarettes. The gas station counter sells them.', 'info');
+  if (e.code === 'KeyX' && !items.chug() && BK.S && BK.S.me && !(BK.S.me.inv && BK.S.me.inv.cans > 0)) BK.toast && BK.toast('No energy drinks. The gas station counter sells them.', 'info');
+});
 addEventListener('contextmenu', (e) => { if (document.pointerLockElement === canvas) { e.preventDefault(); bottles.throw(); } });
 
 // ---- sitting: take a seat from bar.seats; camera drops to seated eye height and movement locks until E/Space/WASD ----
@@ -223,7 +230,8 @@ canvas.addEventListener('mousedown', (e) => {
   if (goons.active() || bumNear.length) { // punch: whatever goon (or the bum) is under the crosshair, if he's within reach
     ray.setFromCamera({ x: 0, y: 0 }, camera);
     const hit = ray.intersectObjects([...goons.list(), ...bumNear].map((o) => o.P.group), true)[0], id = hit && hit.object.userData.goonId, o = id && (goons.get(id) || bumView.get(id));
-    if (o && hit.distance < 2.8 && o.state !== 'down') { BK.send({ type: 'attack', g: id }); audio.sfx('punch', { pos: { x: o.P.group.position.x, y: 1.3, z: o.P.group.position.z } }); me.punch = 1; }
+    items.punch();
+    if (o && hit.distance < 2.8 && o.state !== 'down') { BK.send({ type: 'attack', g: id }); audio.sfx('punch', { pos: { x: o.P.group.position.x, y: 1.3, z: o.P.group.position.z }, v: items.wired() ? 1.4 : 1 }); me.punch = items.wired() ? 1.6 : 1; }
     else audio.sfx('whoosh', { v: 0.4 });
   }
 });
@@ -256,7 +264,7 @@ function move(dt, t, drunkAmt) {
   if (kissLook(dt)) return;
   if (BK.ui.open || games.active() || me.sit || koNow() || heldBy() || draggedBy() || (BK.S && BK.S.cine && BK.now() < BK.S.cine.until)) return;
   const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
-  const sp = keys.ShiftLeft ? 6.2 : 3.8, sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
+  const sp = (keys.ShiftLeft ? 6.2 : 3.8) * (items.wired() ? 1.18 : 1), sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
   let dx = -sin * f + cos * s, dz = -cos * f - sin * s; const len = Math.hypot(dx, dz) || 1;
   const moving = f || s;
   dx = (dx / len) * sp * dt * (moving ? 1 : 0); dz = (dz / len) * sp * dt * (moving ? 1 : 0);
@@ -352,6 +360,7 @@ function frame(now) {
   updatePelts(t); bottles.update(dt); bottles.updateSpots(dt); { const left = koNow() ? (me.koUntil - BK.now()) / 1000 : 0; myDizzy.update(dt, t, null, left > 0); bottles.setKo(left); if (!left && me.koUntil) { me.koUntil = 0; audio.sfx('boing'); } if (left) { camera.position.y = 0.32; camera.rotation.z = 1.25; camera.rotation.x = 0.4; } }
   { const h = heldBy(), o = h && goons.get(h); // grabbed: you're turned to face him and shaken about
     if (o) { const g = o.P.group.position, want = Math.atan2(-(g.x - me.x), -(g.z - me.z)); let d = want - me.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); me.yaw += d * Math.min(1, dt * 6); me.pitch += (-0.22 - me.pitch) * Math.min(1, dt * 4); camera.rotation.set(me.pitch + Math.sin(t * 13) * 0.02, me.yaw + Math.sin(t * 9) * 0.03, Math.sin(t * 7) * 0.05); } }
+  items.update(dt); // first-person hands, smoke, buff timers (after the camera is placed)
   if (me.punch) { me.punch = Math.max(0, me.punch - dt * 6); camera.position.y -= me.punch * 0.04; camera.rotation.z += me.punch * 0.03; }
   const cineOn = !!cine.update(dt, BK.S && BK.S.you); if (cineOn) cross.style.display = 'none';
   { const c = BK.S && BK.S.cine, sal = bar.npcs.find((n) => n.name === 'Uncle Sal'); // Sal talks through the opening scene
@@ -428,6 +437,12 @@ const zones = (() => { const B = bar.backroom.bounds, C = OUT.casino, V = (x, y,
     store: new THREE.Box3(V(C.x0, -1, C.z0), V(C.x1, 12, C.z1)), frontDoor: { x: OUT.door.x, z: ROOM.z }, backDoor: { x: ROOM.x, z: (B.dz0 + B.dz1) / 2 }, storeDoor: { x: C.door.x, z: C.z0 },
     frontOpen: () => Math.abs(fd.rotation.y - (fd.userData.base ?? fBase)) > 0.03, backOpen: () => Math.abs(bd.rotation.y - (bd.userData.base ?? bBase)) > 0.03 }); })();
 zones.tagAll(); onPlace(zones.tag);
-window.__dbg = { zones, brawl, renderer, scene, camera, me, games, roulette, bar, fx, tv, avatars, bottles, voice, keys };
+// gas-station goods: hands, smoke, buffs (made after tagAll so the smoke and the hands stay on the always-drawn layer)
+const items = createItems({ scene, camera, BK, me, games, getAvatars: () => avatars, bumView });
+BK.onFx = (m) => items.onFx(m); BK.onDrag = (m) => items.onDrag(m);
+stations.push({ get x() { const b = bumView.list()[0]; return b ? b.P.group.position.x : 1e9; }, get z() { const b = bumView.list()[0]; return b ? b.P.group.position.z : 1e9; }, r: 2.4, prio: 3,
+  get text() { return `E - Give ${STORY.bum ? STORY.bum.name : 'Dusty'} a cigarette (he'll leave you alone next time)`; },
+  on: () => !!(BK.S && BK.S.me && BK.S.me.inv && BK.S.me.inv.cigs > 0 && bumView.list()[0] && !['run', 'flee'].includes(bumView.list()[0].state)), act: () => { items.give(); BK.send({ type: 'bumCig' }); } });
+window.__dbg = { items, zones, brawl, renderer, scene, camera, me, games, roulette, bar, fx, tv, avatars, bottles, voice, keys };
 requestAnimationFrame(frame);
 window.__worldReady = true; if (typeof window.render === 'function') window.render(); // drop the loading bar / loading screen

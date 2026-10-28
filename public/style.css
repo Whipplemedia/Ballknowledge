@@ -416,3 +416,29 @@ body{font-family:"Barlow Condensed",system-ui,sans-serif;font-size:17px}
 .slotbets .spin{background:#e81830;color:#fff;font-size:24px;padding:10px 28px;border:0;box-shadow:0 4px 0 #7a0010}.slotbets .spin:disabled{opacity:.5}
 .paytab{display:grid;grid-template-columns:repeat(4,1fr);gap:4px 10px;font-size:15px}.paytab div{display:flex;align-items:center;gap:2px}.paytab b{margin-left:auto;color:#ffd24a}.paytab i{font-style:normal;color:var(--muted);font-size:12px;width:22px;text-align:center}
 .paytab .ps canvas{width:22px;height:22px;display:block}
+/* gas-station goods (public/items.js): buff timers + pockets, the wired heartbeat, the toilet-pouch gag */
+#buffs { position: fixed; left: 14px; bottom: 34px; z-index: 24; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; pointer-events: none; }
+#buffs .buff { position: relative; display: flex; align-items: center; gap: 8px; min-width: 230px; padding: 4px 12px; border-radius: 999px; background: #0b1226d8; color: #fff; font-size: 13px; overflow: hidden; border: 1px solid #ffffff30; }
+#buffs .buff b { font-size: 15px; } #buffs .buff span { flex: 1; font-weight: 700; letter-spacing: .02em; } #buffs .buff i { font-style: normal; font-variant-numeric: tabular-nums; opacity: .9; }
+#buffs .buff u { position: absolute; left: 0; bottom: 0; height: 3px; text-decoration: none; }
+#buffs .luck { border-color: #ffb04080; } #buffs .luck u { background: #ffb040; }
+#buffs .wired { border-color: #39ff6a90; } #buffs .wired u { background: #39ff6a; }
+#buffs .zyn { border-color: #7fd8ff90; } #buffs .zyn u { background: #7fd8ff; }
+#buffs .pockets { padding: 3px 12px; border-radius: 999px; background: #0b1226b0; color: #e6ecff; font-size: 12px; }
+#buffs kbd { display: inline-block; min-width: 14px; padding: 0 4px; margin-left: 2px; border-radius: 4px; background: #ffffff22; font: 700 11px system-ui; text-align: center; }
+#buffs kbd:empty { display: none; }
+#wiredfx { position: fixed; inset: 0; pointer-events: none; z-index: 19; opacity: 0; box-shadow: inset 0 0 120px 30px #39ff6a55; transition: opacity .4s; }
+#wiredfx.on { opacity: 1; animation: wiredpulse .62s infinite; }
+@keyframes wiredpulse { 0%, 100% { box-shadow: inset 0 0 110px 26px #39ff6a40; } 18% { box-shadow: inset 0 0 150px 40px #39ff6a70; } }
+#grossfx { position: fixed; inset: 0; pointer-events: none; z-index: 19; opacity: 0; background: radial-gradient(ellipse at center, transparent 30%, #6a8a2a88 100%); }
+#grossfx.on { animation: grossfx 2.4s ease-out; }
+@keyframes grossfx { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
+body.cine #buffs, body.cine #wiredfx { opacity: 0; }
+.gas .gasrow { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #ffffff14; }
+.gas .gasrow > div { flex: 1; } .gas .gasrow .muted { font-size: 13px; } .gas .cp { font-weight: 800; min-width: 44px; text-align: right; }
+.gas .gash { margin-top: 8px; font-weight: 800; }
+.atm .atmscreen { background: #0d2a1c; border: 3px solid #3a4a44; border-radius: 10px; padding: 14px; color: #8dffb8; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.atm .atmh { font-weight: 800; letter-spacing: .12em; margin-bottom: 6px; }
+.atm .atmfine { font-size: 12px; color: #c8e8d4; opacity: .85; }
+.scratch .scratchwrap { display: flex; justify-content: center; }
+.scratch canvas { width: min(330px, 70vw, 46vh); aspect-ratio: 1; border-radius: 10px; cursor: crosshair; touch-action: none; box-shadow: 0 6px 24px #0008; }

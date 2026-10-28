@@ -39,6 +39,9 @@ function connect(msg) {
     else if (m.type === 'bottleGot') window.BK.onBottleGot && window.BK.onBottleGot(m);
     else if (m.type === 'goons') window.BK.onGoons && window.BK.onGoons(m);
     else if (m.type === 'bum') window.BK.onBum && window.BK.onBum(m);
+    else if (m.type === 'fx') window.BK.onFx && window.BK.onFx(m);
+    else if (m.type === 'drag') window.BK.onDrag && window.BK.onDrag(m);
+    else if (m.type === 'scratch') { ui.scratch = m.t; ui.scratchDone = false; openPanel('scratch'); }
     else if (m.type === 'goonDodge') window.BK.onGoonDodge && window.BK.onGoonDodge(m);
     else if (m.type === 'ko') window.BK.onKo && window.BK.onKo(m);
     else if (m.type === 'spin') window.BK.onSpin && window.BK.onSpin(m);
@@ -126,7 +129,7 @@ function hudHotkeys() {
   const sig = [...document.querySelectorAll('#app .hud button[data-hk]')].map((b) => b.closest('.hud-event,.hunt')?.className || '').join('|');
   if (k && sig && sig !== ui.hkSig && document.pointerLockElement) toast(`Press 1${k > 1 ? '-' + k : ''} to choose, or Tab to use the mouse`, 'info');
   ui.hkSig = k ? sig : '';
-  const help = document.querySelector('#app .hud-help'); if (help) help.textContent = `WASD move · Space jump · Mouse look · E interact · C crew/wire · P phone${k ? ' · 1-' + k + ' pop-up buttons · Tab free the mouse' : ''} · H ${settings.compact ? 'full' : 'compact'} HUD · Esc menu`;
+  const help = document.querySelector('#app .hud-help'); if (help) help.textContent = `WASD move · Space jump · Mouse look · E interact · G smoke · F drag/throw · X energy · C crew/wire · P phone${k ? ' · 1-' + k + ' pop-up buttons · Tab free the mouse' : ''} · H ${settings.compact ? 'full' : 'compact'} HUD · Esc menu`;
 }
 addEventListener('keydown', (e) => {
   if (!S || !['play', 'hunt'].includes(S.phase) || ui.open || ui.shop || ui.menu || /INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '')) return;
@@ -376,9 +379,9 @@ function goalText() {
 }
 function gameView() {
   const me = S.me, hunt = S.phase === 'hunt';
-  const extra = ui.tab === 'bar' ? [['bar', '🍺 Bar']] : ui.tab === 'vinnie' ? [['vinnie', '🍷 Old Vinnie']] : ui.tab === 'paper' ? [['paper', '📰 Paper']] : ui.tab === 'wheel' ? [['wheel', '🎰 Roulette']] : ui.tab === 'challenge' ? [['challenge', '🎯 Challenge']] : ui.tab === 'pool' ? [['pool', '🎱 Pool']] : ui.tab === 'slot' ? [['slot', '🎰 Slots']] : [];
+  const extra = ui.tab === 'bar' ? [['bar', '🍺 Bar']] : ui.tab === 'vinnie' ? [['vinnie', '🍷 Old Vinnie']] : ui.tab === 'paper' ? [['paper', '📰 Paper']] : ui.tab === 'wheel' ? [['wheel', '🎰 Roulette']] : ui.tab === 'challenge' ? [['challenge', '🎯 Challenge']] : ui.tab === 'pool' ? [['pool', '🎱 Pool']] : ui.tab === 'slot' ? [['slot', '🎰 Slots']] : ui.tab === 'gas' ? [['gas', '⛽ Counter']] : ui.tab === 'atm' ? [['atm', '🏧 ATM']] : ui.tab === 'scratch' ? [['scratch', '🎟️ Scratch-off']] : [];
   const tabs = [['book', '📱 Sportsbook'], ['bets', '🧾 My Bets'], ['mob', '🕴️ The Mob'], ['crew', '👥 Crew'], ...extra];
-  const body = { book: bookView, bets: betsView, mob: mobView, crew: crewView, bar: barView, vinnie: vinnieView, paper: paperView, wheel: wheelView, challenge: challengeView, slot: slotView, pool: typeof poolView === 'function' ? poolView : () => '' }[ui.tab]();
+  const body = { book: bookView, bets: betsView, mob: mobView, crew: crewView, bar: barView, vinnie: vinnieView, paper: paperView, wheel: wheelView, challenge: challengeView, slot: slotView, gas: gasView, atm: atmView, scratch: scratchView, pool: typeof poolView === 'function' ? poolView : () => '' }[ui.tab]();
   if (!window.__worldReady) return `<div class="center"><div class="card col" style="width:min(420px,100%)"><div class="big">Getting the bar ready...</div>${loadBar()}<div class="muted">Your crew can already see you. The game has started - you'll be dropped in as soon as the bar finishes loading.</div></div></div>`;
   return `<div class="hud">
     <div class="hud-top">
@@ -534,6 +537,7 @@ function slotResult(m) {
 }
 function slotFrame() {
   requestAnimationFrame(slotFrame);
+  if (ui.open && ui.tab === 'scratch') scratchSetup();
   const cv = document.getElementById('slotcv'); if (!cv || !window.BK.slotDraw) return; const g = cv.getContext('2d'), W = cv.width, H = cv.height, a = ui.slotAnim, t = performance.now();
   for (const el of document.querySelectorAll('.paytab .ps:not(.done)')) { const c = document.createElement('canvas'); c.width = c.height = 44; window.BK.slotDraw(c.getContext('2d'), el.dataset.s, 22, 22, 40); el.appendChild(c); el.classList.add('done'); }
   g.fillStyle = '#0a0a14'; g.fillRect(0, 0, W, H);
@@ -578,6 +582,64 @@ function crewView() {
     ${S.phase === 'hunt' ? '<div class="muted">🍾 Hitmen only go down to bottles. Grab them from the tables or the crate by the couch.</div>' : ''}</div>`;
 }
 
+// ---------- the gas station: the counter, the ATM, scratch-offs (server 'gas' / 'atm' / 'scratchDone'; first-person bits in public/items.js) ----------
+function gasView() {
+  const G = S.gas || {}, me = S.me, inv = me.inv || {}, d = Math.round(drunkLevel()), lit = me.cigUntil > window.BK.now();
+  const row = (emoji, name, blurb, price, item, extra = '') => `<div class="gasrow"><div><b>${emoji} ${name}</b><div class="muted">${blurb}</div></div><span class="cp">${$$(price)}</span><button class="cta" ${me.money < price || (item === 'beer' && d >= 100) ? 'disabled' : ''} onclick="send({type:'gas',item:'${item}'${extra}})">Buy</button></div>`;
+  return `<div class="card col gas"><div class="row" style="justify-content:space-between"><div class="big">⛽ Gas-N-Go counter</div><span class="pill money">${$$(me.money)}</span></div>
+    <div class="muted">Clerk: "Cash only. No, I can't break a hundred."</div>
+    ${row('🍺', 'Budget Lite tallboy', `Same buzz as the bar's beer for a quarter of the price.`, G.beer, 'beer')}
+    ${row('🚬', 'A single (loosie)', `G lights it: 2 minutes of +15% luck on roulette, slots and scratchers. F takes a drag. Or hand one to ${esc(S.story && S.story.bum ? S.story.bum.name : 'Dusty')} and he skips you next time.`, G.cig, 'cig')}
+    ${row('📦', 'Pack of five', 'Five cigarettes. Cheaper by the pack.', G.pack, 'pack')}
+    ${row('⚡', 'VOLT energy drink', `X cracks it: 60 seconds wired. Your punches drop Sal's collectors in a few hits, and you move faster.`, G.energy, 'energy')}
+    <div class="gash">🎟️ Scratch-offs <span class="muted">· match three amounts to win it</span></div>
+    <div class="row" style="gap:8px">${(G.tiers || [5, 20]).map((t) => `<button class="cta" ${me.money < t ? 'disabled' : ''} onclick="send({type:'gas',item:'scratch',tier:${t}})">${t === 5 ? 'Lucky Lager' : 'Big Money Bowl'} · ${$$(t)}</button>`).join('')}</div>
+    <div class="muted" style="font-size:13px">In your pockets: 🚬 ${inv.cigs || 0}${lit ? ' (one lit)' : ''} · ⚡ ${inv.cans || 0}. G light a cigarette · X drink a VOLT.</div></div>`;
+}
+function atmView() {
+  const G = S.gas || {}, out = S.me.atm || 0, left = Math.max(0, (G.atmMax || 100) - out), bum = esc(S.story && S.story.bum ? S.story.bum.name : 'Dusty');
+  return `<div class="card col atm"><div class="atmscreen"><div class="atmh">FIRST NEIGHBORHOOD BANK</div><div>Withdrawal limit tonight: <b>${$$(left)}</b> of ${$$(G.atmMax || 100)}</div>
+    <div class="row" style="gap:8px;margin:10px 0">${[20, 50, 100].map((a) => `<button class="cta" ${a > left ? 'disabled' : ''} onclick="send({type:'atm',amount:${a}})">${$$(a)}</button>`).join('')}</div>
+    <div class="atmfine">A ${$$(G.atmFee || 5)} fee on every withdrawal. This is your rent money: what you take out tonight comes back out of what you put in the Save the Bar fund at closing${out ? ` (${$$(out)} so far)` : ''}.<br>And ${bum} watches this machine. Flash cash, and he'll come for it.</div></div></div>`;
+}
+function scratchView() {
+  const t = ui.scratch; if (!t) return '<div class="card col"><div class="muted">No ticket. Buy one at the counter.</div></div>';
+  return `<div class="card col scratch"><div class="row" style="justify-content:space-between"><div class="big">🎟️ ${t.tier === 5 ? 'Lucky Lager' : 'Big Money Bowl'} <span class="muted">${$$(t.tier)} ticket</span></div><span class="pill money">${$$(S.me.money)}</span></div>
+    <div class="muted">Hold the mouse button and scratch. Three of the same amount wins that amount.</div>
+    <div class="scratchwrap"><canvas id="scratchcv" width="420" height="420"></canvas></div>
+    <div class="row" style="gap:8px"><button onclick="scratchAll()">Reveal all</button><button class="cta" onclick="send({type:'gas',item:'scratch',tier:${t.tier}})" ${S.me.money < t.tier || !ui.scratchDone ? 'disabled' : ''}>Another one (${$$(t.tier)})</button></div></div>`;
+}
+// the ticket: amounts under a silver coating; scratching paints the coating away (destination-out). 55% off = it reads itself
+let scratchCv = null; // { id, el, base, top, g }: the coating lives off-screen, so re-renders (new <canvas>) keep your scratching
+function scratchSetup() {
+  const cv = document.getElementById('scratchcv'), t = ui.scratch; if (!cv || !t) return;
+  if (!scratchCv || scratchCv.id !== t.id) {
+    const W = cv.width, H = cv.height, base = document.createElement('canvas'), top = document.createElement('canvas'); base.width = top.width = W; base.height = top.height = H;
+    const b = base.getContext('2d'); const gr = b.createLinearGradient(0, 0, W, H); gr.addColorStop(0, '#ffe58a'); gr.addColorStop(1, '#f2a93b'); b.fillStyle = gr; b.fillRect(0, 0, W, H);
+    b.textAlign = 'center'; b.textBaseline = 'middle';
+    const counts = {}; for (const c of t.cells) counts[c] = (counts[c] || 0) + 1;
+    t.cells.forEach((c, i) => { const x = 20 + (i % 3) * 130, y = 20 + Math.floor(i / 3) * 130; b.fillStyle = '#fff8e0'; b.fillRect(x, y, 120, 120); b.strokeStyle = '#c0392b'; b.lineWidth = 3; b.strokeRect(x + 4, y + 4, 112, 112);
+      b.fillStyle = counts[c] >= 3 ? '#0a8a3a' : '#2a2a2a'; b.font = `900 ${c >= 1000 ? 30 : 36}px Bungee, Impact, sans-serif`; b.fillText('$' + c, x + 60, y + 60); });
+    const g = top.getContext('2d', { willReadFrequently: true }); const sg = g.createLinearGradient(0, 0, W, H); sg.addColorStop(0, '#c9ced6'); sg.addColorStop(0.5, '#eef1f5'); sg.addColorStop(1, '#aab1bb'); g.fillStyle = sg; g.fillRect(0, 0, W, H);
+    g.fillStyle = 'rgba(80,90,100,0.35)'; g.font = '900 30px Bungee, Impact, sans-serif'; g.textAlign = 'center'; for (let i = 0; i < 9; i++) g.fillText('★', 80 + (i % 3) * 130, 85 + Math.floor(i / 3) * 130);
+    g.fillStyle = '#c0392b'; g.font = '900 22px Bungee, Impact, sans-serif'; g.fillText('SCRATCH HERE', W / 2, H - 14);
+    scratchCv = { id: t.id, el: null, base, top, g, down: false };
+  }
+  if (scratchCv.el === cv) return;
+  scratchCv.el = cv; const W = cv.width, H = cv.height, c = scratchCv;
+  const pt = (e) => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+  const rub = (e) => { if (!c.down) return; const [x, y] = pt(e), g = c.g; g.globalCompositeOperation = 'destination-out'; g.lineCap = 'round'; g.lineWidth = 34; g.beginPath(); g.moveTo(c.lx ?? x, c.ly ?? y); g.lineTo(x + 0.1, y); g.stroke(); g.globalCompositeOperation = 'source-over'; c.lx = x; c.ly = y;
+    if (Math.random() < 0.3) window.BK.sfx && window.BK.sfx('scratch'); scratchPaint(); };
+  cv.onmousedown = (e) => { c.down = true; c.lx = c.ly = null; rub(e); }; cv.onmousemove = rub;
+  scratchPaint();
+}
+addEventListener('mouseup', () => { if (scratchCv) scratchCv.down = false; });
+function scratchPaint() {
+  const c = scratchCv; if (!c) return; const g = c.el.getContext('2d'); g.drawImage(c.base, 0, 0); g.drawImage(c.top, 0, 0);
+  if (!ui.scratchDone && (c.n = (c.n || 0) + 1) % 6 === 0) { const d = c.g.getImageData(0, 0, c.top.width, c.top.height).data; let clear = 0; for (let i = 3; i < d.length; i += 64) if (d[i] < 40) clear++; if (clear / (d.length / 64) > 0.55) scratchFinish(); }
+}
+function scratchAll() { if (!scratchCv) return; scratchCv.g.clearRect(0, 0, scratchCv.top.width, scratchCv.top.height); scratchPaint(); scratchFinish(); }
+function scratchFinish() { if (ui.scratchDone || !ui.scratch) return; ui.scratchDone = true; if (scratchCv) { scratchCv.g.clearRect(0, 0, scratchCv.top.width, scratchCv.top.height); scratchPaint(); } send({ type: 'scratchDone', id: ui.scratch.id }); setTimeout(render, 50); }
 function barView() {
   const d = Math.round(drunkLevel()), b = d < 20 ? 'sober' : d < 45 ? 'warm' : d < 65 ? 'loose' : d < 82 ? 'hammered' : 'wrecked', blur = Math.max(0, (d - 20) / 14);
   return `<div class="chalk"><div class="chalk-h">DRINKS</div>

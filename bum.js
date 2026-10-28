@@ -107,11 +107,17 @@ module.exports = function createBum({ feed, toast, broadcast, plist, money, send
         if (walk(room, b, b.wp.x, b.wp.z, SPEED.loiter, dt)) { b.wp = null; b.pause = now + 4000 + Math.random() * 9000; }
       }
     }
-    const msg = { type: 'bum', b: [+b.x.toFixed(2), +b.z.toFixed(2), +b.ry.toFixed(2), b.state, b.hp, b.maxHp, b.target, b.moving ? 1 : 0, now - b.hit < 300 ? 1 : 0, b.loot] };
+    const msg = { type: 'bum', b: [+b.x.toFixed(2), +b.z.toFixed(2), +b.ry.toFixed(2), b.state, b.hp, b.maxHp, b.target, b.moving ? 1 : 0, now - b.hit < 300 ? 1 : 0, b.loot, (b.smoke || 0) > now ? 1 : 0] };
     for (const q of room.players.values()) send(q, msg);
   }
 
+  // a cigarette for him: 'now' if he was coming for this player (he takes it and leaves), 'later' if he's just around (he'll skip them next time)
+  function giveCig(room, p) {
+    const b = room.bum; if (!b || dist(p, b) > 2.6 || b.state === 'run' || b.state === 'flee') return null; const now = Date.now(); b.smoke = now + 120000;
+    if (b.target === p.id && (b.state === 'walk' || b.state === 'grab' || b.state === 'stun')) { b.state = 'run'; b.born = now; b.out = farSpot(b.x, b.z); broadcast(room); return 'now'; }
+    if (b.state === 'loiter') { b.pause = Math.max(b.pause, now + 6000); b.ry = Math.atan2(-(p.x - b.x), -(p.z - b.z)); } return 'later';
+  }
   // Sal's men are coming in: he makes himself scarce (back to his corner)
   function scram(room) { const b = room.bum; if (b && b.state !== 'loiter' && b.state !== 'run' && b.state !== 'flee') { b.state = 'run'; b.born = Date.now(); b.out = farSpot(b.x, b.z); } }
-  return { spawn, ensure, busy, scram, resume, stop, hit, pickTarget };
+  return { spawn, ensure, busy, scram, resume, stop, hit, pickTarget, giveCig };
 };

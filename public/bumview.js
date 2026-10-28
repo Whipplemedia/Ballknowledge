@@ -19,12 +19,12 @@ export function createBumView({ scene, audio }) {
   return {
     onMsg(m) {
       if (!m.b) return drop();
-      const [x, z, ry, state, hp, , , moving, hit, loot] = m.b;
+      const [x, z, ry, state, hp, , , moving, hit, loot, smoking] = m.b;
       if (!o) { o = make(x, z); audio.sfx('step', { pos: { x, y: 0.2, z } }); }
       if (hit && hp < o.hp) audio.sfx('punch', { pos: { x, y: 1.3, z } });
       if (state !== o.state && state === 'flee' && loot > 0) audio.sfx('coin', { pos: { x, y: 1.2, z } });
       if (state !== o.state && state === 'run') audio.sfx('boing', { pos: { x, y: 1.4, z } });
-      Object.assign(o, { tx: x, tz: z, try: ry, state, hp, moving });
+      Object.assign(o, { tx: x, tz: z, try: ry, state, hp, moving, smoking: !!smoking }); // smoking: somebody gave him a cigarette (public/items.js puts it in his mouth)
       if (loot !== o.lootAmt) { o.lootAmt = loot; o.P.group.remove(o.loot); o.loot = label(loot > 0 ? `💰 $${loot}` : '', '#7dff9a', 0.6); o.loot.position.y = 2.62; o.loot.visible = loot > 0; o.P.group.add(o.loot); }
     },
     update(dt, t) {
