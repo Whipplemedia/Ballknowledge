@@ -538,3 +538,9 @@ body.hascrew #buffs{top:auto;bottom:44px;right:auto;left:14px}
 @media (max-width:940px){.bug .bug-r{display:none}.bug-c{clip-path:polygon(12px 0,100% 0,100% 100%,0 100%);margin-right:0}.bug{left:12px;transform:scale(.84);transform-origin:top left}.bug-strip,.objective{left:12px;transform:none;text-align:left}.hud .hud-event{left:12px;transform:none}}
 @media (max-height:820px){.hud-napkin,.hud-bounty{transform:scale(.82) rotate(-1deg)!important;transform-origin:bottom right}}
 @media (max-height:600px){.hud-napkin,.hud-bounty{transform:scale(.64) rotate(-1deg)!important}#toasts{bottom:96px}}
+/* Pro Shop: the item you clicked (try on / wear / buy), prices on locked items */
+.shopsel{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#0f1a33;border:1px solid var(--rc,#2a3a66);border-radius:10px;padding:8px 10px;margin:0 0 8px;min-height:48px}
+.shopsel>div{display:flex;flex-direction:column}.shopsel b{font-size:16px}.shopsel span{font-size:12px;color:var(--rc,#9fb0d8);letter-spacing:.06em;text-transform:uppercase}
+.shopsel button{flex:none;padding:8px 14px}
+.item{cursor:pointer}.item.locked{opacity:.62;filter:grayscale(.55)}.item.locked:hover{opacity:.9;filter:none}.item.sel{outline:2px solid #fff;outline-offset:1px;opacity:1;filter:none}
+.item em.pr{color:var(--gold)}

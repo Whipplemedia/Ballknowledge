@@ -3,7 +3,7 @@
 //   - cig: a lit cigarette in your left hand for 2 minutes, smoke curling off the ember; F brings it to your mouth for a drag (the ember
 //     flares, then you breathe out a cloud). G lights one: it goes to your lips and the lighter hand flicks a flame under it.
 //   - energy (OVERTIME) / beer (Budget Lite): the can comes up, tilts, you chug. Wired for 60 s: fists up in a jittery guard, punches land hard.
-//   - pouch: the hand comes up from the toilet bowl and puts it in your lip. Steady hands (games.js dr()) for 90 s.
+//   - pouch: the hand comes up from the urinal and puts it in your lip. Steady hands (games.js dr()) for 90 s.
 //   - fist: punches, a jab from alternating fists (world.js calls punch()).
 // Other people see a cigarette in the mouth of anyone smoking (and Dusty, once you've given him one), with smoke and a drag now and then.
 // The buff timers (luck / wired / steady) and what's in your pockets sit bottom left.
@@ -61,7 +61,7 @@ const POUCH_LOW = [0.15, -0.6, -0.4, 30, 0, 0], POUCH_UP = [0.1, -0.3, -0.4, 10,
 const guard = (side) => [side * 0.27, -0.29, -0.52, -10, 180, -25 * side], jabAt = (side) => [side * 0.04, -0.17, -0.52, -40, 180 + 10 * side, -45 * side], fistOff = (side) => [side * 0.3, -0.72, -0.45, -10, 180, -25 * side];
 const windup = (side) => { const g = guard(side); return [g[0] + side * 0.02, g[1] - 0.02, g[2] + 0.05, g[3] - 6, g[4], g[5] - side * 6]; }; // the fist draws back a touch before it goes
 
-export function createItems({ scene, camera, BK, me, games, getAvatars, bumView }) {
+export function createItems({ scene, camera, BK, me, games, getAvatars, bumView, getSelf = () => null }) {
   const smoke = createSmoke(scene);
   // ---- first person rig: one holder per grip, filled when its model arrives (nothing shows until then)
   const H = {}, tmpEmber = new THREE.Vector3(), rig = new THREE.Group(); camera.add(rig); // rig: sway when you look around, bob when you walk
@@ -130,13 +130,16 @@ export function createItems({ scene, camera, BK, me, games, getAvatars, bumView 
     onDrag(m) { const a = getAvatars().get(m.id); const w = a && worn.get(a.P); if (w) w.drag = now(); },
     update(dt) {
       const t = now(), hidden = blocked();
-      smoke.update(dt); if (BK.zynPouch) BK.zynPouch.visible = !(BK.S && BK.S.zynAt > BK.now()); // the pouch in the men's room toilet (public/bar.js)
+      smoke.update(dt);
+      if (BK.zynPouch) { BK.zynPouch.visible = !(BK.S && BK.S.zynAt > BK.now()); const sp = BK.zynSpots && BK.zynSpots[(BK.S && BK.S.zynSpot) || 0]; if (sp) BK.zynPouch.position.x = sp.x; } // the pouch in one of the urinals (public/bar.js)
       // --- who's smoking (other players, Dusty)
       const want = new Set();
       if (BK.S && BK.S.players) for (const p of BK.S.players) { if (p.id === BK.S.you || !(p.smoking > BK.now())) continue; const a = getAvatars().get(p.id); if (a) want.add(a.P); }
       const b = bumView.list()[0]; if (b && b.smoking) want.add(b.P);
+      const self = getSelf(); if (self && lit()) want.add(self.P); // you, in a mirror (no smoke from it: it would rise in front of your own eyes)
       for (const P of [...worn.keys()]) if (!want.has(P) || !P.group.parent) wear(P, false);
       for (const P of want) { const w = wear(P, true); if (!w) continue;
+        if (self && P === self.P) continue;
         if (!w.drag && Math.random() < dt / 14) w.drag = t; // now and then he takes a drag on his own
         const dk = w.drag ? t - w.drag : 9; w.cig.emberM.color.setHex(dk < 1.1 ? 0xffc040 : 0xff5a1a);
         if (dk > 1.4 && dk < 1.6 && !w.puffed) { w.puffed = true; w.cig.g.getWorldPosition(tmp); P.group.getWorldDirection(fwd); for (let i = 0; i < 10; i++) smoke.emit(tmp, fwd.clone().multiplyScalar(-0.5 - Math.random() * 0.4).add(new THREE.Vector3((Math.random() - 0.5) * 0.3, 0.05 + Math.random() * 0.1, (Math.random() - 0.5) * 0.3)), 0.05 + Math.random() * 0.04, 2.0, 0.22, 0.3); }

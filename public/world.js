@@ -17,6 +17,7 @@ import { makeDizzy, headPos } from './dizzy.js';
 import { createGoonsView } from './goonsview.js';
 import { createBumView } from './bumview.js';
 import { createItems } from './items.js';
+import { createMirror } from './mirror.js';
 import { STORY } from './story.js';
 import { createBrawl } from './brawl.js';
 import { createCine } from './cine.js';
@@ -174,6 +175,7 @@ canvas.addEventListener('mouseup', () => games.up());
 const SHIRTS = [0xe74c3c, 0x3498db, 0x2ecc71, 0xf1c40f, 0x9b59b6, 0xe67e22], SKINS = [0xf0c8a0, 0xc58c5c, 0xe0b890, 0x8d5a3a, 0xf5d0b0, 0xd8a070], HAIRS = [0x2a1a0a, 0x111111, 0x8a5a2a, 0x3a3a3a, 0xb06a2a, 0x5a3a1a], CAPS = [0x9c9ca2, 0xb02a2a, 0x2a5aa8, 0x2f8f5a, 0xd0a020, 0x7a3fa0];
 const avatars = new Map(), pending = new Map();
 BK.onPos = (m) => { const a = avatars.get(m.id); if (a) { a.tx = m.x; a.tz = m.z; a.try = m.ry; a.sit = m.sit || 0; a.jy = m.jy || 0; a.lp = m.p || 0; } else pending.set(m.id, m); };
+const playerLook = (p) => ({ shirt: SHIRTS[p.color % 6], skin: SKINS[(p.color + 2) % 6], hair: HAIRS[(p.color + 1) % 6], hairStyle: p.color % 3 === 2 ? 'long' : 'short', hat: p.color % 3 === 1 ? null : { color: CAPS[p.color % 6], backwards: p.color % 2 === 0 }, shorts: p.color % 2 === 0, pants: p.color % 2 === 0 ? 0x2a2a30 : 0x2c3e50, backpack: p.color % 2 === 0 });
 function syncAvatars() {
   const S = BK.S, inGame = active();
   const ids = new Set(inGame ? S.players.filter((p) => p.id !== S.you).map((p) => p.id) : []);
@@ -183,7 +185,7 @@ function syncAvatars() {
     if (p.id === S.you) continue;
     let a = avatars.get(p.id);
     if (!a) {
-      const P = makePreset('bub', { shirt: SHIRTS[p.color % 6], skin: SKINS[(p.color + 2) % 6], hair: HAIRS[(p.color + 1) % 6], hairStyle: p.color % 3 === 2 ? 'long' : 'short', hat: p.color % 3 === 1 ? null : { color: CAPS[p.color % 6], backwards: p.color % 2 === 0 }, shorts: p.color % 2 === 0, pants: p.color % 2 === 0 ? 0x2a2a30 : 0x2c3e50, backpack: p.color % 2 === 0 });
+      const P = makePreset('bub', playerLook(p));
       const l = label(p.name, '#fff', 0.8); l.position.y = 2.2; P.group.add(l); scene.add(P.group);
       const pm = pending.get(p.id); P.group.position.set(pm ? pm.x : -3 + p.color * 1.2, 0, pm ? pm.z : 2);
       a = { id: p.id, P, tx: P.group.position.x, tz: P.group.position.z, try: pm ? pm.ry : 0, px: P.group.position.x, pz: P.group.position.z, drunk: 0 }; avatars.set(p.id, a);
@@ -429,7 +431,7 @@ function frame(now) {
   if (st && !cineOn && !BK.ui.open && !BK.ui.shop && !BK.ui.menu && !me.sit && !games.active()) { setPrompt(st.text); promptEl.classList.remove('hidden'); } else promptEl.classList.add('hidden');
   if (!st && !cineOn && !games.active() && !BK.ui.open && !BK.ui.shop && !BK.ui.menu && document.pointerLockElement !== canvas) { setPrompt('Click to look around'); promptEl.classList.remove('hidden'); }
   fx.setDrunk(drunkAmt, t);
-  zones.update(); fx.render();
+  zones.update(); updateMirrors(dt, t); fx.render();
 }
 // the use prompt: "E - Bartender (drinks...)" shows as a keycap and its label (built only when the text changes)
 let promptTxt = null;
@@ -442,8 +444,28 @@ const zones = (() => { const B = bar.backroom.bounds, C = OUT.casino, V = (x, y,
     store: new THREE.Box3(V(C.x0, -1, C.z0), V(C.x1, 12, C.z1)), frontDoor: { x: OUT.door.x, z: ROOM.z }, backDoor: { x: ROOM.x, z: (B.dz0 + B.dz1) / 2 }, storeDoor: { x: C.door.x, z: C.z0 },
     frontOpen: () => Math.abs(fd.rotation.y - (fd.userData.base ?? fBase)) > 0.03, backOpen: () => Math.abs(bd.rotation.y - (bd.userData.base ?? bBase)) > 0.03 }); })();
 zones.tagAll(); onPlace(zones.tag);
+// ---------- mirrors (public/mirror.js): the Pro Shop's dressing mirror and the one over the restroom sinks ----------
+// You are never drawn in first person, so the mirror gets a stand-in: your own Bub, in your gear (the same look the others see),
+// following you, shown only while the mirror renders. Your first-person hands are hidden for that render.
+const mirrors = (BK.mirrorSpots || []).map((m) => { const mr = createMirror({ w: m.w, h: m.h, res: m.w > 1.5 ? 768 : 512, tint: m.tint }); mr.mesh.position.set(m.x, m.y, m.z); mr.mesh.rotation.y = m.ry; mr.near = m.near || 7; scene.add(mr.mesh); return mr; });
+let me2 = null, mirrorTick = 0;
+function selfForMirror(dt, t) {
+  const S = BK.S, p = S && S.players && S.players.find((q) => q.id === S.you); if (!p) return null;
+  if (!me2 || me2.color !== p.color) { if (me2) scene.remove(me2.P.group); const P = makePreset('bub', playerLook(p)); P.group.visible = false; scene.add(P.group); me2 = { P, color: p.color, cosKey: null, px: me.x, pz: me.z, sp: 0 }; BK.me2 = me2; }
+  const ck = JSON.stringify(p.cos || {}); if (me2.cosKey !== ck) { me2.cosKey = ck; applyCosmetics(me2.P, p.cos || {}); }
+  const g = me2.P.group, v = Math.hypot(me.x - me2.px, me.z - me2.pz) / Math.max(dt, 1 / 240); me2.px = me.x; me2.pz = me.z; me2.sp += (Math.min(v, 7) - me2.sp) * Math.min(1, dt * 8);
+  g.position.set(me.x, (me.jy || 0), me.z); g.rotation.y = me.yaw; me2.P.moveSpeed = me2.sp; animate(me2.P, me2.sp > 0.5 ? 'walk' : 'idle', t, Math.min(1.4, me2.sp / 3.5)); tickCosmetics(me2.P, t);
+  return me2;
+}
+function updateMirrors(dt, t) {
+  if (!mirrors.length || !active() || me.sit) return;
+  let best = null, score = 0; for (const m of mirrors) { const s = m.wants(camera, m.near); if (s > score) { score = s; best = m; } }
+  if (!best || (mirrorTick = (mirrorTick + 1) % 2) === 1 && score < 0.5) return; // farther than ~2 m: refresh every other frame
+  const self = selfForMirror(dt, t), hands = camera.children.filter((c) => c.visible); for (const c of hands) c.visible = false;
+  if (self) self.P.group.visible = true; best.render(renderer, scene, camera); if (self) self.P.group.visible = false; for (const c of hands) c.visible = true;
+}
 // gas-station goods: hands, smoke, buffs (made after tagAll so the smoke and the hands stay on the always-drawn layer)
-const items = createItems({ scene, camera, BK, me, games, getAvatars: () => avatars, bumView });
+const items = createItems({ scene, camera, BK, me, games, getAvatars: () => avatars, bumView, getSelf: () => me2 });
 BK.onFx = (m) => items.onFx(m); BK.onDrag = (m) => items.onDrag(m);
 stations.push({ get x() { const b = bumView.list()[0]; return b ? b.P.group.position.x : 1e9; }, get z() { const b = bumView.list()[0]; return b ? b.P.group.position.z : 1e9; }, r: 2.4, prio: 3,
   get text() { return `E - Give ${STORY.bum ? STORY.bum.name : 'Dusty'} a cigarette (he'll leave you alone next time)`; },

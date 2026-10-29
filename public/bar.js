@@ -89,7 +89,7 @@ export function buildBar({ scene, BK, tv }) {
     [-ROOM.x + 0.1, 2.5, 5.5, Math.PI / 2, [['NO CREDIT', 40], ['NO REFUNDS', 36, '#b3262e'], ['NO EXCUSES', 36]]],
     [ROOM.x - 0.1, 2.4, -2.6, -Math.PI / 2, [['HOUSE RULES', 34], ['1. TIP', 30, '#b3262e'], ['2. PAY UP', 30], ['3. DON\'T ASK', 30]]],
     [3.2, 2.3, ROOM.z - 0.1, Math.PI, [['EMPLOYEE', 34], ['OF THE', 34], ['MONTH', 40, '#b3262e']]],
-    [-7.5, 2.3, ROOM.z - 0.1, Math.PI, [['LOST DOG', 40, '#b3262e'], ['ANSWERS TO', 24], ['"HEY"', 40]]]];
+    [-10.3, 2.3, ROOM.z - 0.1, Math.PI, [['LOST DOG', 40, '#b3262e'], ['ANSWERS TO', 24], ['"HEY"', 40]]]];
   posters.forEach(([x, y, z, ry, lines], i) => { const w = 0.9, h = 1.2; plane(w, h, MT(TX.poster(lines, { bg: ['#e9d9a8', '#d8e4c8', '#e6c9b0'][i % 3] }).t), x, y, z, ry); });
   // pennants
   const penG = new THREE.Shape(); penG.moveTo(0, 0); penG.lineTo(0.5, 0); penG.lineTo(0.25, -0.5); penG.closePath();
@@ -265,13 +265,19 @@ export function buildBar({ scene, BK, tv }) {
   // ---------- Pro Shop corner ----------
   box(2.4, 1.0, 0.8, M(0x4a2a14), -8.6, 0.5, 6.7); box(2.55, 0.07, 0.95, M(0x8a5a30, { roughness: 0.3 }), -8.6, 1.03, 6.7);
   const stand = (id, x, y = 1.07) => { const g = new THREE.Group(); g.position.set(x, y, 6.65); buildItem(id, g); g.scale.setScalar(0.8); scene.add(g); box(0.12, 0.1, 0.12, M(0x222), x, 1.1, 6.65); return g; };
-  [['helmet_fb', -9.5], ['tophat', -8.9], ['crown', -8.3], ['viking', -7.7]].forEach(([id, x]) => { const s = stand(id, x, 1.35); s.position.y = 1.2; });
+  [['viking', -9.6], ['helmet_fb', -9.12], ['crown', -8.62], ['tophat', -8.15]].forEach(([id, x]) => { const s = stand(id, x, 1.35); s.position.y = 1.2; }); // the end by the mirror stays clear
   for (const [id, x] of [['golf_club', -9.9], ['bat', -9.5], ['hockey_stick', -9.1]]) { const g = new THREE.Group(); g.position.set(x, 1.9, ROOM.z - 0.2); buildItem(id, g); scene.add(g); } // on the wall rack, hanging by the grip
   neonPlane('PRO SHOP', '#ffc83d', 2.4, 0.7, -8.6, 3.3, ROOM.z - 0.12, Math.PI, 70);
   const clerk = spawn(makePreset('jock', { glasses: false, hairStyle: 'slick', hair: 0x2a1a10 }), -8.6, 7.55, 0, 'idle', ['Cosmetics! Crates! Dignity not included.', 'Every crate is a surprise.', 'Dress for the occasion.'], 'Clerk');
   applyCosmetics(clerk.P, { body: 'ref_shirt', head: 'sweatband' }); tag('Pro Shop', -8.6, 2.7, 7.55, '#ffc83d');
   lamp(-8.6, 3.2, 6.0, 0xffd8a0, 22, 8);
   obstacles.push({ x: -8.6, z: 6.7, r: 1.4 });
+  { // a mirror on the wall behind the counter's end, so you can see what you're wearing (world.js puts the glass in: public/mirror.js)
+    const MX = -7.5, MY = 1.62, MZ = ROOM.z - 0.06, fr = new THREE.Group(); fr.position.set(MX, MY, MZ); fr.rotation.y = Math.PI; scene.add(fr);
+    const wood = M(0x6a3a18, { roughness: 0.45 }), W = 0.86, Hh = 1.3, t = 0.07;
+    box(W + 2 * t, t, 0.05, wood, 0, Hh / 2 + t / 2, 0, fr); box(W + 2 * t, t, 0.05, wood, 0, -Hh / 2 - t / 2, 0, fr); box(t, Hh, 0.05, wood, -W / 2 - t / 2, 0, 0, fr); box(t, Hh, 0.05, wood, W / 2 + t / 2, 0, 0, fr);
+    BK.mirrorSpots = BK.mirrorSpots || []; BK.mirrorSpots.push({ x: MX, y: MY, z: MZ - 0.012, ry: Math.PI, w: W, h: Hh, near: 7 });
+  }
   stations.push({ x: -8.6, z: 5.5, r: 2.2, text: 'E - Pro Shop (cosmetics)', act: () => BK.openShop && BK.openShop() });
 
   // ---------- dressing (beams, windows, signs, chalkboard, extra TVs, door) ----------
@@ -311,6 +317,12 @@ export function buildBar({ scene, BK, tv }) {
     for (const x of [BX - 1.0, BX + 0.2]) { box(0.44, 0.66, 0.3, porc, x, 0.98, Z0 + 0.16, urG); box(0.32, 0.46, 0.06, M(0xd8d6ce), x, 0.92, Z0 + 0.3, urG, false); cyl(0.02, 0.02, 0.6, chrome, x, 1.62, Z0 + 0.06, 8, urG, false); obstacles.push({ x, z: Z0 + 0.25, r: 0.35 });
       place(g, 'urinal', { h: 1.3 }, x, 0.3, Z0 + 0.3, () => { urG.visible = false; }); }
     box(0.04, 0.8, 0.4, part, BX - 0.4, 1.1, Z0 + 0.22, g); // privacy panel between them
+    { // somebody keeps spitting nicotine pouches into the urinals (server 'zyn' picks which one; public/items.js shows it while there's one in there)
+      const spots = [BX - 1.0, BX + 0.2].map((x) => ({ x, y: 0.6, z: Z0 + 0.26 }));
+      const pouch = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.008, 0.028), M(0xe6e8d6, { roughness: 0.3 })); pouch.rotation.y = 0.5; g.add(pouch); BK.zynPouch = pouch; BK.zynSpots = spots;
+      place(g, 'pouch', { w: 0.065, rotX: -Math.PI / 2 }, spots[0].x, spots[0].y, spots[0].z, (m) => { m.rotation.y = 0.5; g.remove(pouch); BK.zynPouch = m; }); // the Meshy one (prop pouch), hair and all
+      spots.forEach((sp, i) => stations.push({ x: sp.x, z: Z0 + 0.95, r: 0.7, prio: 2, on: () => !!(BK.S && !(BK.S.zynAt > BK.now()) && (BK.S.zynSpot || 0) === i), text: 'E - Fish the nicotine pouch out of the urinal (steady hands for 90s. Gross.)', act: () => BK.send({ type: 'zyn' }) }));
+    }
     // two stalls along the back wall (doors facing the room), a toilet in each
     const SX = X1 - 1.55, sz = [Z0 + 0.65, Z0 + 1.95], stG = new THREE.Group(); g.add(stG);
     box(1.55, 1.85, 0.04, part, X1 - 0.78, 1.1, Z0 + 1.3, stG); box(1.55, 1.85, 0.04, part, X1 - 0.78, 1.1, Z0 + 2.6, stG);
@@ -318,11 +330,6 @@ export function buildBar({ scene, BK, tv }) {
       const tG = new THREE.Group(); g.add(tG);
       box(0.36, 0.38, 0.5, porc, X1 - 0.38, 0.2, z, tG); box(0.4, 0.05, 0.46, M(0x111111, { roughness: 0.4 }), X1 - 0.42, 0.42, z, tG, false); box(0.18, 0.42, 0.46, porc, X1 - 0.1, 0.62, z, tG);
       swap(tG, 'toilet', { h: 0.95, rotY: -Math.PI / 2 }, X1 - 0.45, 0, z);
-      if (i === 0) { // somebody keeps spitting nicotine pouches in this one (server 'zyn'; public/items.js shows it while there's one in there)
-        const pouch = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.008, 0.028), M(0xe6e8d6, { roughness: 0.3 })); pouch.position.set(X1 - 0.6, 0.37, z + 0.03); pouch.rotation.y = 0.5; g.add(pouch); BK.zynPouch = pouch;
-        place(g, 'pouch', { w: 0.07, rotX: -Math.PI / 2 }, X1 - 0.6, 0.365, z + 0.03, (m) => { m.rotation.y = 0.5; g.remove(pouch); BK.zynPouch = m; }); // the Meshy one (prop pouch), hair and all
-        stations.push({ x: X1 - 1.15, z, r: 0.85, prio: 2, on: () => !(BK.S && BK.S.zynAt > BK.now()), text: 'E - Fish the nicotine pouch out of the toilet (steady hands for 90s. Gross.)', act: () => BK.send({ type: 'zyn' }) });
-      }
       const d = new THREE.Group(); d.position.set(SX, 0, z - 0.6); d.rotation.y = i ? -0.9 : -0.35; stG.add(d); box(0.04, 1.6, 1.15, part, 0, 1.0, 0.575, d);
       obstacles.push({ x: X1 - 0.75, z, r: 0.72 });
     });
@@ -334,7 +341,8 @@ export function buildBar({ scene, BK, tv }) {
     box(2.5, 0.08, 0.55, M(0x3a3a3c, { roughness: 0.3 }), BX - 0.3, 0.86, Z1 - 0.29, skG); box(2.5, 0.8, 0.04, M(0x2a2a2c), BX - 0.3, 0.42, Z1 - 0.54, skG);
     for (const x of [BX - 0.95, BX + 0.35]) { cyl(0.2, 0.15, 0.1, porc, x, 0.86, Z1 - 0.28, 16, skG, false); cyl(0.015, 0.015, 0.2, chrome, x, 1.0, Z1 - 0.08, 8, skG, false); box(0.03, 0.03, 0.14, chrome, x, 1.1, Z1 - 0.14, skG, false); }
     swap(skG, 'sink_vanity', { w: 2.4, h: 1.15, d: 0.62, rotY: Math.PI }, BX - 0.3, 0, Z1 - 0.33);
-    pl(new THREE.MeshStandardMaterial({ color: 0x9fb0ba, metalness: 0.2, roughness: 0.15, emissive: 0x1a2228 }), 2.3, 0.9, BX - 0.3, 1.72, Z1 - 0.02, Math.PI); // no reflections in here: a dim, greenish mirror
+    pl(new THREE.MeshStandardMaterial({ color: 0x9fb0ba, metalness: 0.2, roughness: 0.15, emissive: 0x1a2228 }), 2.36, 0.96, BX - 0.3, 1.72, Z1 - 0.015, Math.PI); // the mirror's backing; the glass in front is a real mirror (public/mirror.js)
+    BK.mirrorSpots = BK.mirrorSpots || []; BK.mirrorSpots.push({ x: BX - 0.3, y: 1.72, z: Z1 - 0.025, ry: Math.PI, w: 2.3, h: 0.9, near: 6, tint: 0xd8e4e0 });
     box(0.3, 0.26, 0.2, chrome, X0 + 0.5, 1.3, Z1 - 0.1, g); // hand dryer
     obstacles.push({ x: BX - 0.95, z: Z1 - 0.3, r: 0.45 }, { x: BX + 0.35, z: Z1 - 0.3, r: 0.45 });
     const mbG = new THREE.Group(); g.add(mbG); cyl(0.2, 0.17, 0.32, M(0xe8c020, { roughness: 0.5 }), X1 - 0.35, 0.16, Z1 - 0.4, 12, mbG); obstacles.push({ x: X1 - 0.4, z: Z1 - 0.45, r: 0.35 }); // mop bucket

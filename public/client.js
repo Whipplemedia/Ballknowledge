@@ -877,15 +877,26 @@ function postPool() { send({ type: 'poolStart', opp: ui.poolOpp || 'rookie', sta
 // ---------- Pro Shop ----------
 const SLOT_ICON = { head: '🧢', face: '🕶️', body: '👕', hand: '🏌️', back: '🦸' };
 const CRATE = 25, DUP_REFUND = 6;
-function openShop() { window.BK.leaveGames && window.BK.leaveGames(); ui.shop = true; ui.reveal = null; document.exitPointerLock && document.exitPointerLock(); render(); if (window.BKC) window.BKC.preview.set(save.eq); }
+function openShop() { window.BK.leaveGames && window.BK.leaveGames(); ui.shop = true; ui.reveal = null; ui.shopSel = null; document.exitPointerLock && document.exitPointerLock(); render(); if (window.BKC) window.BKC.preview.set(save.eq); }
 function closeShop() { ui.shop = false; ui.reveal = null; render(); if (S && ['play', 'hunt'].includes(S.phase) && !ui.open) { try { document.getElementById('world').requestPointerLock(); } catch {} } }
 window.BK.openShop = openShop;
+// what the preview wears: your gear, plus whatever you've clicked on to try (owned or not)
+const shopLook = () => { const it = ui.shopSel && BKC.BY_ID[ui.shopSel]; return it ? { ...save.eq, [it.slot]: it.id } : save.eq; };
+const PRICE = { common: 20, rare: 45, epic: 90, legendary: 180 }; // buy outright, or gamble on a crate
+function selectItem(id) { ui.shopSel = ui.shopSel === id && !save.inv.includes(id) ? null : id; const it = BKC.BY_ID[id]; if (it && save.inv.includes(id)) return equipItem(id); BKC.preview.set(shopLook()); render(); }
 function equipItem(id) {
   const it = BKC.BY_ID[id]; if (!it || !save.inv.includes(id)) return;
-  if (save.eq[it.slot] === id) delete save.eq[it.slot]; else save.eq[it.slot] = id;
-  persist(); send({ type: 'cosmetics', cos: wearing() }); BKC.preview.set(save.eq); render();
+  const on = save.eq[it.slot] !== id; if (on) save.eq[it.slot] = id; else delete save.eq[it.slot];
+  ui.shopSel = id; persist(); send({ type: 'cosmetics', cos: wearing() }); BKC.preview.set(shopLook()); window.BK.sfx && window.BK.sfx(on ? 'bet' : 'click');
+  if (on) toast(`Wearing the ${it.name}. Everyone in the bar sees it - check the mirror behind the Pro Shop counter (or the one in the restroom).`, 'win');
+  render();
 }
-function unequipSlot(slot) { delete save.eq[slot]; persist(); send({ type: 'cosmetics', cos: wearing() }); BKC.preview.set(save.eq); render(); }
+function buyItem(id) {
+  const it = BKC.BY_ID[id], cost = it && PRICE[it.rarity]; if (!it || save.inv.includes(id)) return;
+  if (save.tix < cost) return toast(`The ${it.name} is ${cost} 🎟. You have ${save.tix}. Finish seasons and bounties for more.`, 'err');
+  save.tix -= cost; save.inv.push(id); persist(); window.BK.sfx && window.BK.sfx(it.rarity === 'legendary' || it.rarity === 'epic' ? 'rare' : 'crate'); equipItem(id);
+}
+function unequipSlot(slot) { delete save.eq[slot]; persist(); send({ type: 'cosmetics', cos: wearing() }); BKC.preview.set(shopLook()); render(); }
 function buyCrates(n) {
   const cost = n === 1 ? CRATE : CRATE * 5 - 15; if (save.tix < cost) return toast('Not enough tickets. Play a season to earn more.', 'err');
   save.tix -= cost; const got = [];
@@ -895,6 +906,12 @@ function buyCrates(n) {
 function revealView() {
   return `<div class="reveal" onclick="ui.reveal=null;render()"><div class="rv-row">${ui.reveal.map(({ id, dup }) => { const it = BKC.BY_ID[id], R = BKC.RARITY[it.rarity]; return `<div class="rv-card" style="--rc:${R.color}"><div class="rv-r">${R.label.toUpperCase()}</div><div class="rv-i">${SLOT_ICON[it.slot]}</div><div class="rv-n">${esc(it.name)}</div><div class="muted">${dup ? 'Duplicate - scrapped for +6 🎟' : 'NEW! Added to your locker'}</div></div>`; }).join('')}</div><div class="muted" style="margin-top:12px">Click to continue</div></div>`;
 }
+function shopDetail() { // the item you clicked: try it on, wear it, or buy it
+  const it = ui.shopSel && BKC.BY_ID[ui.shopSel]; if (!it) return '<div class="shopsel muted">Click anything to try it on. Buy it outright, or roll a crate for a surprise.</div>';
+  const R = BKC.RARITY[it.rarity], has = save.inv.includes(it.id), on = save.eq[it.slot] === it.id, cost = PRICE[it.rarity];
+  return `<div class="shopsel" style="--rc:${R.color}"><div><b>${esc(it.name)}</b><span>${R.label} · ${esc((BKC.SLOTS.find(([s]) => s === it.slot) || [, it.slot])[1])}${has ? '' : ' · trying it on'}</span></div>
+    ${has ? `<button class="${on ? 'ghost' : ''}" onclick="equipItem('${it.id}')">${on ? 'Take it off' : 'Wear it'}</button>` : `<button class="gold" ${save.tix < cost ? 'disabled' : ''} onclick="buyItem('${it.id}')">Buy · ${cost} 🎟</button>`}</div>`;
+}
 function shopView() {
   if (!window.BKC) return '';
   const { CATALOG, RARITY, SLOTS } = window.BKC, own = new Set(save.inv), tab = ui.shopTab;
@@ -903,9 +920,10 @@ function shopView() {
     <div class="shop-grid"><div class="shop-left"><div id="shopPrev" class="prev"></div>
       <div class="eqs">${SLOTS.map(([s, l]) => { const id = save.eq[s], it = id && BKC.BY_ID[id]; return `<div class="eq" ${it ? `style="border-color:${RARITY[it.rarity].color}" onclick="unequipSlot('${s}')" title="Click to take off"` : ''}>${SLOT_ICON[s]} <span>${it ? esc(it.name) : l}</span></div>`; }).join('')}</div></div>
       <div class="shop-right"><div class="crates"><button class="gold" onclick="buyCrates(1)">📦 Mystery Crate · ${CRATE} 🎟</button><button class="gold" onclick="buyCrates(5)">📦×5 · ${CRATE * 5 - 15} 🎟</button></div>
-        <div class="muted" style="margin:4px 2px 8px">Crates drop a random item. Rarer items are... rarer. Duplicates scrap for ${DUP_REFUND} 🎟. Collected ${own.size}/${CATALOG.length}. Earn tickets by finishing seasons and completing bounties.</div>
+        <div class="muted" style="margin:4px 2px 8px">Crates drop a random item (rarer ones are rarer) and cost less than buying outright. Duplicates scrap for ${DUP_REFUND} 🎟. Collected ${own.size}/${CATALOG.length}. Earn tickets by finishing seasons and completing bounties.</div>
         <div class="itabs">${[['all', 'All'], ...SLOTS].map(([id, l]) => `<button class="${tab === id ? 'on' : ''}" onclick="ui.shopTab='${id}';render()">${l}</button>`).join('')}</div>
-        <div class="items">${items.map((it) => { const R = RARITY[it.rarity], has = own.has(it.id), on = save.eq[it.slot] === it.id; return `<button class="item ${has ? '' : 'locked'} ${on ? 'on' : ''}" style="--rc:${R.color}" ${has ? `onclick="equipItem('${it.id}')"` : 'disabled'}><span class="ii">${has ? SLOT_ICON[it.slot] : '🔒'}</span><span class="in">${has ? esc(it.name) : '???'}</span><span class="ir">${R.label}</span>${on ? '<em>WEARING</em>' : ''}</button>`; }).join('')}</div></div></div>
+        ${shopDetail()}
+        <div class="items">${items.map((it) => { const R = RARITY[it.rarity], has = own.has(it.id), on = save.eq[it.slot] === it.id, sel = ui.shopSel === it.id; return `<button class="item ${has ? '' : 'locked'} ${on ? 'on' : ''} ${sel ? 'sel' : ''}" style="--rc:${R.color}" onclick="selectItem('${it.id}')" title="${has ? (on ? 'Take it off' : 'Wear it') : 'Try it on'}"><span class="ii">${SLOT_ICON[it.slot]}</span><span class="in">${esc(it.name)}</span><span class="ir">${R.label}</span>${on ? '<em>WEARING</em>' : has ? '' : `<em class="pr">${PRICE[it.rarity]} 🎟</em>`}</button>`; }).join('')}</div></div></div>
     ${ui.reveal ? revealView() : ''}</div></div>`;
 }
 render();

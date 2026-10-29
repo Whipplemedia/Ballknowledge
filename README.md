@@ -178,6 +178,13 @@ Second batch (Oct 2026), all game scores and home teams checked against web sear
 - `MESHY` in cosmetics.js sets how each one sits: rotation, target size, and an anchor (bottom, center, front for glasses, top for things held by the grip). `buildItem` shows the old primitive version until the model arrives, and keeps it if the model can't load. The Pro Shop stands and wall rack use the same models.
 - **Outfits (11 body items):** Meshy retextures of Bub's original model, generated with his UVs. Only the clothing is kept (torso and arm triangles, plus Bub's shirt-colored pixels). Bare skin is mapped back to Bub's skin tone, then everything is baked onto his texture (`public/models/cos/<id>.jpg`, ~210 KB each). Wearing one swaps the player's body texture (`setOutfit` in people.js), keeping their own skin and hair colors. Characters that aren't Bub (like the Pro Shop clerk) still get the primitive version.
 
+- **Buying and equipping (`shopView` in client.js):**
+  - Click any item to try it on the preview, whether you own it or not. Buy it outright (common 20, rare 45, epic 90, legendary 180 🎟; `PRICE`) or roll a crate (25 🎟, cheaper on average).
+  - Equipping saves to this browser and is sent to the server (`cosmetics`), so the whole crew sees it on your character.
+- **Mirrors (public/mirror.js):** one on the wall behind the Pro Shop counter's end, and the restroom mirror over the sinks, which is now a real reflection.
+  - Each is the scene rendered again from your view reflected in the glass, with an oblique clip plane at the glass, into a 512-768 px target. Only the nearest mirror you're facing renders, every frame within ~2 m and every other frame farther out.
+  - You're never drawn in first person, so the mirror gets a stand-in (`selfForMirror` in world.js): your own Bub in your gear, plus a cigarette if you're smoking. It follows you and is visible only during the mirror's render. Your first-person hands are hidden for that render.
+
 ## Outside: the street, the gas station, the casino (`public/outside.js`)
 - The bar's front door (EXIT) opens onto a Chicago street at night:
   - sidewalks and a two-lane street;
@@ -211,7 +218,7 @@ Second batch (Oct 2026), all game scores and home teams checked against web sear
   - the restroom tiles, with mirrored repeat to hide seams.
   - Outside surfaces glow faintly with their own texture (`lit()`), so the street reads at night without dozens of lights.
 
-## Gas-station goods, the ATM, the toilet pouch (`public/items.js`, server `gas` / `atm` / `zyn` / `bumCig`)
+## Gas-station goods, the ATM, the urinal pouch (`public/items.js`, server `gas` / `atm` / `zyn` / `bumCig`)
 - **The counter** (E at the clerk; `gasView` in client.js; prices in `GAS` in server.js):
   - **Budget Lite tallboy, $8:** the same buzz as the bar's $30 beer.
   - **Cigarettes:** $12 for a single, $50 for a pack of five.
@@ -231,8 +238,8 @@ Second batch (Oct 2026), all game scores and home teams checked against web sear
     1. The fee.
     2. Everything you take out comes back out of your fund deposit at closing (and out of the crew's check-in pace, via `networth`). It's your rent money.
     3. Dusty saw you count it: his next robbery comes within about 20 seconds, and it's aimed at you (`atmMark`).
-- **The toilet pouch:** somebody keeps spitting nicotine pouches into the first stall's toilet (a little white pouch floats in the bowl while one's there).
-  - E fishes it out and puts it in: a hand comes up from the bowl to your lip, with a sick-green flash.
+- **The urinal pouch:** somebody keeps spitting nicotine pouches into the men's room urinals. A little white pouch, hair and all, sits in one of the two. The server picks which (`room.zynSpot`), and it changes every time it reappears.
+  - E fishes it out and puts it in: a hand comes up to your lip, with a sick-green flash.
   - **Steady hands for 90 seconds:** `dr()` in games.js drops to 0.3, so darts, bowling and cornhole hold still however drunk you are.
   - A new pouch shows up 2.5 minutes later (`ZYN_RESPAWN_MS`, per room). It's closed while the collectors are in.
 - **Dusty and a cigarette:** with one in your pocket, walk up to him and press E to hand it over.
@@ -250,7 +257,7 @@ Second batch (Oct 2026), all game scores and home teams checked against web sear
 - **Props from your references** (prop GLBs in `public/models/props`):
   - `overtime_can` and `cig_pack` (Last Call) are on display on the counter.
   - `cash` is the money people drop when they're knocked out, or when Dusty drops his loot. It replaces the poker chips.
-  - `pouch` (hair included) floats in the stall toilet.
+  - `pouch` (hair included) sits in a urinal.
 
 ## Type
 - **Bungee:** titles, big buttons (`.cta`), promo graphics, TV headlines, slot symbols and splashes.

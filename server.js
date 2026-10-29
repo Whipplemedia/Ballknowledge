@@ -39,7 +39,7 @@ const DRINKS = [
   { id: 'whiskey', name: 'Top-Shelf Whiskey', emoji: '🥂', price: 120, add: 42, blurb: 'The expensive stuff. Confidence in a glass.' },
   { id: 'mystery', name: 'Bartender\'s Special', emoji: '🧪', price: 90, add: 55, blurb: 'Ingredients: unknown. Side effects: yes.' },
 ];
-// the gas station: the counter (cheap beer, smokes, energy drinks, scratch-offs), the ATM, and the pouch in the men's room toilet
+// the gas station: the counter (cheap beer, smokes, energy drinks, scratch-offs), the ATM, and the pouch in the men's room urinals
 const GAS = { beer: { price: 8, add: 18 }, cig: 12, pack: 50, energy: 25 }; // the bar's beer is $30
 const CIG_MS = 120000, ENERGY_MS = 60000, ZYN_MS = 90000, ZYN_RESPAWN_MS = 150000, LUCK = 0.15; // a lit cigarette: +15% on the odds of a winning roulette spin, slot pull or scratcher
 const ATM_MAX = 100, ATM_FEE = 5; // a night's withdrawals; at closing they come back out of what you put in the fund
@@ -270,7 +270,7 @@ function startGame(room) {
   room.fund = fund; room.crewStart = start; const nightsLeft = camp ? camp.nights - night + 1 : 1;
   room.goal = Math.max(0, Math.ceil((fund.buyout - fund.banked) / nightsLeft / 50) * 50);
   room.quota = [...CHECK_AT.map((f, i) => ({ kind: 'mid', idx: Math.max(i, Math.round(nE * f) - 1), frac: f })), { kind: 'final', idx: nE - 1, frac: 1 }].map((q) => ({ ...q, target: Math.round(start + room.goal * q.frac), status: 'pending', crew: 0 }));
-  room.verdictAt = 0; room.deposited = false; room.deposit = 0; room.nextBum = now + (process.env.BK_BUM_SOON ? 20000 : dur(55000 + rnd(35000))); /* BK_BUM_SOON: dev/testing only */ bum.stop(room); bum.ensure(room); /* Dusty is out on the street all night */ room.pendingShake = 0; room.zynAt = 0;
+  room.verdictAt = 0; room.deposited = false; room.deposit = 0; room.nextBum = now + (process.env.BK_BUM_SOON ? 20000 : dur(55000 + rnd(35000))); /* BK_BUM_SOON: dev/testing only */ bum.stop(room); bum.ensure(room); /* Dusty is out on the street all night */ room.pendingShake = 0; room.zynAt = 0; room.zynSpot = rnd(2);
   room.shake = null; room.barEvent = null; room.nextBarEvent = now + dur(55000 + rnd(30000)); room.lastBarKind = null;
   room.altered = false; room.finalWinner = null; room.phase = 'play'; room.paper = paperFor(room);
   feed(room, season.fake ? `${sport.emoji} Welcome to the ${season.league}. None of these teams exist and nothing is written yet - every result is rolled live from the odds.` : `${sport.emoji} A season has been assigned. Nobody will tell you which one. Place your bets before the clock runs out.`);
@@ -691,7 +691,7 @@ function view(room, p) {
       job: p.job && Date.now() < p.job.until ? { kind: p.job.kind, text: p.job.text, step: p.job.step, target: p.job.kind === 'collect' && p.job.stage === 'back' ? 'bar' : p.job.target, stage: p.job.stage, reward: p.job.reward || 0, tabCut: p.job.tabCut || 0, until: p.job.until } : null,
       jobNext: p.jobNext || 0, jobsDone: p.jobsDone || 0, vinniePrice: VINNIE_PRICE,
       inv: { cigs: p.cigs || 0, cans: p.cans || 0 }, cigUntil: p.cigUntil || 0, wiredUntil: p.wiredUntil || 0, zynUntil: p.zynUntil || 0, atm: p.atm || 0, bumPass: !!p.bumPass } };
-  v.gas = { beer: GAS.beer.price, cig: GAS.cig, pack: GAS.pack, energy: GAS.energy, tiers: SCRATCH.tiers, atmMax: ATM_MAX, atmFee: ATM_FEE }; v.zynAt = room.zynAt || 0;
+  v.gas = { beer: GAS.beer.price, cig: GAS.cig, pack: GAS.pack, energy: GAS.energy, tiers: SCRATCH.tiers, atmMax: ATM_MAX, atmFee: ATM_FEE }; v.zynAt = room.zynAt || 0; v.zynSpot = room.zynSpot || 0;
   if (room.season && room.phase !== 'lobby') {
     v.events = room.events.map((e) => evSummary(e));
     v.teams = Object.fromEntries(Object.entries(room.season.teams).map(([n, t]) => [n, { short: t.short, color: t.color }]));
@@ -937,12 +937,12 @@ function handle(room, p, m) {
       if (!inPlay(room) || !(p.cans > 0) || (p.wiredUntil || 0) > Date.now() + 5000) break;
       p.cans--; p.wiredUntil = Date.now() + ENERGY_MS; toast(p, '⚡ WIRED. Your punches hit like a truck for 60 seconds - go throw Sal\'s collectors out.', 'win'); broadcast(room); break;
     }
-    case 'zyn': { // the men's room toilet: somebody keeps spitting them in there
+    case 'zyn': { // the men's room urinals: somebody keeps spitting them in there (room.zynSpot: which one)
       const t = Date.now(); if (!inPlay(room) || room.shake) break;
-      if ((room.zynAt || 0) > t) { toast(p, 'Nothing in there but... no. Somebody already fished it out. Check back later.', 'info'); break; }
-      room.zynAt = t + ZYN_RESPAWN_MS; p.zynUntil = t + ZYN_MS; send(p, { type: 'fx', kind: 'zyn' });
-      toast(p, '🟢 You fished a pouch out of the toilet and put it in. Disgusting. Your hands are rock steady: darts, bowling and cornhole for 90 seconds.', 'win');
-      feed(room, `🤢 ${p.name} took a nicotine pouch out of the men's room toilet. And used it.`); broadcast(room); break;
+      if ((room.zynAt || 0) > t) { toast(p, 'Nothing in there but... no. Somebody already fished it out. Check the urinals later.', 'info'); break; }
+      room.zynAt = t + ZYN_RESPAWN_MS; room.zynSpot = rnd(2); /* the next one turns up in either urinal */ p.zynUntil = t + ZYN_MS; send(p, { type: 'fx', kind: 'zyn' });
+      toast(p, '🟢 You fished a pouch out of the urinal and put it in. Disgusting. Your hands are rock steady: darts, bowling and cornhole for 90 seconds.', 'win');
+      feed(room, `🤢 ${p.name} took a nicotine pouch out of a urinal. And used it.`); broadcast(room); break;
     }
     case 'bumCig': { // hand Dusty a smoke: he leaves you alone the next time he'd have come for your wallet
       if (!inPlay(room) || !(p.cigs > 0)) break; const r = bum.giveCig(room, p); if (!r) break; p.cigs--;
