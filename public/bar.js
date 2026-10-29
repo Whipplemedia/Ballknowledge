@@ -9,6 +9,7 @@ import { OUT } from './outside.js';
 import { STORY } from './story.js';
 
 export const ROOM = { x: 12, z: 8, h: 5 };
+export const JAR = { x: 10.0, y: 1.14, z: -1.45 }; // the Save the Bar fund jar, on the counter by the owner (finale.js fills it at closing time)
 
 const M = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...o });
 const MT = (map, o = {}) => new THREE.MeshStandardMaterial({ map, roughness: 0.9, ...o });
@@ -128,6 +129,7 @@ export function buildBar({ scene, BK, tv }) {
   }
   [1, 2, 3, 4].forEach((z, i) => { cyl(0.025, 0.03, 0.3, M(0xc9c9d0, { metalness: 0.9, roughness: 0.2 }), 10.35, 1.34, z, 8); box(0.05, 0.16, 0.05, M([0xd22, 0x2a6, 0xe9a, 0x36c][i]), 10.35, 1.55, z, scene, false); });
   box(0.45, 0.28, 0.4, M(0xc8b080), 10.0, 1.32, 5.7); // register
+  place(scene, 'fund_jar', { h: 0.34, rotY: -Math.PI / 2 }, JAR.x, JAR.y, JAR.z); // label to the customers
   if (hasProp('stool')) { for (let i = 0; i < 6; i++) { const t = prop('stool', { h: 0.86 }); t.position.set(9.0, 0, -0.2 + i * 1.2); t.rotation.y = i * 1.1; scene.add(t); } }
   else  for (let i = 0; i < 6; i++) { const z = -0.2 + i * 1.2; cyl(0.22, 0.2, 0.08, TX.vinyl ? MT(TX.vinyl('#8b1d24').t) : M(0x8b1d24), 9.0, 0.78, z, 14); cyl(0.04, 0.04, 0.74, M(0x888888, { metalness: 0.8 }), 9.0, 0.38, z, 6); cyl(0.2, 0.2, 0.03, M(0x888888, { metalness: 0.8 }), 9.0, 0.02, z, 12, scene, false); obstacles.push({ x: 9.0, z, r: 0.28 }); }
   stations.push({ x: 8.1, z: 2.5, r: 2.4, text: 'E - Bartender (drinks, side jobs)', act: () => BK.openPanel('bar') });

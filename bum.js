@@ -92,6 +92,7 @@ module.exports = function createBum({ feed, toast, broadcast, plist, money, send
       else if (now >= b.until) {
         const take = Math.min(Math.floor(p.money), 400, Math.max(40, Math.round(p.money * 0.12)));
         p.money -= take; b.loot = take; b.state = 'flee'; b.until = 0;
+        if (room.tally) { room.tally.robbed++; room.tally.robbedAmt += take; }
         toast(p, `${name} lifted ${money(take)} and ran! Bottle him before he gets away.`, 'err'); feed(room, `🥫 ${name} picked ${p.name}'s pocket for ${money(take)}!`); broadcast(room);
       }
     } else if (b.state === 'flee' || b.state === 'run') {

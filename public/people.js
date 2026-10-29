@@ -93,18 +93,22 @@ function recolorNpc(srcTex, key, { hue, skin }, clothMask) {
 
 // ---- Meshy walk/run clips (public/models/clips.json): rotation tracks per bone, retargeted onto each character's own rest pose ----
 const CLIPS = {};
-if (typeof location !== 'undefined' && !/[?&]clips=0/.test(location.search)) {
-  try {
-    const j = await (await fetch('models/clips.json')).json(), q = (a) => new THREE.Quaternion(a[0], a[1], a[2], a[3]);
-    const srcInv = {}; for (const k in j.rest) srcInv[k] = q(j.rest[k]).invert();
-    for (const name in j) { // walk/run (Bub's rig) + fight/gesture clips (the hitman's rig): each clip may carry its own rest pose
-      if (name === 'rest') continue; const c = j[name], inv = {}; if (c.rest) for (const k in c.rest) inv[k] = q(c.rest[k]).invert();
-      const tr = {}; for (const b in c.tracks) { const t = c.tracks[b]; if (!t.q) continue; tr[b] = { t: t.t, q: t.q, srcInv: (c.rest ? inv[b] : srcInv[b]) || new THREE.Quaternion() }; }
-      const hp = c.tracks.Hips && c.tracks.Hips.p ? c.tracks.Hips.p : null, hy = []; if (hp) for (let i = 1; i < hp.length; i += 3) hy.push(hp[i]);
-      CLIPS[name] = { dur: c.dur, tr, hy, hmean: hy.length ? hy.reduce((a, b) => a + b, 0) / hy.length : 0, hip0: c.hip0 || 0 };
-    }
-  } catch { /* clips are optional */ }
+function addClips(j, srcRest = j.rest) { // a clips file: each clip may carry its own rest pose; 'fps' clips store uniform frames without time arrays
+  const q = (a) => new THREE.Quaternion(a[0], a[1], a[2], a[3]), srcInv = {}; if (srcRest) for (const k in srcRest) srcInv[k] = q(srcRest[k]).invert();
+  for (const name in j) {
+    if (name === 'rest') continue; const c = j[name], inv = {}; if (c.rest) for (const k in c.rest) inv[k] = q(c.rest[k]).invert();
+    const times = (n) => Array.from({ length: n }, (_, i) => Math.min(c.dur, i / c.fps));
+    const tr = {}; for (const b in c.tracks) { const t = c.tracks[b]; if (!t.q) continue; tr[b] = { t: t.t || times(t.q.length / 4), q: t.q, srcInv: (c.rest ? inv[b] : srcInv[b]) || new THREE.Quaternion() }; }
+    const hp = c.tracks.Hips && c.tracks.Hips.p ? c.tracks.Hips.p : null, hy = []; if (hp) for (let i = 1; i < hp.length; i += 3) hy.push(hp[i]);
+    CLIPS[name] = { dur: c.dur, tr, hy, hmean: hy.length ? hy.reduce((a, b) => a + b, 0) / hy.length : 0, hip0: c.hip0 || 0 };
+  }
 }
+if (typeof location !== 'undefined' && !/[?&]clips=0/.test(location.search)) {
+  try { addClips(await (await fetch('models/clips.json')).json()); } catch { /* clips are optional */ }
+  // the cutscene clips (celebrations, the developer's tantrum, Lou's despair...: public/models/clips_end.json) load in the background
+  fetch('models/clips_end.json').then((r) => r.json()).then((j) => addClips(j, null)).catch(() => {});
+}
+export const hasClip = (name) => !!CLIPS[name];
 const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qd = new THREE.Quaternion();
 function sampleBone(clip, bone, time, out) { // out <- local rotation delta relative to the clip's own rest pose
   const tr = clip.tr[bone]; if (!tr) return false; const T = tr.t, n = T.length, u = ((time % clip.dur) + clip.dur) % clip.dur;

@@ -96,5 +96,64 @@
    "img": "01a183b3-8bd4-718c-81d2-eb1993be1427",
    "gen": "01a183b5-3d5a-73af-b7a8-30cce6992fc5"
   }
+ },
+ "finale": {
+  "_note": "closing-scene props (public/finale.js, the fund jar in bar.js): nano-banana-pro concept (9) -> meshy-7.1 image-to-3d (30); compressed with gltf-transform (simplify 0.08, the car 0.05; webp 1024, meshopt). public/models/props/<name>.glb",
+  "fund_jar": {
+   "img": "01a1851a-c3a7",
+   "gen": "01a1851b-cd26-736e-9c4f-5a2df067eec1"
+  },
+  "big_check": {
+   "img": "01a1851a-c485",
+   "gen": "01a1851b-cfd1-773d-9271-d42eca8014cc",
+   "note": "blank board: its face is the model's -z side; finale.js paints the check on a canvas plane"
+  },
+  "champagne": {
+   "img": "01a1851a-c553",
+   "gen": "01a1851b-d225-706b-ae3d-0b9bbe22d359"
+  },
+  "dev_car": {
+   "img": "01a1851a-c630",
+   "gen": "01a1851b-d4be-7336-a62c-fe4db029aeed",
+   "note": "nose toward -x"
+  },
+  "wrecking_ball": {
+   "img": "01a1851a-c71f",
+   "gen": "01a1851b-d6f0-713c-bb0f-fd7fcadf4f59"
+  },
+  "sold_sign": {
+   "img": "01a1851a-c7eb",
+   "gen": "01a1851b-d96e-7005-93a0-4384fd52fbff",
+   "note": "the rider panel is covered by a canvas plane (future home of...)"
+  },
+  "clips": {
+   "_note": "public/models/clips_end.json: meshy_animate on the Bub rig (3 credits per action), converted to the compact fps format",
+   "anims": [
+    "01a1851a-c06f-729d-9798-5ccbe6c3d4fb",
+    "01a1851a-c207-733c-81cb-f907f5d58927"
+   ],
+   "names": [
+    "victory",
+    "fistPump",
+    "happyJump",
+    "hopArms",
+    "ymca",
+    "cheerUp",
+    "stomp",
+    "shout",
+    "headPain",
+    "drink",
+    "tantrum",
+    "wave",
+    "bow",
+    "sitClap",
+    "sitPump",
+    "dance",
+    "shrug",
+    "dumbfounded",
+    "motivate",
+    "groundStomp"
+   ]
+  }
  }
 }

@@ -207,7 +207,8 @@ function grabDrops() { for (const [id, o] of drops) if (Math.hypot(o.x - me.x, o
 // ---------- Sal's muscle: hitmen + collectors are simulated on the server (goons.js) and streamed here ----------
 const goons = createGoonsView({ scene, BK, audio }); BK.goons = goons;
 const bumView = createBumView({ scene, audio }); BK.onBum = (m) => bumView.onMsg(m); // the pickpocket (server bum.js)
-const cine = createCine({ camera, BK, doors: bar.doors, goons, audio, backroom: bar.backroom, owner: bar.owner, dev: bar.dev });
+const cine = createCine({ camera, BK, doors: bar.doors, goons, audio, backroom: bar.backroom, owner: bar.owner, dev: bar.dev, scene, bar, avatars, tickCos: tickCosmetics,
+  castOf: (p) => { const P = makePreset('bub', playerLook(p)); applyCosmetics(P, p.cos || {}); return P; } }); // the finale's cast: everyone as they look in game
 let wasHeld = null;
 // guided first night: a regular calls out to you (bubble + voice line when the clip exists)
 BK.guideSay = (who, text, vo) => { const n = bar.say(who, text, 7); if (n) { const g = n.P.group.position; BK.vo.play(vo, { x: g.x, y: 1.6, z: g.z }); } };
@@ -339,7 +340,7 @@ function frame(now) {
   if (active() && t > 1) autoRes(rawDt, t);
   const on = active(); cross.style.display = on && !BK.ui.open ? 'block' : 'none';
   if (!on) { // title / lobby: slow cinematic drift through the bar
-    promptEl.classList.add('hidden'); cine.update(dt, null); goons.update(dt, t, null);
+    promptEl.classList.add('hidden'); cine.update(dt, null, t); goons.update(dt, t, null);
     const k = t * 0.06; camera.position.set(Math.sin(k) * 3 - 1.2, 2.5 + Math.sin(k * 1.7) * 0.2, 0.4 + Math.cos(k * 0.8) * 0.8); camera.lookAt(Math.sin(k * 0.7) * 5, 1.9, -6); camera.rotation.z = 0;
     const mm = { x: camera.position.x, z: camera.position.z }; bar.update(t, dt, mm); roulette.update(dt); tv.draw(BK.S, now); fx.setDrunk(0, t); zones.update(); fx.render(); return;
   }
@@ -356,7 +357,7 @@ function frame(now) {
   camera.rotation.set(me.pitch + off.p + Math.sin(t * 0.7) * drunkAmt * 0.03, me.yaw + off.y + Math.sin(t * 0.5) * drunkAmt * 0.05, Math.sin(t * 0.9) * drunkAmt * 0.07);
   { const f = (BK.settings && BK.settings.fov) || 72; if (Math.abs(camera.fov - f) > 0.01) { camera.fov = f; camera.updateProjectionMatrix(); } }
   games.update(dt); games.rig(camera);
-  { const cOn = !!(BK.S && BK.S.cine && BK.now() < BK.S.cine.until), gOn = games.active() || cOn; const ring = brawl.spot(); for (const n of bar.npcs) { if (n.cine) continue; /* cine.js shows/hides the developer */ const g = n.P.group, hide = (ring && !n.seated && Math.hypot(g.position.x - ring.x, g.position.z - ring.z) < 1.5) || gOn && !(cOn && /^(opening|checkIn|verdict)$/.test(BK.S.cine.kind)) && Math.hypot(g.position.x - camera.position.x, g.position.z - camera.position.z) < (cOn ? 2.6 : 1.1) && !n.seated; /* the story's scenes frame their own close-ups */ if (g.visible === hide) g.visible = !hide; } }
+  { const cOn = !!(BK.S && BK.S.cine && BK.now() < BK.S.cine.until), gOn = games.active() || cOn; const ring = brawl.spot(); for (const n of bar.npcs) { if (n.cine) continue; /* cine.js shows/hides the developer */ const g = n.P.group, hide = (ring && !n.seated && Math.hypot(g.position.x - ring.x, g.position.z - ring.z) < 1.5) || gOn && !(cOn && /^(opening|checkIn|verdict|nightEnd)$/.test(BK.S.cine.kind)) && Math.hypot(g.position.x - camera.position.x, g.position.z - camera.position.z) < (cOn ? 2.6 : 1.1) && !n.seated; /* the story's scenes frame their own close-ups */ if (g.visible === hide) g.visible = !hide; } }
   // ---- audio frame: listener, footsteps, bar-event cues, voice
   audio.update(dt, camera); audioUI.show(active()); voice.update(dt, avatars);
   grabDrops(); for (const o of drops.values()) o.g.rotation.y += dt * 0.6;
@@ -365,7 +366,7 @@ function frame(now) {
     if (o) { const g = o.P.group.position, want = Math.atan2(-(g.x - me.x), -(g.z - me.z)); let d = want - me.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); me.yaw += d * Math.min(1, dt * 6); me.pitch += (-0.22 - me.pitch) * Math.min(1, dt * 4); camera.rotation.set(me.pitch + Math.sin(t * 13) * 0.02, me.yaw + Math.sin(t * 9) * 0.03, Math.sin(t * 7) * 0.05); } }
   items.update(dt); // first-person hands, smoke, buff timers (after the camera is placed)
   if (me.punch) { me.punch = Math.max(0, me.punch - dt * 6); camera.position.y -= me.punch * 0.04; camera.rotation.z += me.punch * 0.03; }
-  const cineOn = !!cine.update(dt, BK.S && BK.S.you); if (cineOn) cross.style.display = 'none';
+  const cineOn = !!cine.update(dt, BK.S && BK.S.you, t); if (cineOn) cross.style.display = 'none';
   { const c = BK.S && BK.S.cine, sal = bar.npcs.find((n) => n.name === 'Uncle Sal'); // Sal talks through the opening scene
     if (sal) sal.P.group.visible = !(cineOn && c && c.kind === 'kill'); // he's in the back room with the bat
     if (sal && sal.life) { const talk = cineOn && c && c.kind === 'opening'; if (talk) { sal.life.act = 'talk'; sal.life.actT = 1; sal.life.dur = 99; sal.life.gaze.target = { local: { y: 0, p: 0.05 } }; sal.life.gaze.next = 2; } else if (sal.life.dur === 99) { sal.life.act = null; sal.life.dur = 1; } } }
