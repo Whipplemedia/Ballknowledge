@@ -82,16 +82,18 @@ export function buildBar({ scene, BK, tv }) {
     const { t } = TX.neon(text, color, { w: 512, h: Math.round(512 * h / w), size });
     plane(w, h, new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, toneMapped: false }), x, y, z, ry);
   };
-  neonPlane('THE DUGOUT', '#27e08a', 6, 0.85, 0, 4.68, -ROOM.z + 0.12, 0, 60);
-  neonPlane('OPEN', '#ff3040', 1.6, 0.6, 9.5, 3.4, -ROOM.z + 0.12, 0, 80);
-  neonPlane('BAR', '#ffb030', 1.8, 0.8, ROOM.x - 0.12, 4.0, 5.5, -Math.PI / 2, 90);
-  neonPlane('LIVE SPORTS', '#ff60e0', 3, 0.7, -ROOM.x + 0.12, 3.9, 2.5, Math.PI / 2, 52);
-  const posters = [[-ROOM.x + 0.1, 2.4, -3.2, Math.PI / 2, [['WILD CARD', 30, '#b3262e'], ['WEDNESDAYS', 30], ['$2 DRAFTS', 40, '#b3262e']]],
-    [-ROOM.x + 0.1, 2.5, 5.5, Math.PI / 2, [['NO CREDIT', 40], ['NO REFUNDS', 36, '#b3262e'], ['NO EXCUSES', 36]]],
+  // neon signs: bent-tube pictures, not lettering (TX.neonSign). The main TV wall stays clear.
+  const sign = (kind, size, x, y, z, ry = 0) => plane(size, size, new THREE.MeshBasicMaterial({ map: TX.neonSign(kind).t, transparent: true, depthWrite: false, toneMapped: false }), x, y, z, ry);
+  sign('open', 1.4, 9.5, 3.4, -ROOM.z + 0.12);
+  sign('mug', 1.6, ROOM.x - 0.12, 3.9, 5.5, -Math.PI / 2);
+  sign('football', 1.4, 5.0, 3.9, ROOM.z - 0.12, Math.PI); // over the front door
+  const posters = [[-ROOM.x + 0.1, 2.5, 5.5, Math.PI / 2, [['NO CREDIT', 40], ['NO REFUNDS', 36, '#b3262e'], ['NO EXCUSES', 36]]],
     [ROOM.x - 0.1, 2.4, -2.6, -Math.PI / 2, [['HOUSE RULES', 34], ['1. TIP', 30, '#b3262e'], ['2. PAY UP', 30], ['3. DON\'T ASK', 30]]],
     [3.2, 2.3, ROOM.z - 0.1, Math.PI, [['EMPLOYEE', 34], ['OF THE', 34], ['MONTH', 40, '#b3262e']]],
     [-10.3, 2.3, ROOM.z - 0.1, Math.PI, [['LOST DOG', 40, '#b3262e'], ['ANSWERS TO', 24], ['"HEY"', 40]]]];
   posters.forEach(([x, y, z, ry, lines], i) => { const w = 0.9, h = 1.2; plane(w, h, MT(TX.poster(lines, { bg: ['#e9d9a8', '#d8e4c8', '#e6c9b0'][i % 3] }).t), x, y, z, ry); });
+  // illustrated ads: the bucket deal and wing night by the darts, Uncle Sal's garage between the house rules and the restroom door
+  [['beer', -ROOM.x + 0.1, 2.3, -3.0, Math.PI / 2], ['wings', -ROOM.x + 0.1, 2.3, -1.8, Math.PI / 2], ['sal', ROOM.x - 0.1, 2.3, -4.5, -Math.PI / 2]].forEach(([k, x, y, z, ry]) => plane(0.9, 1.2, MT(TX.adPoster(k).t), x, y, z, ry));
   // pennants
   const penG = new THREE.Shape(); penG.moveTo(0, 0); penG.lineTo(0.5, 0); penG.lineTo(0.25, -0.5); penG.closePath();
   for (let i = 0; i < 16; i++) { const m = new THREE.Mesh(new THREE.ShapeGeometry(penG), new THREE.MeshBasicMaterial({ color: [0xb3262e, 0x2a5aa8, 0xe8c030, 0x2a8a4a][i % 4], side: THREE.DoubleSide })); m.position.set(-11 + i * 1.45, 4.35, ROOM.z - 0.2); scene.add(m); }
@@ -381,10 +383,10 @@ export function buildBar({ scene, BK, tv }) {
     return { group: g, sal, pivot, light, bulb, chair: { x: BX + 0.6, z: BZ }, show, bounds, tick };
   })();
   neonPlane('EXIT', '#ff3030', 0.9, 0.38, 5.0, 2.6, ROOM.z - 0.1, Math.PI, 70);
-  // neon wall
-  neonPlane('GOOD SPORTS', '#27e08a', 3.0, 0.7, -ROOM.x + 0.12, 3.5, -4.6, Math.PI / 2, 54); neonPlane('BAD DECISIONS', '#ff60b0', 3.2, 0.7, -ROOM.x + 0.12, 2.8, -4.6, Math.PI / 2, 50);
-  neonPlane('Cold Beer', '#a060ff', 3.0, 1.0, ROOM.x - 0.12, 3.8, -2.9, -Math.PI / 2, 64);
-  [['LAGER', '#ff4040', 0.9, 0.5, -0.9], ['ALE', '#ffb030', 0.7, 0.5, 1.0], ['PILSNER', '#4da3ff', 1.1, 0.5, 4.1], ['STOUT', '#ff8030', 0.8, 0.5, 5.8]].forEach(([t, c, w, h, z]) => neonPlane(t, c, w, h, ROOM.x - 0.14, 3.35, z, -Math.PI / 2, 44));
+  // more neon signs: the left wall, the back bar
+  sign('martini', 1.5, -ROOM.x + 0.12, 3.55, -5.6, Math.PI / 2); sign('eightball', 1.3, -ROOM.x + 0.12, 3.6, -3.9, Math.PI / 2);
+  sign('bottle', 1.4, ROOM.x - 0.12, 3.8, -2.9, -Math.PI / 2);
+  sign('pint', 0.85, ROOM.x - 0.14, 3.5, -1.45, -Math.PI / 2); sign('hockey', 1.0, ROOM.x - 0.12, 3.75, -4.5, -Math.PI / 2); /* the pint by the back-bar TV; the sticks over Sal's garage ad */
   // chalkboard drinks menu
   const chalk = TX.canvasTex(512, 384, (g, w, h) => {
     g.fillStyle = '#22302c'; g.fillRect(0, 0, w, h); g.strokeStyle = '#6a4a28'; g.lineWidth = 14; g.strokeRect(7, 7, w - 14, h - 14);
