@@ -16,7 +16,7 @@ Dev: `BK_SPEED=10 npm start` divides every timer by 10 (full game in about a min
 - **Pool**: full 2D-physics pool table (your 4 solids vs an NPC's 4 stripes + the 8-ball). Pick Rookie or Shark, stake cash, win to double up.
 - **Check-ins**: the developer drops in twice a night to check the fund's pace. Behind it, he adds a permit fee to the buyout.
 - **Chaos**: random bar events (happy hour, bar fight you can bet on, blackout, big tipper), the bum who picks pockets, and per-player bounties keep things moving.
-- **Pro Shop**: earn tickets (finishing games, crew wins, quotas, bounties) and open crates for ~50 wearable items (helmets, jerseys, golf clubs, and more) in four rarities. Cosmetics are visible to the whole crew. Saved in browser localStorage.
+- **Pro Shop**: earn tickets (finishing games, crew wins, quotas, bounties) and open crates for ~50 wearable items (helmets, jerseys, golf clubs, and more) in four rarities. Cosmetics are visible to the whole crew. Saved per **player name** in this browser (`Profiles` in client.js, `localStorage` `bk_profiles_v1`): two people sharing a computer each keep their own tickets, gear and tutorial progress under the name they play as; the name box remembers the last one. The first name used on a browser inherits the old single save (`bk_save_v1`). Profiles is the one place to swap for server-side accounts later (load/store go to the server; the first login imports the local profiles).
 
 ## Controls
 WASD move, mouse look, E interact, C crew/wire money, P phone (check your bets), Esc releases the mouse / closes menus. Click throws a bottle (or punches up close); G lights a cigarette, F takes a drag (or throws a bottle when you are not smoking), X drinks an energy drink.
@@ -117,7 +117,7 @@ Server-timed like every cutscene (`finish()` sets `room.cine` and `room.verdictA
 
 ## Seasons: real or made-up
 - The host picks **Real season** or **Made-up season** in the lobby (`{type:'setMode', mode}`).
-- Real: the server prefers a season nobody in the crew has played. Each browser keeps the seasons it has finished in `save.seen` (`bk_save_v1`) and reports them on connect (`{type:'seen', ids}`); the room also remembers its last 12 picks. When everyone has seen everything, the least-seen season is picked.
+- Real: the server prefers a season nobody in the crew has played. Each player profile keeps the seasons it has finished in `save.seen` (`bk_profiles_v1`) and reports them on connect (`{type:'seen', ids}`); the room also remembers its last 12 picks. When everyone has seen everything, the least-seen season is picked.
 - Made-up (`fakeseason.js`): a fictional league, 6-13 teams with invented cities, nicknames, colors, records and star players, and a full postseason in the real format of that sport (NFL-style 12-team bracket, conference title games + bowls + 4-team playoff, Sweet 16 onward, or a conference final + best-of-7 final with 2-2-1-1-1 / 2-3-2 home games). Every winner is rolled from the same win probability the sportsbook prices (`odds.js`), so the posted odds are honest and nothing can be remembered. Scores are shaped per sport (touchdowns and field goals, Poisson goals and runs, overtime and extra innings on ties). Generated fresh each night from a seed; the season is part of the room snapshot.
 
 ## Known gaps / next
@@ -152,7 +152,7 @@ Server-timed like every cutscene (`finish()` sets `room.cine` and `room.verdictA
 - Knockouts show cartoon "seeing stars" (`public/dizzy.js`): a ring of spinning, bobbing gold stars orbits above the head (world space, so it follows the head when the body is flat on the floor) and springs in/out. Your own KO shows stars circling across your view with a small countdown.
 
 ## Reconnecting & surviving restarts
-- Each player gets a rejoin token (`{type:'session'}` → stored in `localStorage` as `bk_session_v1`). A refresh, dropped connection or second tab reclaims the same seat, money and bets in any phase; the client retries automatically with a "reconnecting" banner and keeps the bar on screen. Empty rooms wait 10 minutes for their players before being deleted.
+- Each player gets a rejoin token (`{type:'session'}` → stored per tab in `sessionStorage` as `bk_session_v1`, with the profile it plays as). A refresh or dropped connection reclaims the same seat (a second tab is a new player), money and bets in any phase; the client retries automatically with a "reconnecting" banner and keeps the bar on screen. Empty rooms wait 10 minutes for their players before being deleted.
 - Timers are tick-driven (game windows, hitmen deadline, roulette resolution), so a room can be snapshotted. Set `BK_STATE_DIR` to persistent storage (on Railway: add a Volume to the service, e.g. mounted at `/data`, and set `BK_STATE_DIR=/data`). The server writes `rooms.json` every 4 s and on SIGTERM and restores it on boot, so redeploys no longer end running games. Without it, rejoin still covers drops and refreshes but a redeploy ends live games.
 
 ## Rendering budget

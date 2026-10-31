@@ -13,25 +13,42 @@ const SET_KEY = 'bk_settings_v1';
 const settings = Object.assign({ sens: 1, invert: false, fov: 72, quality: 'auto', compact: true, bubbles: true }, (() => { try { return JSON.parse(localStorage.getItem(SET_KEY)) || {}; } catch { return {}; } })());
 function saveSettings() { try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch {} }
 
-// ---------- local save: tickets + inventory (browser only) ----------
-const SAVE_KEY = 'bk_save_v1';
-function loadSave() { try { const o = JSON.parse(localStorage.getItem(SAVE_KEY)); if (o && Array.isArray(o.inv)) return o; } catch {} return { tix: 60, inv: [], eq: {} }; }
-let save = loadSave();
-function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch {} }
+// ---------- local save: tickets, Pro Shop items, what's equipped, tutorial progress - one profile per player name (browser only) ----------
+// Everything reads and writes through Profiles, so two people sharing a computer keep their own gear. Server-side accounts later
+// replace Profiles' insides (load/store go to the server; the first login imports these local profiles); the callers stay as they are.
+const PROF_KEY = 'bk_profiles_v1', OLD_SAVE_KEY = 'bk_save_v1'; // bk_save_v1: the single save from before profiles
+const blankSave = () => ({ tix: 60, inv: [], eq: {} });
+const Profiles = {
+  key: (name) => String(name || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 16),
+  all() { try { const o = JSON.parse(localStorage.getItem(PROF_KEY)); if (o && o.p) return o; } catch {} return { p: {}, last: null }; },
+  write(o) { try { localStorage.setItem(PROF_KEY, JSON.stringify(o)); } catch {} },
+  load(key, name) { // read fresh every time: another tab may be playing as someone else
+    const o = this.all(); let sv = o.p[key];
+    if (!sv) { let old = null; try { old = JSON.parse(localStorage.getItem(OLD_SAVE_KEY)); } catch {} // the first name used here inherits the old save
+      if (old && Array.isArray(old.inv) && !o.claimed) { sv = old; o.claimed = key; } else sv = blankSave(); }
+    if (name) sv.name = String(name).trim(); o.p[key] = sv; o.last = key; this.write(o); return sv;
+  },
+  store(key, sv) { const o = this.all(); o.p[key] = sv; this.write(o); }, // read-modify-write: only this profile changes
+  last() { return this.all().last; },
+};
+let profile = (sess0() && sess0().prof) || Profiles.last() || '', save = profile ? Profiles.load(profile) : blankSave();
+function persist() { if (profile) Profiles.store(profile, save); }
+function useProfile(name) { const k = Profiles.key(name); if (!k) return; profile = k; save = Profiles.load(k, name); }
+function sess0() { try { return JSON.parse(sessionStorage.getItem('bk_session_v1')); } catch { return null; } } // this tab's seat, if it has one
 // what we wear: equipped cosmetics, plus a toe tag for the season after you got taken to the back room
 const wearing = () => (save.toeTag === 'wearing' ? { ...save.eq, tag: 'toe_tag' } : save.eq);
 
 // ---------- session: the server hands out a rejoin token; we keep it so a refresh, dropped wifi or server restart puts you back in your seat ----------
 const SESS_KEY = 'bk_session_v1', SESS_MAX_AGE = 3 * 3600 * 1000;
-let sess = (() => { try { const o = JSON.parse(localStorage.getItem(SESS_KEY)); return o && o.token && Date.now() - o.at < SESS_MAX_AGE ? o : null; } catch { return null; } })();
-const saveSess = () => { try { if (sess) localStorage.setItem(SESS_KEY, JSON.stringify(sess)); else localStorage.removeItem(SESS_KEY); } catch {} };
+let sess = (() => { try { const o = JSON.parse(sessionStorage.getItem(SESS_KEY)); return o && o.token && Date.now() - o.at < SESS_MAX_AGE ? o : null; } catch { return null; } })();
+const saveSess = () => { try { if (sess) sessionStorage.setItem(SESS_KEY, JSON.stringify(sess)); else sessionStorage.removeItem(SESS_KEY); } catch {} }; // per tab: a refresh rejoins, a second tab is a new player
 function connect(msg) {
   const sock = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host); ws = sock;
   sock.onopen = () => { sock.send(JSON.stringify(msg)); sock.send(JSON.stringify({ type: 'cosmetics', cos: wearing() })); sock.send(JSON.stringify({ type: 'seen', ids: save.seen || [], tut: !!save.tutDone })); };
   sock.onmessage = (e) => {
     const m = JSON.parse(e.data);
     if (m.type === 'state') { S = m; skew = m.now - Date.now(); stateAt = Date.now(); err = ''; if (sess && Date.now() - sess.at > 60000) { sess.at = Date.now(); saveSess(); } render(); }
-    else if (m.type === 'session') { const back = ui.reconnecting; sess = { code: m.code, token: m.token, at: Date.now() }; saveSess(); ui.reconnecting = false; ui.retryN = 0; if (back) toast('Reconnected.', 'win'); window.BK.onSession && window.BK.onSession(); }
+    else if (m.type === 'session') { const back = ui.reconnecting; sess = { code: m.code, token: m.token, at: Date.now(), prof: profile }; saveSess(); ui.reconnecting = false; ui.retryN = 0; if (back) toast('Reconnected.', 'win'); window.BK.onSession && window.BK.onSession(); }
     else if (m.type === 'toast') { toast(m.text, m.kind); if (/^🍸 .*(from the bartender|off your tab)/.test(m.text)) window.BK.vo && window.BK.vo.play('bt_thanks'); }
     else if (m.type === 'pos') window.BK.onPos && window.BK.onPos(m);
     else if (m.type === 'rtc') window.BK.onRtc && window.BK.onRtc(m);
@@ -159,13 +176,14 @@ function render() {
   if (S && S.phase === 'ended' && S.summary) { const mine = S.summary.players.find((p) => p.id === S.you), key = S.code + ':' + (S.summary.t0 || S.summary.year); if (mine && ui.paid !== key) { ui.paid = key; save.tix += mine.tickets; if (S.summary.sid) { save.seen = [...(save.seen || []).filter((x) => x !== S.summary.sid), S.summary.sid].slice(-200); send({ type: 'seen', ids: save.seen }); } save.toeTag = mine.fate === 'dead' ? 'pending' : save.toeTag === 'wearing' ? null : save.toeTag; persist(); toast(`+${mine.tickets} 🎟 tickets earned!`, 'win'); } }
   if (window.BKC) window.BKC.preview.setHost(ui.shop && !ui.reveal ? '#shopPrev' : null);
   const a = document.activeElement, keep = a && a.id ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
-  const app = $('#app');
+  const app = $('#app'), typed = ['name', 'code'].map((id) => [id, document.getElementById(id)]).filter(([, el]) => el).map(([id, el]) => [id, el.value]); // re-renders keep what you typed
   if (!S) app.innerHTML = joinView();
   else if (S.phase === 'lobby') app.innerHTML = lobbyView();
   else if (S.phase === 'ended') app.innerHTML = endView();
   else app.innerHTML = gameView();
   if (ui.shop) app.insertAdjacentHTML('beforeend', shopView());
   if (ui.menu && S && ['play', 'hunt'].includes(S.phase) && !ui.open && !ui.shop) app.insertAdjacentHTML('beforeend', menuView()); else ui.menu = false;
+  for (const [id, v] of typed) { const el = document.getElementById(id); if (el) el.value = v; }
   if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { el.setSelectionRange(keep.s, keep.e); } catch {} } }
   tick(); hudHotkeys(); hudCompact(); napkinCheck(); phoneSync();
   { const v = S && S.cur && S.cur.vinnie ? S.cur.idx : -1; if (v >= 0 && ui.vinSaid !== v) { ui.vinSaid = v; window.BK.vo && window.BK.vo.play('vin_tip'); } }
@@ -183,7 +201,7 @@ function joinView() {
     <img class="logo-img" src="logo.webp" alt="Ball Knowledge">
     <div class="tag">Pick a sport. We pick the season. Know your ball - or find another way to win.</div>
     ${ui.rejoining ? `<div class="muted">Rejoining room <b>${esc(sess.code)}</b>...</div>` : ''}${err ? `<div class="bad">${esc(err)}</div>` : ''}
-    <input id="name" placeholder="Your name" maxlength="16">
+    <input id="name" placeholder="Your name" maxlength="16" value="${esc(save.name || '')}">
     ${loadBar()}
     <button class="cta" onclick="doJoin()">Create a crew</button>
     <div class="row"><input id="code" placeholder="Room code" maxlength="4" style="text-transform:uppercase"><button class="ghost fit" onclick="doJoin(true)">Join</button></div>
@@ -192,6 +210,7 @@ function joinView() {
 function doJoin(withCode) {
   const name = $('#name').value, code = withCode ? $('#code').value : undefined;
   if (withCode && !code) return;
+  useProfile(name.trim() || profile || 'player'); // your tickets and gear belong to the name you play under
   ui.rejoining = ui.reconnecting = false; connect({ type: 'join', name, code });
 }
 
