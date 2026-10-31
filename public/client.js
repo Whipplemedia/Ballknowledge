@@ -67,12 +67,12 @@ function retryLater() {
   setTimeout(() => { if (sess && (ui.reconnecting || ui.rejoining)) connect({ type: 'join', code: sess.code, token: sess.token }); }, Math.min(8000, 400 * 2 ** Math.min(n, 5)));
 }
 const send = (m) => ws && ws.readyState === 1 && ws.send(JSON.stringify(m));
-function toast(text, kind = 'info') {
+function toast(text, kind = 'info', ms = 5200) {
   const B = window.BK; if (B && B.sfx) B.sfx(kind === 'win' ? 'win' : kind === 'err' ? 'buzz' : kind === 'mob' ? 'knock' : 'tick');
   const d = document.createElement('div'); d.className = 'toast ' + kind;
   const tag = document.createElement('i'); tag.textContent = { win: '✔', err: '!', mob: '$', info: '•' }[kind] || '•'; const tx = document.createElement('span'); tx.textContent = text; d.append(tag, tx);
   const box = $('#toasts'); box.prepend(d); while (box.children.length > 4) box.lastChild.remove(); // newest on top, at most four
-  setTimeout(() => { d.classList.add('out'); setTimeout(() => d.remove(), 450); }, 5200);
+  setTimeout(() => { d.classList.add('out'); setTimeout(() => d.remove(), 450); }, ms);
 }
 
 // ---------- panels / pointer lock ----------
@@ -117,6 +117,10 @@ function hudCompact() {
   const bs = JSON.stringify((S.me.bounties || []).map((b) => b.done)); if (bs !== ui.bSig) { ui.bSig = bs; ui.bAt = Date.now(); }
   const t = Date.now(), c = settings.compact;
   const ge = $('#goal'); if (ge) ge.classList.toggle('mini', c && t - ui.goalAt > 9000);
+  if (!save.goalTip && S.fund && S.quota && !(S.cine && now() < S.cine.until)) { // once ever: what the box at the top right means
+    save.goalTip = 1; persist(); const D = ST().dev.name;
+    toast(`TONIGHT'S GOAL (top right): the crew needs to win ${$$(S.fund.goal)} tonight, together. The marks on the bar are ${D}'s check-ins - be on pace when he shows up. The bar fund under it is the whole buyout, across every night.`, 'info', 12000);
+  }
   const be = $('#bounty'); if (be) be.classList.toggle('mini', c && t - ui.bAt > 12000);
   for (const d of document.querySelectorAll('#app .hud-feed div[data-t]')) d.classList.toggle('gone', c && now() - Number(d.dataset.t) > 12000);
 }
@@ -801,13 +805,19 @@ function tickerHtml() {
   return `<div class="ticker"><span class="tk-live">LIVE</span><span class="tk-brand">${esc(ST().bar.toUpperCase())}</span><div class="tk-txt ${fresh ? 'news' : 'keys'}${fresh && now() - last.t < 800 ? ' in' : ''}" data-t="${fresh ? last.t : 0}">${fresh ? esc(last.text) : keys}</div></div>`;
 }
 // ---------- quota / bounties / events ----------
-function quotaHud() { // the Save the Bar fund, and tonight's pace for the developer's check-ins (S.quota: crew net worth targets)
+function quotaHud() { // tonight's goal first (what the crew has to win tonight), the developer's check-ins as marks on that bar, the whole buyout in a tab below
   if (!S.quota || !S.fund) return '';
-  const f = S.fund, nxt = S.quota.find((q) => q.status === 'pending'), tonight = (S.crewNow || 0) - (f.start || 0), D = esc(ST().dev.name);
-  const chips = S.quota.map((q) => `<span class="qc ${q.status}" title="${q.kind === 'final' ? 'Tonight\'s goal' : D + ' checks in'} after game ${q.idx + 1}">${q.status === 'met' ? '✓' : q.status === 'missed' ? '✗' : q.idx + 1}</span>`).join('');
-  const pct = Math.max(0, Math.min(100, (Math.max(0, tonight) / Math.max(1, f.goal)) * 100)), ok = nxt ? S.crewNow >= nxt.target : tonight >= f.goal;
-  return `<div class="bug-r" title="${nxt && nxt.kind === 'mid' ? `${D} checks in after game ${nxt.idx + 1}: the crew needs to be up ${$$(nxt.target - f.start)} by then` : 'Tonight\'s goal'}"><div class="br-top"><span>SAVE THE BAR</span><b>${$$(f.banked)}<i> / ${$$(f.buyout)}</i></b></div>
-    <div class="qbar ${ok ? 'ok' : ''}"><div style="width:${pct}%"></div></div><div class="br-bot"><span>TONIGHT <b class="${tonight >= 0 ? 'up' : 'down'}">${tonight >= 0 ? '+' : ''}${$$(tonight)}</b> / ${$$(f.goal)}</span><span class="qchips">${chips}</span></div></div>`;
+  const f = S.fund, D = esc(ST().dev.name), up = Math.round((S.crewNow || 0) - (f.start || 0)), goal = Math.max(1, f.goal), at = (q) => Math.max(0, Math.min(100, ((q.target - f.start) / goal) * 100));
+  const nxt = S.quota.find((q) => q.status === 'pending'), last = S.quota[S.quota.length - 1], pct = Math.max(0, Math.min(100, (up / goal) * 100));
+  const ok = up >= (nxt ? nxt.target - f.start : goal);
+  const marks = S.quota.filter((q) => q.kind === 'mid').map((q) => `<i class="qm ${q.status}" style="left:${at(q)}%"></i>`).join('');
+  const next = !nxt ? (last && last.status === 'met' ? 'Goal made! It goes in the fund at closing' : 'Missed tonight\'s goal')
+    : nxt.kind === 'mid' ? `${D} checks in after game ${nxt.idx + 1}: be up <b>${$$(nxt.target - f.start)}</b>` : `Win <b>${$$(Math.max(0, f.goal - up))}</b> more by the last game`;
+  return `<div class="bug-r" title="Tonight's goal: what the crew has to win tonight, all of you together. The marks on the bar are ${D}'s check-ins: be on pace when he shows up, or he adds a permit fee to the buyout.">
+    <div class="br-top"><span>TONIGHT'S GOAL</span><b class="${up >= 0 ? 'up' : 'down'}">${up >= 0 ? '+' : '-'}${$$(Math.abs(up))}<i> / ${$$(f.goal)}</i></b></div>
+    <div class="qbar ${ok ? 'ok' : ''}"><div style="width:${pct}%"></div>${marks}</div>
+    <div class="br-next">${next}</div></div>
+    <div class="br-fund" title="Every night's winnings go in the fund. Fill it to buy the bar back from ${D}.">BAR FUND <b>${$$(f.banked)}</b> of ${$$(f.buyout)} buyout</div>`;
 }
 function bountyHud() {
   const b = S.me.bounties || []; if (!b.length) return '';

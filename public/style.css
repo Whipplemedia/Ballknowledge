@@ -563,3 +563,12 @@ body.hascrew #buffs{top:auto;bottom:44px;right:auto;left:14px}
 #credits .cr-mem{margin-top:10px;font:italic 700 17px var(--bc-font,system-ui);color:#e6e6ea;opacity:0;animation:crIn .5s ease-out forwards}#credits .cr-mem span{display:block;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#8a8a96;font-style:normal}
 #credits .cr-end{margin-top:10px;font:800 clamp(15px,2vw,19px) var(--bc-font,system-ui);color:var(--bc-gold,#ffc83d);opacity:0;animation:crIn .6s ease-out forwards}#credits.sold .cr-end{color:#ff6a6a}
 @keyframes crIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* tonight's goal (quotaHud): the goal, a bar with the developer's check-in marks, the next step; the whole buyout hangs below as a tab */
+.bug{position:absolute}.bug-r{min-width:270px;position:relative}
+.br-top b.up{color:var(--bc-green)}.br-top b.down{color:#ff6a78}
+.bug-r .qbar{position:relative;height:7px;overflow:visible}.bug-r .qbar>div{height:100%}
+.qm{position:absolute;top:-3px;width:3px;height:13px;margin-left:-1px;background:#fff;box-shadow:0 0 0 1px #0b1428}.qm.met{background:var(--bc-green)}.qm.missed{background:#ff4d5e}
+.br-next{font-size:12px;font-weight:700;letter-spacing:.03em;color:#c8d2ee;white-space:nowrap}.br-next b{color:var(--bc-gold)}
+.bug>.br-fund{position:absolute;right:0;top:100%;display:block;padding:2px 12px 3px 18px;background:#0b1428e8;color:#9fb0d8;font-size:11px;font-weight:800;letter-spacing:.1em;white-space:nowrap;clip-path:polygon(0 0,100% 0,100% 100%,8px 100%)}.br-fund b{color:var(--bc-ink)}
+@media (max-width:940px){.bug>.br-fund{display:none}}
