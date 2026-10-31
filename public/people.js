@@ -129,7 +129,8 @@ function fromSkinned(src, name, over) {
   const rig = SkeletonUtils.clone(src), outer = new THREE.Group(), inner = new THREE.Group();
   inner.rotation.y = Math.PI; inner.add(rig); outer.add(inner);
   const B = {}; let skinned = null;
-  rig.traverse((o) => { if (o.isBone) B[o.name] = o; if (o.isSkinnedMesh) { skinned = o; o.frustumCulled = false; o.castShadow = true; } });
+  rig.traverse((o) => { if (o.isBone) B[o.name] = o; if (o.isSkinnedMesh) { skinned = o; o.frustumCulled = false; o.castShadow = true; }
+    if (o.isMesh && (o.material.emissiveMap || o.material.metalness > 0.5)) { o.material.emissiveMap = null; o.material.emissive.set(0); o.material.metalness = 0; o.material.needsUpdate = true; } }); // some Meshy exports (owner_ai) come self-lit (texture as emissive map) and fully metallic: plain cloth and skin like everyone else
   const need = ['Hips', 'Spine', 'Spine01', 'Spine02', 'neck', 'Head', 'LeftArm', 'LeftForeArm', 'LeftHand', 'RightArm', 'RightForeArm', 'RightHand', 'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'RightUpLeg', 'RightLeg', 'RightFoot'];
   if (!skinned || need.some((n) => !B[n])) return null;
   outer.updateMatrixWorld(true);
