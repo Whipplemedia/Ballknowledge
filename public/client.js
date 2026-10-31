@@ -850,6 +850,10 @@ function fightBet(side) { if (!fightOpen()) return; if (S.me.money < ui.fightSta
 function fightStakeNext() { ui.fightStake = FIGHT_STAKES[(FIGHT_STAKES.indexOf(ui.fightStake) + 1) % FIGHT_STAKES.length]; render(); }
 function eventBanner() {
   const be = S.barEvent, fin = S.cur && S.events && S.events[S.cur.idx] && S.events[S.cur.idx].final && S.events[S.cur.idx].status === 'open' ? S.events[S.cur.idx] : null;
+  const dare = S.chaseDare;
+  if (!be && dare) { const D = esc(ST().dev.name); // Chase's pool dare after a check-in the crew was behind on
+    return `<div class="hud-event dare"><div class="et">${D}'S DARE${dare.by ? '' : ` <span class="pill time">${mmss(dare.until - now())}</span>`}</div><div>${dare.by ? (dare.mine ? `You're playing ${D}. Win: no permit fee and ${$$(dare.fee)} for the fund. Lose: ${$$(dare.fee * 2)}.` : `${esc(dare.by)} is playing ${D} at pool. ${$$(dare.fee)} rides on it.`) : `Beat ${D} at pool: no permit fee, and he puts ${$$(dare.fee)} in the jar. Lose: the fee doubles to ${$$(dare.fee * 2)}. Walk to the pool table and press E.`}</div></div>`;
+  }
   if (!be && fin) { // last call: the championship's betting window
     if (ui.lastCall !== S.code + fin.idx) { ui.lastCall = S.code + fin.idx; window.BK.sfx && window.BK.sfx('bell'); window.BK.sfx && window.BK.sfx('murmur', { delay: 0.6 }); }
     const mine = (S.me.bets[fin.idx] || {}).ml;
@@ -896,8 +900,9 @@ function cancelChallenge() { send({ type: 'challengeCancel' }); render(); }
 
 // ---------- pool ----------
 window.BK.openPool = () => openPanel('pool');
+window.BK.playChase = () => { send({ type: 'poolStart', opp: 'chase' }); ui.pendingPool = { at: Date.now() }; }; // Chase's dare: straight to the table
 function poolView() {
-  const open = S.me.pool, NAME = { rookie: 'The Rookie', shark: 'The Shark' };
+  const open = S.me.pool, NAME = { rookie: 'The Rookie', shark: 'The Shark', chase: ST().dev.name };
   if (open) return `<div class="card col"><div class="big">🎱 Game in progress</div><div class="muted">${$$(open.stake)} on the table against <b>${NAME[open.opp]}</b>. Walking away forfeits the stake.</div>
     <div class="row"><button onclick="closePanel();BK.startGame('pool', S.me.pool)">Back to the table</button><button class="ghost" onclick="send({type:'poolEnd',won:false});render()">Forfeit</button></div></div>`;
   const sel = ui.poolOpp || 'rookie', stake = ui.poolStake || 50, mult = { rookie: 1.7, shark: 2.6 }[sel];

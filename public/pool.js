@@ -8,7 +8,7 @@ import { hasProp } from './props.js';
 const PX = 3.4, PZ = 3.4, Y = 0.92, BR = 0.04, HX = hasProp('pool') ? 1.21 : 1.3, HZ = hasProp('pool') ? 0.565 : 0.65, PR = 0.09; // HX/HZ = inner rail edges (the AI table's rails sit at |x|=1.21, |z|=0.565)
 const POCKETS = [[-HX, -HZ], [HX, -HZ], [-HX, HZ], [HX, HZ], [0, -HZ - 0.03], [0, HZ + 0.03]];
 const COLORS = { 1: '#f2c230', 2: '#2a5ad8', 3: '#d82a2a', 4: '#7a2ab8', 8: '#101010', 9: '#f2c230', 10: '#2a5ad8', 11: '#d82a2a', 12: '#7a2ab8' };
-const SKILL = { rookie: { aim: 0.06, pow: 0.2, name: 'the Rookie', think: 1.1 }, shark: { aim: 0.011, pow: 0.05, name: 'The Shark', think: 1.5 } };
+const SKILL = { rookie: { aim: 0.06, pow: 0.2, name: 'the Rookie', think: 1.1 }, shark: { aim: 0.011, pow: 0.05, name: 'The Shark', think: 1.5 }, chase: { aim: 0.024, pow: 0.09, name: 'Chase', think: 1.3 } }; // chase: the developer's dare at a check-in, between the two
 const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 0.5;
 
 function ballTex(n) {
@@ -33,7 +33,8 @@ export function createPool({ scene, camera, BK, me, stations, obstacles, hud, V 
   const lineGeo = new THREE.BufferGeometry().setFromPoints([V(), V(), V(), V()]);
   const aimLine = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 })); aimLine.frustumCulled = false; aimLine.visible = false; scene.add(aimLine);
   const ghost = new THREE.Mesh(new THREE.SphereGeometry(BR, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.8 })); ghost.visible = false; scene.add(ghost);
-  stations.push({ x: PX - 1.9, z: PZ, r: 1.6, text: 'E - Play pool (bet vs NPC)', act: () => BK.openPool && BK.openPool() });
+  const dare = () => { const d = BK.S && BK.S.chaseDare; return d && !d.by && BK.now() < d.until ? d : null; }; // Chase's pool dare, open to take
+  stations.push({ x: PX - 1.9, z: PZ, r: 1.6, get text() { const d = dare(); return d ? `E - Play Chase at pool ($${d.fee} permit fee rides on it)` : 'E - Play pool (bet vs NPC)'; }, act: () => (dare() ? BK.playChase && BK.playChase() : BK.openPool && BK.openPool()) });
 
   // ----- game state -----
   let st = null; // {opp, stake, turn, phase, power, cdir, charging, aim, msg, msgT, shots, firstHit, pocketed[], scratched, t, npcPlan, winner, practice}
@@ -125,8 +126,8 @@ export function createPool({ scene, camera, BK, me, stations, obstacles, hud, V 
   const end = (winner, why) => {
     st.phase = 'over'; st.winner = winner; st.t = 0; cue.visible = false; aimLine.visible = false; ghost.visible = false;
     const won = winner === 'you'; st.endMsg = won ? `🏆 YOU WIN! ${why}` : `💀 You lose. ${why}`;
-    if (st.stake && BK.send) BK.send({ type: 'poolEnd', won });
-    st.stake = 0;
+    if ((st.stake || st.dare) && BK.send) BK.send({ type: 'poolEnd', won });
+    st.stake = 0; st.dare = false;
   };
 
   // ----- game interface (matches games.js) -----
@@ -136,10 +137,10 @@ export function createPool({ scene, camera, BK, me, stations, obstacles, hud, V 
     enter(ch) {
       st = { opp: ch && ch.opp ? ch.opp : 'rookie', stake: ch && ch.stake ? ch.stake : 0, turn: 'you', phase: 'aim', power: 0, cdir: 1, charging: false, aim: -Math.PI / 2, msg: '', msgT: 0, shots: 0, firstHit: null, pocketed: [], t: 0, lastLy: undefined, endMsg: '' };
       rack(); sync(); cue.visible = true; me.yaw = st.aim; st.lastLy = me.yaw; group.visible = true; this.hudUpdate();
-      say(`You vs ${SKILL[st.opp].name}. ${st.stake ? '$' + st.stake + ' on the line. ' : 'Practice - no wager. '}You break!`, 3600);
+      st.dare = !!(ch && ch.dare); say(`You vs ${SKILL[st.opp].name}. ${st.dare ? 'The permit fee rides on this one. ' : st.stake ? '$' + st.stake + ' on the line. ' : 'Practice - no wager. '}You break!`, 3600);
     },
-    exit() { if (st && st.stake && st.phase !== 'over') { BK.send({ type: 'poolEnd', won: false }); } cue.visible = false; aimLine.visible = false; ghost.visible = false; st = null; hud.msg(''); hud.power(null); },
-    reset() {}, hudUpdate() { if (!st) return; hud.title(''); hud.sub(`🎱 You (solids) ${4 - remaining('you')}/4  ·  ${SKILL[st.opp].name} (stripes) ${4 - remaining('npc')}/4${st.stake ? ' · $' + st.stake : ' · practice'}`); hud.help(st.phase === 'over' ? 'Press E to leave' : 'Mouse = aim · HOLD click, release to shoot (the meter swings) · E to leave (forfeits a wager)'); },
+    exit() { if (st && (st.stake || st.dare) && st.phase !== 'over') { BK.send({ type: 'poolEnd', won: false }); } cue.visible = false; aimLine.visible = false; ghost.visible = false; st = null; hud.msg(''); hud.power(null); },
+    reset() {}, hudUpdate() { if (!st) return; hud.title(''); hud.sub(`🎱 You (solids) ${4 - remaining('you')}/4  ·  ${SKILL[st.opp].name} (stripes) ${4 - remaining('npc')}/4${st.dare ? ' · the permit fee' : st.stake ? ' · $' + st.stake : ' · practice'}`); hud.help(st.phase === 'over' ? 'Press E to leave' : 'Mouse = aim · HOLD click, release to shoot (the meter swings) · E to leave (forfeits a wager)'); },
     camOffset() { return { y: 0, p: 0 }; },
     look() { if (!st) return; if (st.lastLy !== undefined && st.phase === 'aim') { const d = me.yaw - st.lastLy; st.aim += d * 0.28; } me.yaw = st.aim; st.lastLy = me.yaw; me.pitch = spot.pitch; },
     down() { if (st && st.phase === 'aim' && st.turn === 'you') { st.charging = true; st.power = 0; st.cdir = 1; } },

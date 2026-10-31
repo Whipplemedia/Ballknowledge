@@ -573,3 +573,4 @@ body.hascrew #buffs{top:auto;bottom:44px;right:auto;left:14px}
 .bug>.br-fund{position:absolute;right:0;top:100%;display:block;padding:2px 12px 3px 18px;background:#0b1428e8;color:#9fb0d8;font-size:11px;font-weight:800;letter-spacing:.1em;white-space:nowrap;clip-path:polygon(0 0,100% 0,100% 100%,8px 100%)}.br-fund b{color:var(--bc-ink)}
 @media (max-width:940px){.bug>.br-fund{display:none}}
 .hud-event.lastcall{border-color:#ffc83d;background:#2a2008f0}.hud-event.lastcall .et{background:#ffc83d;color:#1a1200}
+.hud-event.dare{border-color:#4aa8ff;background:#0c1a30f0}.hud-event.dare .et{background:#2f7de1}

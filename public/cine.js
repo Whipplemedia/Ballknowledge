@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { animate } from './people.js';
+import { animate, hasClip } from './people.js';
 import { STORY } from './story.js';
 import { createFinale } from './finale.js';
 
@@ -76,6 +76,7 @@ export function createCine({ camera, BK, doors, goons, audio, backroom, owner, d
       shot(5.35, 1.66, 3.7, w.x, 1.55, w.z);
       if (t > 1.2) cue('vo', () => audio.sfx(c.met ? 'groan' : 'laugh', { pos: { x: 5, y: 1.6, z: 6.3 } }));
       if (c.met) caption(`${D.name.toUpperCase()} CHECKS THE BOOKS`, `"+${money(c.gained)} already? ...Beginner's luck." On pace for tonight.`);
+      else if (c.dare) caption('PERMIT FEE... OR POOL', `"${c.gained >= 0 ? '+' : ''}${money(c.gained)}? You're behind. That's +${money(c.fee)} on the buyout - unless one of you beats me at pool. Win, and I put ${money(c.fee)} in your jar. Lose, it's double."`);
       else caption('PERMIT FEE', `"${c.gained >= 0 ? '+' : ''}${money(c.gained)}? You're behind. That'll be a permit fee: +${money(c.fee)}." Buyout: ${money(c.buyout)}`);
       return;
     }
@@ -89,7 +90,9 @@ export function createCine({ camera, BK, doors, goons, audio, backroom, owner, d
       const c = BK.S && BK.S.cine, now = BK.now();
       const on = !!(c && now < c.until + 200);
       document.body.classList.toggle('cine', on);
-      if (!on) { if (shown) { shown = null; cues = {}; finale.end(); caption(''); fade.style.opacity = 0; flash.style.opacity = 0; if (backroom) backroom.show(false); hideDev(); } return null; } // outside a cutscene, both doors open for whoever walks up to them (bar.js)
+      if (!on) { // between cutscenes, Chase waits at the pool table while his dare is open or being played
+        const dare = BK.S && BK.S.chaseDare; if (dare && dev) { place(dev, 5.15, 3.4, Math.PI / 2, hasClip('shrug') && !dare.by ? 'clip:shrug' : 'idle', wt); BK.chaseOut = true; } else if (BK.chaseOut) { BK.chaseOut = false; hideDev(); }
+        if (shown) { shown = null; cues = {}; finale.end(); caption(''); fade.style.opacity = 0; flash.style.opacity = 0; if (backroom) backroom.show(false); hideDev(); } return null; } // outside a cutscene, both doors open for whoever walks up to them (bar.js)
       if (shown !== c.start) { shown = c.start; cues = {}; }
       const t = (now - c.start) / 1000, L = lead();
       fade.style.opacity = 0;

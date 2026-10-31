@@ -49,7 +49,8 @@ const SCRATCH_PW = SCRATCH.prizes.reduce((a, [, w]) => a + w, 0);
 const lucky = (p) => (p.cigUntil || 0) > Date.now();
 const luckQ = (pw) => Math.min(1, LUCK * pw / Math.max(0.01, 1 - pw)); // flip a loss with this chance: the win chance becomes pw * 1.15
 const MG = { darts: { max: 180 }, bowling: { max: 20 }, cornhole: { max: 12 }, golf: { max: 24 } }; // golf: Stableford points over 3 holes (public/golf.js)
-const OPPS = { rookie: { label: 'Rookie', mult: 1.6 }, regular: { label: 'Regular', mult: 2.0 }, shark: { label: 'The Shark', mult: 2.8 } };
+const OPPS = { rookie: { label: 'Rookie', mult: 1.6 }, regular: { label: 'Regular', mult: 2.0 }, shark: { label: 'The Shark', mult: 2.8 }, chase: { get label() { return STORY.dev.name; }, mult: 0 } };
+const DARE_MS = 60000, DARE_MAX_MS = 480000; // Chase's pool dare: a minute to take it; a game that never reports back counts as a loss after 8 min
 const NPC_SKILL = { golf: { rookie: [6, 2], regular: [9, 2], shark: [11.5, 2] }, darts: { rookie: [45, 18], regular: [70, 22], shark: [98, 26] }, bowling: { rookie: [9, 3], regular: [12.5, 3.2], shark: [16, 3] }, cornhole: { rookie: [3, 1.8], regular: [5, 2], shark: [7.5, 2] } };
 const POOL_MULT = { rookie: 1.7, shark: 2.6 };
 // ---------- the story: save the bar (names and the developer's plan live in public/story.json) ----------
@@ -271,7 +272,7 @@ function startGame(room) {
   room.fund = fund; room.crewStart = start; const nightsLeft = camp ? camp.nights - night + 1 : 1;
   room.goal = Math.max(0, Math.ceil((fund.buyout - fund.banked) / nightsLeft / 50) * 50);
   room.quota = [...CHECK_AT.map((f, i) => ({ kind: 'mid', idx: Math.max(i, Math.round(nE * f) - 1), frac: f })), { kind: 'final', idx: nE - 1, frac: 1 }].map((q) => ({ ...q, target: Math.round(start + room.goal * q.frac), status: 'pending', crew: 0 }));
-  room.verdictAt = 0; room.deposited = false; room.deposit = 0; room.nextBum = now + (process.env.BK_BUM_SOON ? 20000 : dur(240000 + rnd(60000))); room.lastMark = null; /* first try after about game 2 */ /* BK_BUM_SOON: dev/testing only */ bum.stop(room); bum.ensure(room); /* Dusty is out on the street all night */ room.pendingShake = 0; room.zynAt = 0; room.zynSpot = rnd(2);
+  room.verdictAt = 0; room.deposited = false; room.deposit = 0; room.chaseDare = null; room.nextBum = now + (process.env.BK_BUM_SOON ? 20000 : dur(240000 + rnd(60000))); room.lastMark = null; /* first try after about game 2 */ /* BK_BUM_SOON: dev/testing only */ bum.stop(room); bum.ensure(room); /* Dusty is out on the street all night */ room.pendingShake = 0; room.zynAt = 0; room.zynSpot = rnd(2);
   room.shake = null; room.barEvent = null; room.nextBarEvent = now + dur(55000 + rnd(30000)); room.lastBarKind = null;
   room.altered = false; room.finalWinner = null; room.phase = 'play'; room.paper = paperFor(room);
   feed(room, season.fake ? `${sport.emoji} Welcome to the ${season.league}. None of these teams exist and nothing is written yet - every result is rolled live from the odds.` : `${sport.emoji} A season has been assigned. Nobody will tell you which one. Place your bets before the clock runs out.`);
@@ -317,6 +318,9 @@ function tick(room) {
     const t = marked || bum.pickTarget(room, false, room.lastMark); if (t) room.lastMark = t.id;
     if (t && t.bumPass) { t.bumPass = false; toast(t, `${STORY.bum ? STORY.bum.name : 'Dusty'} was coming your way - then he recognized you, nodded, and kept walking. That cigarette paid off.`, 'win'); changed = true; }
     else if (t) { bum.spawn(room, t, false); changed = true; } }
+  if (room.chaseDare) { const d = room.chaseDare; // nobody took Chase's dare in time (or the game never reported back): the fee stands
+    if (!d.by && now >= d.until) { room.fund.buyout += d.fee; feed(room, `📋 Nobody took ${STORY.dev.name} on. The permit fee stands: buyout ${money(room.fund.buyout)}.`); room.chaseDare = null; changed = true; }
+    else if (d.by && now - d.at > DARE_MAX_MS) { const q = room.players.get(d.by); if (q) q.pool = null; dareResult(room, q, false); changed = true; } }
   if (room.drops && room.drops.some((d) => now >= d.until)) { room.drops = room.drops.filter((d) => now < d.until); changed = true; }
   if (room.barEvent && now >= room.barEvent.until) { endBarEvent(room); changed = true; }
   else if (!room.barEvent && !room.shake && !room.goons && !(room.cine && now < room.cine.until) && now >= room.nextBarEvent) { startBarEvent(room); changed = true; }
@@ -417,11 +421,11 @@ function checkQuota(room, q) {
   if (met) {
     feed(room, q.kind === 'mid' ? `📋 ${STORY.dev.name} checked the fund: on pace. "Huh. Beginner's luck."` : `✅ Tonight's goal is in the bag. ${STORY.owner.name} owes you all a round.`);
     for (const p of room.players.values()) { p.tickets += TICKETS.quota; if (q.kind === 'mid') p.money += 100; toast(p, q.kind === 'mid' ? `On pace! ${STORY.owner.name} comps you $100 (+${TICKETS.quota} tickets)` : `Tonight's goal met: +${TICKETS.quota} tickets`, 'win'); }
-  } else if (q.kind === 'mid') {
-    const fee = PERMIT_FEE * n; room.fund.buyout += fee; q.fee = fee;
-    feed(room, `📋 ${STORY.dev.name} checked the fund: behind pace. "That'll be a permit fee." The buyout went up ${money(fee)} to ${money(room.fund.buyout)}.`);
+  } else if (q.kind === 'mid') { // behind: a permit fee - unless somebody beats him at pool (win: no fee and he pays the same into the fund; lose: double)
+    const fee = PERMIT_FEE * n; q.fee = fee; room.chaseDare = { fee, until: now + dur(DARE_MS), by: null, at: 0 };
+    feed(room, `📋 ${STORY.dev.name} checked the fund: behind pace. "That's ${money(fee)} on the buyout... unless one of you beats me at pool." Win: no fee and he puts ${money(fee)} in the jar. Lose: ${money(fee * 2)}.`);
   } else feed(room, `⚠️ The crew came up short of tonight's goal (${money(crew - room.crewStart)} of ${money(room.goal)}).`);
-  if (q.kind === 'mid' && !room.goons && !(room.cine && now < room.cine.until)) room.cine = { kind: 'checkIn', start: now, until: now + 7000, met, fee: q.fee || 0, buyout: room.fund.buyout, gained: Math.round(crew - room.crewStart), target: Math.round(q.target - room.crewStart) };
+  if (q.kind === 'mid' && !room.goons && !(room.cine && now < room.cine.until)) room.cine = { kind: 'checkIn', start: now, until: now + 7000, met, dare: !met, fee: q.fee || 0, buyout: room.fund.buyout, gained: Math.round(crew - room.crewStart), target: Math.round(q.target - room.crewStart) };
   if (q.kind === 'mid' && owing(room).length) room.pendingShake = now + 8000; // Sal checks in on his loans too: his collectors walk in once the developer is gone
 }
 // the guided first night: the bum shows up early and the napkin teaches bottles on him
@@ -519,8 +523,15 @@ function endHunt(room, beaten) {
 }
 const tallyOf = (room) => room.tally || (room.tally = { bigWin: null, cigs: 0, beers: 0, zyn: 0, robbed: 0, robbedAmt: 0, fights: 0, scratch: 0, atm: 0, dead: [] });
 function tallyWin(room, p, amt, label) { const t = tallyOf(room); if (!t.bigWin || amt > t.bigWin.amt) t.bigWin = { name: p.name, amt: Math.round(amt), label: String(label).replace(/^[^\w$]+/, '') }; }
+function dareResult(room, p, won) { // Chase's pool dare is settled
+  const d = room.chaseDare; if (!d) return; room.chaseDare = null; const who = p ? p.name : 'The crew';
+  if (won) { room.fund.banked += d.fee; feed(room, `🎱 ${who} beat ${STORY.dev.name} at pool! No permit fee, and he grudgingly puts ${money(d.fee)} in the jar.`); if (p) award(room, p, 'poolWin'); }
+  else { room.fund.buyout += d.fee * 2; feed(room, `🎱 ${STORY.dev.name} ran the table on ${who}. Double permit fee: the buyout is ${money(room.fund.buyout)}.`); }
+  for (const q of room.players.values()) toast(q, won ? `${who} beat ${STORY.dev.name} at pool: no permit fee, +${money(d.fee)} for the fund!` : `${STORY.dev.name} won the pool game. The buyout went up ${money(d.fee * 2)}.`, won ? 'win' : 'err');
+}
 function finish(room) {
   const ps = plist(room), camp = room.format === 'campaign' && room.camp;
+  if (room.chaseDare && !room.chaseDare.by) { room.fund.buyout += room.chaseDare.fee; room.chaseDare = null; } // an untaken pool dare: the fee stands
   if (!room.deposited) { // closing time: everyone's winnings above tonight's bankroll go into the Save the Bar fund (the back room keeps a dead man's)
     room.deposited = true; let dep = 0;
     for (const p of ps) { const prof = p.dead ? 0 : Math.floor(p.money - p.startCash - (p.atm || 0)); /* ATM cash goes back first */ p.gave = Math.max(0, prof); if (prof > 0) { p.money -= prof; dep += prof; } }
@@ -710,6 +721,7 @@ function view(room, p) {
   if (room.season && room.phase !== 'lobby') {
     v.events = room.events.map((e) => evSummary(e));
     v.teams = Object.fromEntries(Object.entries(room.season.teams).map(([n, t]) => [n, { short: t.short, color: t.color }]));
+    v.chaseDare = room.chaseDare ? { fee: room.chaseDare.fee, until: room.chaseDare.until, by: room.chaseDare.by ? (room.players.get(room.chaseDare.by) || {}).name || '?' : null, mine: room.chaseDare.by === p.id } : null;
     v.quota = room.quota.map((q) => ({ kind: q.kind, idx: q.idx, target: q.target, status: q.status, crew: q.crew }));
     v.crewNow = Math.round(plist(room).reduce((a, q) => a + networth(room, q), 0));
     v.barEvent = room.barEvent ? { kind: room.barEvent.kind, until: room.barEvent.until, betUntil: room.barEvent.betUntil, red: room.barEvent.red, blue: room.barEvent.blue, hits: room.barEvent.hits || null, title: room.barEvent.title, text: room.barEvent.text, mine: room.barEvent.bets ? room.barEvent.bets[p.id] || null : null } : null;
@@ -839,6 +851,11 @@ function handle(room, p, m) {
       broadcast(room); break;
     }
     case 'poolStart': {
+      if (m.opp === 'chase') { // taking Chase's dare: no stake, the permit fee rides on it
+        const d = room.chaseDare; if (!inPlay(room) || !d || d.by || p.pool || Date.now() > d.until) break;
+        d.by = p.id; d.at = Date.now(); p.pool = { opp: 'chase', stake: 0, dare: true, at: Date.now() };
+        feed(room, `🎱 ${p.name} takes ${STORY.dev.name} on at pool. ${money(d.fee)} rides on it.`); broadcast(room); break;
+      }
       if (!inPlay(room) || !POOL_MULT[m.opp]) break;
       const stake = Math.floor(Number(m.stake)); if (p.pool) break;
       if (!(stake >= 25 && stake <= 500 && stake <= p.money)) { toast(p, 'Pool stakes are $25 - $500.', 'err'); break; }
@@ -847,6 +864,7 @@ function handle(room, p, m) {
     case 'poolEnd': {
       if (!p.pool) break; const pl = p.pool; p.pool = null;
       const won = !!m.won && Date.now() - pl.at > 15000 / Math.max(1, SPEED);
+      if (pl.dare) { dareResult(room, p, won); broadcast(room); break; }
       if (won) { const pay = pl.stake * POOL_MULT[pl.opp]; p.money += pay; toast(p, `🎱 You beat the ${OPPS[pl.opp] ? OPPS[pl.opp].label : pl.opp} at pool! +${money(pay - pl.stake)}`, 'win'); award(room, p, 'poolWin'); feed(room, `🎱 ${p.name} won a game of pool.`); }
       else toast(p, `🎱 You lost the game. -${money(pl.stake)}`, 'err');
       broadcast(room); break;
