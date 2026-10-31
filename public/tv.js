@@ -74,6 +74,25 @@ export function createTV(BK) {
 
   function center(S, now, ts) {
     const { g, c } = C, W = c.width, H = c.height, kind = KIND[S.sport] || 'football';
+    const fc = S.cine && S.cine.kind === 'finalCall' && now < S.cine.until + 500 ? S.cine : null;
+    if (fc) { // the championship's last play: an instant replay in slow motion, then the champions card
+      const e = (now - fc.start) / 1000, A = team(S, fc.winner), B = team(S, fc.loser);
+      if (e < 5.5) {
+        drawScene(g, W, H, kind, fc.start / 1000 + e * 0.18, A.color, B.color, 99); // a fifth of real speed
+        const vg = g.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, W * 0.7); vg.addColorStop(0, '#0000'); vg.addColorStop(1, '#000c'); g.fillStyle = vg; g.fillRect(0, 0, W, H);
+        g.fillStyle = '#c4111a'; g.fillRect(0, 0, 360, 44); fit(g, 'INSTANT REPLAY', 14, 31, 340, '400 24px Bungee, system-ui', '#fff', 'left');
+        if (Math.floor(e * 2) % 2 === 0) fit(g, 'SLOW MO', W - 30, 33, 220, '800 30px "Barlow Condensed", system-ui', '#ffc83d', 'right');
+        g.fillStyle = '#000c'; g.fillRect(0, H - 220, W, 90); fit(g, 'THE FINAL PLAY', W / 2, H - 160, W - 60, '800 40px "Barlow Condensed", system-ui', '#fff');
+        scorebug(g, 40, H - 118, W - 80, 78, A, B, fc.ws, fc.ls, 'FINAL', fc.ot ? 'OT' : ' ');
+      } else {
+        const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, A.color); gr.addColorStop(1, '#05070f'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+        for (let i = 0; i < 90; i++) { const x = (i * 97 + ts * 0.05 * (1 + (i % 3))) % W, y = (i * 53 + ts * 0.12 * (1 + (i % 4))) % H; g.fillStyle = ['#ffc83d', '#fff', '#27e08a', '#ff4d5e'][i % 4]; g.fillRect(x, y, 10, 6); }
+        fit(g, fc.voided ? 'VOIDED' : 'CHAMPIONS', W / 2, 200, W - 60, '400 92px Bungee, system-ui', '#ffc83d');
+        fit(g, fc.voided ? 'The league stepped in' : String(fc.winner).toUpperCase(), W / 2, 300, W - 60, '800 62px "Barlow Condensed", system-ui', '#fff');
+        fit(g, `${fc.ws}-${fc.ls}${fc.ot ? ' (OT)' : ''}`, W / 2, 380, W - 60, '800 48px "Barlow Condensed", system-ui', '#dfe6ff');
+      }
+      upd(C); return;
+    }
     const air = S.events.filter((e) => e.status === 'airing').sort((a, b) => a.closeAt - b.closeAt);
     if (!air.length) {
       drawScene(g, W, H, kind, ts / 1000, '#2a5aa8', '#b02a2a', 3); g.fillStyle = '#000b'; g.fillRect(0, 0, W, H);

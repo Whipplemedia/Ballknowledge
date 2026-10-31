@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { animate, hasClip } from './people.js';
 import { place as placeProp } from './props.js';
 import { STORY } from './story.js';
-import { JAR } from './bar.js';
+import { JAR, ROOM } from './bar.js';
 
 // The closing scenes (server: room.cine kind 'nightEnd' after nights 1-2 of a campaign, 'verdict' after the last night), driven by cine.js.
 //  nightEnd: lights up, the night's deposit flies into the fund jar on the counter, the developer texts Lou. Then tomorrow's number.
@@ -71,7 +71,8 @@ export function createFinale({ scene, camera, BK, audio, bar, castOf, tickCos, a
   const NC = 360, conf = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.045, 0.026), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }), NC); conf.visible = false; conf.frustumCulled = false; scene.add(conf);
   const cp = Array.from({ length: NC }, (_, i) => ({ p: new THREE.Vector3(), r: new THREE.Euler(), w: new THREE.Vector3(Math.random() * 6, Math.random() * 6, Math.random() * 6), fall: 0.45 + Math.random() * 0.5, ph: Math.random() * 6.28, c: COLORS[i % COLORS.length] }));
   cp.forEach((o, i) => conf.setColorAt(i, o.c));
-  const respawn = (o, top) => o.p.set(PARTY.x - 3.2 + Math.random() * 4.8, top ? 3.6 + Math.random() * 1.2 : Math.random() * 4.6, PARTY.z - 3.4 + Math.random() * 6.8);
+  let confAt = PARTY; // where the confetti falls: the party line, or in front of the big TV when the crew calls the champion
+  const respawn = (o, top) => o.p.set(confAt.x - 3.2 + Math.random() * 4.8, top ? 3.6 + Math.random() * 1.2 : Math.random() * 4.6, confAt.z - 3.4 + Math.random() * 6.8);
   const NS = 260, spray = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ color: 0xfff4cc, size: 0.05, map: soft, transparent: true, opacity: 0.95, depthWrite: false })); spray.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NS * 3).fill(-99), 3)); spray.frustumCulled = false; spray.visible = false; scene.add(spray);
   const sp = Array.from({ length: NS }, () => ({ p: new THREE.Vector3(0, -99, 0), v: new THREE.Vector3(), life: 0 })); let spNext = 0;
   const NB = 14, billMat = new THREE.MeshStandardMaterial({ color: 0x7fc06a, emissive: 0x1e3a18, roughness: 0.8, side: THREE.DoubleSide }), bills = Array.from({ length: NB }, (_, i) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.09), billMat); m.visible = false; scene.add(m); return { m, t0: 0.25 * i, from: new THREE.Vector3(9.2, 1.75 + Math.random() * 0.2, JAR.z + 0.45 - Math.random() * 0.9) }; });
@@ -118,8 +119,8 @@ export function createFinale({ scene, camera, BK, audio, bar, castOf, tickCos, a
     setPhone([]); credits.className = ''; credits.innerHTML = ''; run = null;
   }
   const lou_ = (mode, wt) => { take(lou); put(lou, LOU.x, LOU.z, Math.PI / 2, mode, wt); };
-  const crowd = (on, wt) => { // the standing regulars react; the seated ones keep doing what they do
-    let i = 0; for (const n of bar.npcs) { if (n === lou || n === dev || n.seated || n.life || !n.P.skinned || n.name === 'Uncle Sal') continue; if (!on && !run.took.some((o) => o.n === n)) continue; take(n); const g = n.P.group; g.visible = Math.hypot(g.position.x - camera.position.x, g.position.z - camera.position.z) > 1.8; animate(n.P, on ? clip(CROWD[i++ % CROWD.length]) : 'idle', wt); }
+  const crowd = (on, wt, kinds = CROWD) => { // the standing regulars react; the seated ones keep doing what they do
+    let i = 0; for (const n of bar.npcs) { if (n === lou || n === dev || n.seated || n.life || !n.P.skinned || n.name === 'Uncle Sal') continue; if (!on && !run.took.some((o) => o.n === n)) continue; take(n); const g = n.P.group; g.visible = Math.hypot(g.position.x - camera.position.x, g.position.z - camera.position.z) > 1.8; animate(n.P, on ? clip(kinds[i++ % kinds.length], 'cheer') : 'idle', wt); }
   };
   const hideCrew = () => { for (const a of avatars.values()) if (a.P.group.visible) { a.P.group.visible = false; run.hid.push(a.P.group); } };
   function party(u, wt, dt) { // the crew lined up in front of the bar, each with their own dance; the first one has the champagne
@@ -138,7 +139,9 @@ export function createFinale({ scene, camera, BK, audio, bar, castOf, tickCos, a
     }
     spray.visible = true; const pa = spray.geometry.attributes.position;
     sp.forEach((o, i) => { if (o.life > 0) { o.life -= dt; o.v.y -= 6 * dt; o.p.addScaledVector(o.v, dt); if (o.life <= 0 || o.p.y < 0) o.p.y = -99; } pa.setXYZ(i, o.p.x, o.p.y, o.p.z); }); pa.needsUpdate = true;
-    // confetti from the ceiling
+    confetti(dt, wt);
+  }
+  function confetti(dt, wt) { // from the ceiling
     if (!conf.visible) { conf.visible = true; cp.forEach((o) => respawn(o, false)); }
     cp.forEach((o, i) => { o.p.y -= o.fall * dt; o.p.x += Math.sin(wt * 2 + o.ph) * 0.25 * dt; o.r.set(o.w.x * wt, o.w.y * wt, o.w.z * wt); if (o.p.y < 0.02) respawn(o, true); M4.compose(o.p, Q.setFromEuler(o.r), ONE); conf.setMatrixAt(i, M4); });
     conf.instanceMatrix.needsUpdate = true;
@@ -171,6 +174,21 @@ export function createFinale({ scene, camera, BK, audio, bar, castOf, tickCos, a
   function scene_(c, u, dt, wt) {
     if (!run || run.start !== c.start) begin(c);
     const N = c.night || 1;
+    if (c.kind === 'finalOn') { // the championship goes on the air: the room turns to the big TV and goes quiet
+      shot(0.6 - u * 0.08, 1.85, 3.2 - u * 0.35, 0, 2.9, -ROOM.z); crowd(false, wt); lou_('idle', wt);
+      cue('hush', () => { audio.sfx('murmur', { v: 0.9 }); audio.sfx('bell', { delay: 0.4, v: 0.7 }); });
+      caption('THE CHAMPIONSHIP', `${c.a} vs ${c.b}. It all comes down to this.`); return;
+    }
+    if (c.kind === 'finalCall') { // the last play in slow motion on the big TV (tv.js draws the replay), then the room erupts or groans
+      if (u < 5.5) { shot(0, 3.05, -4.0 + u * 0.1, 0, 2.95, -ROOM.z); /* over the sportsbook terminal */ crowd(false, wt); caption('', ''); return; }
+      const v = u - 5.5; shot(0.4 + v * 0.1, 2.4, -6.2, 0.6, 1.5, 3); lou_(c.called ? clip('victory') : once('headPain'), wt);
+      crowd(true, wt, c.called ? CROWD : ['shrug', 'headPain', 'dumbfounded', 'shout']);
+      if (c.called) { confAt = { x: 0, z: -3 }; confetti(dt, wt); cue('erupt', () => { audio.sfx('cheer', { v: 1.3 }); audio.sfx('horn', { delay: 0.2 }); audio.sfx('bigwin', { delay: 0.5 }); flash.style.opacity = 0.5; }); flash.style.opacity = Math.max(0, 0.5 - v * 1.2); }
+      else cue('groan', () => { audio.sfx('groan', { v: 1.2 }); audio.sfx('boo', { delay: 0.3, v: 0.8 }); });
+      if (c.voided) caption('VOIDED', 'League investigators void the championship. Nobody called it.');
+      else caption(`CHAMPIONS: ${String(c.winner).toUpperCase()}`, `${c.ws}-${c.ls}${c.ot ? ' (OT)' : ''}. ${c.called ? (c.fixed ? 'The crew called it... with a little help from Sal.' : 'The crew called it!') : 'Nobody saw that coming.'}`);
+      return;
+    }
     if (c.kind === 'nightEnd') {
       if (u < 3.5) { wide(u); lou_('polish', wt); crowd(false, wt); cue('bell', () => audio.sfx('bell', { v: 0.8 })); caption(`NIGHT ${N} IS IN THE BOOKS`, `Last call at ${STORY.bar}.`); return; }
       if (u < 9.5) { jarShot(u, 3.5); jarBills(u - 3.8, dt); lou_(c.deposit >= c.goal && c.deposit > 0 ? clip('fistPump') : c.deposit > 0 ? 'idle' : once('headPain'), wt);

@@ -110,7 +110,7 @@ export function createCine({ camera, BK, doors, goons, audio, backroom, owner, d
         return 'camera';
       }
       if (c.kind === 'opening' || c.kind === 'checkIn') { storyShot(c, t, dt); return 'camera'; }
-      if (c.kind === 'nightEnd' || c.kind === 'verdict') { finale.scene(c, t, dt, wt); return 'camera'; }
+      if (c.kind === 'nightEnd' || c.kind === 'verdict' || c.kind === 'finalOn' || c.kind === 'finalCall') { finale.scene(c, t, dt, wt); return 'camera'; }
       if (c.kind === 'huntBeaten' || c.kind === 'shakeBeaten') {
         door(doors.front, t > 2.2, dt); if (t > 2.2) cue('door', () => audio.sfx('knock'));
         shot(5, 2.2, 1.6, 5, 1.0, 6.2); caption(t > 0.6 ? 'AND STAY OUT!' : '', t > 0.6 ? "Sal's men limp back out the front door." : '');

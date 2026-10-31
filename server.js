@@ -319,11 +319,9 @@ function tick(room) {
     else if (t) { bum.spawn(room, t, false); changed = true; } }
   if (room.drops && room.drops.some((d) => now >= d.until)) { room.drops = room.drops.filter((d) => now < d.until); changed = true; }
   if (room.barEvent && now >= room.barEvent.until) { endBarEvent(room); changed = true; }
-  else if (!room.barEvent && !room.shake && !room.goons && now >= room.nextBarEvent) { startBarEvent(room); changed = true; }
-  if (changed) {
-    broadcast(room);
-    if (room.events.every((e) => e.status === 'final') && room.phase === 'play' && !room.shake && !room.goons) settle(room);
-  }
+  else if (!room.barEvent && !room.shake && !room.goons && !(room.cine && now < room.cine.until) && now >= room.nextBarEvent) { startBarEvent(room); changed = true; }
+  if (changed) broadcast(room);
+  if (room.events.every((e) => e.status === 'final') && room.phase === 'play' && !room.shake && !room.goons && !(room.cine && room.cine.kind === 'finalCall' && now < room.cine.until)) settle(room); // after the championship scene
 }
 
 function lockEvent(room, ev) {
@@ -349,6 +347,7 @@ function lockEvent(room, ev) {
   ev.air = { plays: genHighlights(room.sportDef, ev, season, rng) };
   ev.status = 'airing';
   feed(room, `📺 ${ev.label} is on the TV - highlights rolling.`);
+  if (ev.final && !room.goons && !room.shake) { const now = Date.now(); room.barEvent = null; room.cine = { kind: 'finalOn', start: now, until: now + 7000, a: ev.a, b: ev.b, label: ev.label }; } // the championship stops the bar: everyone to the big TV
 }
 
 function settleBets(room, ev) {
@@ -404,7 +403,9 @@ function finalizeEvent(room, ev) {
   const r = ev.result, w = r.winner === 'a' ? ev.a : ev.b, l = r.winner === 'a' ? ev.b : ev.a;
   feed(room, `🏁 FINAL - ${ev.label}: ${w} def. ${l}, ${r.winner === 'a' ? r.sa + '-' + r.sb : r.sb + '-' + r.sa}${ev.ot ? ' (OT)' : ''}.`);
   if (r.fixed) feed(room, `🕵️ Rumors swirl about the officiating in the ${ev.label}...`);
-  if (ev.final) room.finalWinner = w;
+  if (ev.final) { room.finalWinner = w; // the final play in slow motion on the big TV, then the room erupts or groans; settling up waits for it
+    const ps = plist(room), correct = ps.filter((p) => p.finalCorrect).length, now = Date.now();
+    room.barEvent = null; room.cine = { kind: 'finalCall', start: now, until: now + 11000, winner: w, loser: l, ws: Math.max(r.sa, r.sb), ls: Math.min(r.sa, r.sb), called: correct >= Math.ceil(ps.length / 2) && correct > 0, fixed: !!r.fixed, voided: !!r.voided, ot: !!ev.ot }; }
   const q = room.quota.find((x) => x.idx === ev.idx && x.status === 'pending'); if (q) checkQuota(room, q);
 }
 

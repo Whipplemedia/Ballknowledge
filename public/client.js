@@ -849,7 +849,13 @@ function fightOpen() { const be = S && S.barEvent; return !!(be && be.kind === '
 function fightBet(side) { if (!fightOpen()) return; if (S.me.money < ui.fightStake) return toast(`You need ${$$(ui.fightStake)} to bet that.`, 'err'); window.BK.sfx && window.BK.sfx('chip'); send({ type: 'fightBet', side, stake: ui.fightStake }); }
 function fightStakeNext() { ui.fightStake = FIGHT_STAKES[(FIGHT_STAKES.indexOf(ui.fightStake) + 1) % FIGHT_STAKES.length]; render(); }
 function eventBanner() {
-  const be = S.barEvent; if (!be) return '';
+  const be = S.barEvent, fin = S.cur && S.events && S.events[S.cur.idx] && S.events[S.cur.idx].final && S.events[S.cur.idx].status === 'open' ? S.events[S.cur.idx] : null;
+  if (!be && fin) { // last call: the championship's betting window
+    if (ui.lastCall !== S.code + fin.idx) { ui.lastCall = S.code + fin.idx; window.BK.sfx && window.BK.sfx('bell'); window.BK.sfx && window.BK.sfx('murmur', { delay: 0.6 }); }
+    const mine = (S.me.bets[fin.idx] || {}).ml;
+    return `<div class="hud-event lastcall"><div class="et">LAST CALL · THE CHAMPIONSHIP <span class="pill time">${mmss(fin.closeAt - now())}</span></div><div>${esc(fin.a)} vs ${esc(fin.b)}. ${mine ? 'Your moneyline is in. Get to the big TV.' : 'Put a moneyline on the champion at the terminal - the crew needs half of you on the winner.'}</div></div>`;
+  }
+  if (!be) return '';
   const base = `<div class="hud-event ${be.kind}"><div class="et">${esc(be.title)} <span class="pill time">${mmss(be.until - now())}</span></div><div>${esc(be.text)}</div>`;
   if (be.kind === 'fight') {
     const hits = be.hits ? `<div class="muted">🍾 Bottles thrown: ${esc(be.red)} ${be.hits.red} · ${esc(be.blue)} ${be.hits.blue} - every hit tips the fight against him</div>` : '<div class="muted">Throw bottles at a fighter (click) to tip the fight against him.</div>';
