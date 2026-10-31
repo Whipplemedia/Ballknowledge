@@ -155,5 +155,129 @@
     "groundStomp"
    ]
   }
+ },
+ "night3": {
+  "_note": "night 3 (The End Zone, the cops): reference images made by the user from blender/night3_asset_prompt.md. Characters: multi-image-to-3d meshy-7.1 (front+back, t-pose) -> remesh 12000 -> rig; compressed like the others (shrink_glb.py 1024/88, gltf-transform webp + meshopt) to public/models/<name>_ai.glb. Props: image-to-3d meshy-7.1 (squad car multi-image) -> gltf-transform optimize (simplify, webp 1024, meshopt) to public/models/props. Animations all on the Bub rig 01a17459-824d-76f1-9d1b-c1efabdf24d5 (bone names are shared, so every character plays them): library dances + gestures, and text-to-motion pole moves (prime) applied with meshy_animate; converted by tools/meshy-clips.mjs to public/models/clips_n3.json.",
+  "tasks": {
+   "dancer_1": {
+    "char": "01a19014-65fa-75ba-8711-f6e1a29e8a43",
+    "remesh": "01a19017-55fb-71e5-8142-dfecbeb9d6d8",
+    "rig": "01a19019-f11d-714c-ad4f-324a10d5abb4"
+   },
+   "dancer_2": {
+    "char": "01a19014-6df1-72f1-acda-ec2a61190251",
+    "remesh": "01a19017-570b-711d-b7b6-82a91af5c698",
+    "rig": "01a19019-fc1c-73e2-8ed2-02202639ea4b"
+   },
+   "bouncer": {
+    "char": "01a19014-74df-728d-a7fc-b8a04a193293",
+    "remesh": "01a19017-5826-706a-9fa9-6a8b00b1a178",
+    "rig": "01a1901a-06ad-776f-aa97-19f764347590"
+   },
+   "dj": {
+    "char": "01a19014-7b30-713a-94a6-ad2c25021ad7",
+    "remesh": "01a19017-590a-7670-8424-5691065b2cbd",
+    "rig": "01a1901a-11ac-7149-88b9-94aad34c33a3"
+   },
+   "vip_athlete": {
+    "char": "01a19014-82cf-76ea-8d2f-33a986e4504e",
+    "remesh": "01a19018-5f76-74ca-a95c-d5d8c4782f9c",
+    "rig": "01a1901a-326c-7595-b4a8-39098f6392a5"
+   },
+   "shot_girl": {
+    "char": "01a19014-89a5-77f7-aa73-bea29772ca3a",
+    "remesh": "01a19018-605b-71ef-a75b-504fe94048c8",
+    "rig": "01a1901a-4364-7416-8fec-f5588fb70067"
+   },
+   "groom": {
+    "char": "01a19014-902c-71d6-bc28-4deb6d1dadf3",
+    "remesh": "01a19017-5b89-7672-825d-13a0e0691b37",
+    "rig": "01a1901a-1c75-769f-8be7-c2e01d8cb536"
+   },
+   "cop_1": {
+    "char": "01a19014-96a1-77c2-b8a6-5a69f9a7aa05",
+    "remesh": "01a19018-6139-7197-b530-926e76dceac9",
+    "rig": "01a1901a-4e6c-7523-84c2-c5258d3e3051"
+   },
+   "cop_2": {
+    "char": "01a19014-9dc3-72e6-a59a-2e053f75c10f",
+    "remesh": "01a19017-5c73-756f-99eb-7f0d9875b2a1",
+    "rig": "01a1901a-27e0-7770-b9ac-d7a4073f7222"
+   },
+   "stripper_pole": {
+    "prop": "01a19014-d89c-70a4-b7a3-8b2e54b13c2c"
+   },
+   "money_gun": {
+    "prop": "01a19014-dd65-70a2-ae37-89c9f25ec5b0"
+   },
+   "cash_fan": {
+    "prop": "01a19014-e3b8-75a8-aa8f-214295fc7d81"
+   },
+   "champagne_bucket": {
+    "prop": "01a19014-e904-73de-a5c1-985da36ce7eb"
+   },
+   "shot_tray": {
+    "prop": "01a19014-ed93-711c-bcd0-d043d9ae390e"
+   },
+   "vip_rope": {
+    "prop": "01a19014-f2f0-7747-a79e-4ba2250f994f"
+   },
+   "flashlight": {
+    "prop": "01a19014-f71c-71ae-aac6-d35eb5a7d6bf"
+   },
+   "club_chair": {
+    "prop": "01a19015-2203-7129-a18e-d0a791997053"
+   },
+   "dj_booth": {
+    "prop": "01a19015-2715-7186-ab68-3799f8d6ce8b"
+   },
+   "main_stage": {
+    "prop": "01a19015-2b9a-7484-9a85-1a9d57e0ba1c"
+   },
+   "mirror_ball": {
+    "prop": "01a19015-2fce-70bf-a141-66ede807dd90"
+   },
+   "stage_light": {
+    "prop": "01a19015-33b8-73c4-a9c3-52ed86d0dd26"
+   },
+   "vip_booth": {
+    "prop": "01a19015-3812-721d-96fb-4924412c3242"
+   },
+   "squad_car": {
+    "prop": "01a19015-3cad-7334-bb0b-50adf576ed7f"
+   },
+   "pole_spin": {
+    "motion": "01a19015-a554-75c3-a0e6-2b606b4e93d6",
+    "apply": "01a19018-6211-751f-97e4-afbaef8ced72"
+   },
+   "pole_climb": {
+    "motion": "01a19015-a822-771b-98a3-fe7c4eaf32dd",
+    "apply": "01a19018-64e1-7055-8ad1-84f292ec3a78"
+   },
+   "body_roll": {
+    "motion": "01a19015-aaca-7693-a6a3-537a5913422d",
+    "apply": "01a19018-677d-70c9-a059-39f97346a78f"
+   },
+   "hair_flip": {
+    "motion": "01a19015-adbf-73c4-82e9-1f534bc733a2",
+    "apply": "01a19018-69ec-712a-87f1-bccc228976ac"
+   },
+   "pole_kick": {
+    "motion": "01a19015-b043-77e6-a954-797471f48d6e",
+    "apply": "01a19018-6c93-73c1-a29f-9e35e583fa61"
+   },
+   "pole_fail": {
+    "motion": "01a19015-b336-73b4-82a6-bcae3ef354ea",
+    "apply": "01a19018-6eb4-7234-b97e-fc7557259f70"
+   },
+   "dances": {
+    "anim": "01a19018-f12d-70ba-8149-e6db56218197",
+    "actions": "[64,65,82,76,595,591,66,83,80,78]"
+   },
+   "gestures": {
+    "anim": "01a19018-f2db-7274-9e49-3c5c4e4b67f6",
+    "actions": "[337,341,292,313,2,342,298,366]"
+   }
+  }
  }
 }

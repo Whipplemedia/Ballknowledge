@@ -9,11 +9,19 @@ const AI_NAMES = ['bub', 'bartender', 'sal', 'hitman', 'jock', 'knowItAll', 'gam
 const AI_HEIGHT = { bub: 1.88, bartender: 1.72, sal: 1.8, hitman: 1.95, jock: 1.9, knowItAll: 1.85, gambler: 1.8, chill: 1.86, dieHard: 1.84, rookie: 1.8, gina: 1.7, vinnie: 1.74, ray: 1.9, steve: 1.82, owner: 1.78, bum: 1.82, exec: 1.86 };
 const MODEL_NAMES = AI_NAMES.map((n) => n + '_ai');
 const MODELS = {};
+// night 3's people (The End Zone and the cops) load only when a night 3 starts: loadModels(N3_NAMES) - with their clips (models/clips_n3.json)
+export const N3_NAMES = ['dancer_1', 'dancer_2', 'bouncer', 'dj', 'vip_athlete', 'shot_girl', 'groom', 'cop_1', 'cop_2'];
+Object.assign(AI_HEIGHT, { dancer_1: 1.72, dancer_2: 1.74, bouncer: 2.0, dj: 1.78, vip_athlete: 1.95, shot_girl: 1.7, groom: 1.8, cop_1: 1.82, cop_2: 1.7 });
+const LOADING = {};
+export function loadModels(names) {
+  return Promise.all(names.map((n) => LOADING[n] || (LOADING[n] = MODELS[n + '_ai'] ? Promise.resolve() : gltfLoader().loadAsync('models/' + n + '_ai.glb').then((g) => { MODELS[n + '_ai'] = g.scene; }).catch(() => {}))));
+}
+export const hasModel = (n) => !!MODELS[n + '_ai'];
 if (typeof location !== 'undefined' && !/[?&]models=0/.test(location.search)) {
   const loader = gltfLoader();
   await Promise.all(MODEL_NAMES.map((n) => loader.loadAsync('models/' + n + '.glb').then((g) => { MODELS[n] = g.scene; }).catch(() => {})));
 }
-const TINTED_SHIRT = { jock: 0, knowItAll: 0, dieHard: 0, gambler: 0, sal: 0, hitman: 0, bartender: 0, owner: 0, bum: 0, exec: 0 }; // shirts with baked prints/suits keep their colors
+const TINTED_SHIRT = { dancer_1: 0, dancer_2: 0, bouncer: 0, dj: 0, vip_athlete: 0, shot_girl: 0, groom: 0, cop_1: 0, cop_2: 0, jock: 0, knowItAll: 0, dieHard: 0, gambler: 0, sal: 0, hitman: 0, bartender: 0, owner: 0, bum: 0, exec: 0 }; // shirts with baked prints/suits keep their colors
 const MODEL_OK = new Set(['skin', 'shirt', 'pants', 'hair', 'hat', 'backpack', 'glasses', 'stache', 'scale', 'hairStyle', 'shorts', 'mouth', 'look', 'number']);
 const ROLE_K = { skin2: 0.9, shirt2: 0.92, hat2: 0.78 };
 
@@ -108,6 +116,8 @@ if (typeof location !== 'undefined' && !/[?&]clips=0/.test(location.search)) {
   // the cutscene clips (celebrations, the developer's tantrum, Lou's despair...: public/models/clips_end.json) load in the background
   fetch('models/clips_end.json').then((r) => r.json()).then((j) => addClips(j, null)).catch(() => {});
 }
+let n3Clips = null; // the club dances, the cops' gestures and the pole moves (models/clips_n3.json), fetched with night 3's people
+export function loadN3Clips() { return n3Clips || (n3Clips = fetch('models/clips_n3.json').then((r) => r.json()).then((j) => addClips(j, null)).catch(() => {})); }
 export const hasClip = (name) => !!CLIPS[name];
 const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qd = new THREE.Quaternion();
 function sampleBone(clip, bone, time, out) { // out <- local rotation delta relative to the clip's own rest pose
@@ -368,6 +378,16 @@ export const PRESETS = {
   owner: { skin: SK.tan, hair: 0x4a2c1a, hairStyle: 'short', stache: true, outfit: 'button', shirt: 0x7a2a30, pants: 0x2a3348, fat: true, mouth: 'smile' },
   bum: { skin: SK.light, hair: 0x4a3020, hairStyle: 'messy', hat: { color: 0x3a3a3c, style: 'beanie' }, beard: 'full', outfit: 'hoodie', shirt: 0x5a5a30, pants: 0x3a3632, mouth: 'grin' },
   exec: { skin: SK.light, hair: 0x7a5a3a, hairStyle: 'slick', outfit: 'suit', shirt: 0x1e2a50, pants: 0x1e2a50, mouth: 'smile' },
+  // night 3 (Meshy models; procedural stand-ins until they load)
+  dancer_1: { skin: SK.tan, hair: 0x3a2214, hairStyle: 'long', female: true, outfit: 'tank', shirt: 0xd4af37, pants: 0xd4af37, mouth: 'smile' },
+  dancer_2: { skin: SK.light, hair: 0x0a0a0a, hairStyle: 'long', female: true, outfit: 'tank', shirt: 0xe0287a, pants: 0xe0287a, mouth: 'smile' },
+  bouncer: { skin: SK.tan, hair: 0x0a0a0a, hairStyle: 'short', outfit: 'tee', shirt: 0x111114, pants: 0x111114, fat: true, mouth: 'flat' },
+  dj: { skin: SK.light, hair: 0x2a1810, hairStyle: 'short', hat: { color: 0x111111, backwards: true }, outfit: 'hoodie', shirt: 0xeeeeee, pants: 0x111111, mouth: 'grin' },
+  vip_athlete: { skin: SK.brown, hair: 0x2a1810, hairStyle: 'short', outfit: 'suit', shirt: 0x7a2ac0, pants: 0x7a2ac0, sunglasses: true, mouth: 'grin' },
+  shot_girl: { skin: SK.tan, hair: 0x3a2214, hairStyle: 'long', female: true, outfit: 'tank', shirt: 0x111111, pants: 0x111111, mouth: 'smile' },
+  groom: { skin: SK.light, hair: 0x5a3a22, hairStyle: 'messy', outfit: 'button', shirt: 0xf2f2f2, pants: 0x2a3348, mouth: 'open' },
+  cop_1: { skin: SK.light, hair: 0x4a3a2a, hairStyle: 'short', hat: { color: 0x14213d }, outfit: 'button', shirt: 0x1c2a52, pants: 0x1c2a52, stache: true, fat: true, mouth: 'flat' },
+  cop_2: { skin: SK.tan, hair: 0x3a2214, hairStyle: 'bun', female: true, hat: { color: 0x14213d }, outfit: 'button', shirt: 0x1c2a52, pants: 0x1c2a52, mouth: 'flat' },
   hitman: { skin: SK.light, hair: 0x0a0a0a, hairStyle: 'short', hat: { color: 0x0c0c0e, style: 'fedora' }, outfit: 'suit', shirt: 0x0e0e12, pants: 0x0e0e12, sunglasses: true, mouth: 'flat', scale: 1.06 },
 };
 const PATRON_BASES = ['jock', 'knowItAll', 'gambler', 'chill', 'dieHard', 'rookie'];
