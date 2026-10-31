@@ -127,7 +127,7 @@ export function createCops({ scene, BK, audio, camera }) {
     const cop = cops.get('cop1');
     if (u < 6.2) { shot(CAR.x + 4.2, 1.6, 9.6, CAR.x, 1.3, CAR.z - 1); caption('CITY POLICE', '"Somebody called in a noise complaint... and an illegal sportsbook."'); return; }
     if (cop) { const p = cop.P.group.position, ry = cop.P.group.rotation.y; shot(p.x - Math.sin(ry) * 2.1, 1.65, p.z - Math.cos(ry) * 2.1, p.x, 1.6, p.z); } else shot(CAR.x + 3, 1.6, 10.4, CAR.x, 1.3, CAR.z - 1.2);
-    caption('"NOBODY WALKS AROUND OUT HERE DRUNK TONIGHT."', 'Stay sober on the street - or take a sobriety test. Fail it and you sit in the car.');
+    caption('"WE\'LL BE WATCHING THIS STREET."', 'Anyone outside can get stopped for a sobriety test - drunk, you almost will be. Fail it and you sit in the car. They get tougher every night.');
   }
   // failing: the back seat, behind the cage
   const cage = document.createElement('div'); cage.id = 'cagefx'; cage.innerHTML = '<div class="cg-bars"></div><div class="cg-time"></div>'; document.body.append(cage);

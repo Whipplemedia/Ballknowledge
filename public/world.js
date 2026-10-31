@@ -261,7 +261,7 @@ canvas.addEventListener('mousedown', (e) => {
 // joined by doorway lanes. px/pz: how close to a space's edges you can walk; h: its ceiling (bottles shatter on it)
 const openOut = () => !!(BK.S && BK.S.phase === 'play'); // the street, the lot and the store stay open when Sal's collectors come (they follow you out there); the hitmen at closing time pull everyone in
 const openRest = () => openOut() && !BK.S.shake; // no hiding in the men's room from the collectors
-const openClub = () => openOut() && !!(BK.S.n3 && BK.S.n3.on); // The End Zone only opens on the last night
+const openClub = () => openOut() && !!(BK.S.n3 && BK.S.n3.club); // The End Zone only opens on the last night
 const SPACES = (() => { const B = bar.backroom.bounds, D = OUT.door, C = OUT.casino, S = OUT.street, L = OUT.lot;
   return [
     { x0: -ROOM.x, x1: ROOM.x, z0: -ROOM.z, z1: ROOM.z, px: 0.6, pz: 0.6, h: ROOM.h },

@@ -74,7 +74,13 @@ The last night of a campaign (and any single night) opens **The End Zone**, the 
 - **Shot roulette** with Candy: buy in $25/$50/$100, six shots, one is ghost pepper. Each safe shot grows the pot (x0.95 of fair odds); cash out any time.
 - **Amateur Night**: one player at a time on the pole. A 38 s rhythm game (arrows or WASD, 112 BPM, synthesized beat); every 4-hit combo is a pole move the whole club sees on your stand-in; 4 misses and you slide down the pole. Tips up to $350 (score^1.6), only for a full song.
 - **The groom** (a side job on night 3): his bachelor party left him at the end of the bar. Walk him to the club; if you get more than 7 m ahead he sits down. $200.
-- **The cops**: a 9 s intro scene after the opening (the cruiser rolls up), then Officers Kowalski and Reyes walk a beat along both sidewalks with flashlights. Anyone outside at 20+ drunk who walks into a flashlight (7.5 m, ~31 degrees) gets stopped for a **60 s sobriety test**: walk the line (A/D), follow the pen (mouse), the alphabet backwards (Z to Q), touch your nose (Space on time), stand on one leg (A/D). Drunker = harder. Pass 3 of 5 and you're left alone for 2 minutes; fail and you sit **50 s in the back of the squad car** (phone still works). They never go inside anywhere, and stand down while Sal's men are in.
+- **The cops** patrol **every night** and get tougher each night (`LEVELS` in n3.js; a single-night game is level 3). The first night opens with a 9 s scene (the cruiser rolls up); after that they just get out of the car with a line in the feed. They walk a beat along both sidewalks with flashlights; anyone **outside** they spot in the beam can be stopped, sober or not - a roll each time they spot you (no re-roll for `every` ms), much likelier at 20+ drunk. A stop is a **60 s sobriety test**: walk the line (A/D), follow the pen (mouse), the alphabet backwards (Z to Q), touch your nose (Space on time), stand on one leg (A/D) - drunker = harder. Pass 3 of 5 and they leave you alone for a while; fail and you sit **50 s in the back of the squad car** (phone still works). They never go inside anywhere, and stand down while Sal's men are in.
+
+  | Night | Cops | Flashlight | Stop chance sober / buzzed | Re-check | Chase | Left alone after passing |
+  |---|---|---|---|---|---|---|
+  | 1 | 1 | 6 m, ~26° | 10% / 60% | 25 s | 12 s | 3 min |
+  | 2 | 2 | 7.5 m, ~31° | 25% / 85% | 20 s | 15 s, faster | 2 min |
+  | 3 | 2, walking faster | 9 m, ~37° | 40% / 100% | 15 s | 20 s, fastest | 90 s |
 
 ## Closing scenes (`public/finale.js`)
 Server-timed like every cutscene (`finish()` sets `room.cine` and `room.verdictAt`; `tick()` waits for it, then builds the results). Nothing in them is pre-rendered: they're the live bar, puppeted.

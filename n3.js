@@ -15,64 +15,78 @@ const outside = (x, z) => !inBar(x, z) && !inStore(x, z) && !inClub(x, z) && !in
 const BEAT = [[-24, 10.6], [-8, 10.4], [9, 10.6], [20, 11.2], [20, 23.4], [4, 23.6], [-14, 23.2], [-24, 22.8]];
 const CAR = { x: -3.5, z: 13.6 };                                          // public/cops.js CAR (the cruiser at the bar-side curb)
 const SPEED = { walk: 1.25, go: 2.6 };
-const SEE = { range: 7.5, cone: 0.55, drunk: 20 };                         // what a cop's flashlight notices: 7.5 m, ~31 degrees, buzzed
-const TEST_MS = 60000, CAR_MS = 50000, IMMUNE_MS = 120000, DANCE_MS = 42000, RAIN_SHOT = 20, RAIN_TIP = 200, VIP_PRICE = 300, ATHLETE_PRICE = 50;
+// the cops get more aggressive every night: how many are out, how far and wide the flashlight reaches, the chance a stop happens when they
+// spot you (sober or buzzed - anyone outside can get stopped; 20+ on the drunk meter is far likelier), how often they re-check you, how hard they chase, how long a passed test lasts
+const LEVELS = {
+  1: { cops: 1, range: 6.0, cone: 0.45, sober: 0.10, drunk: 0.60, every: 25000, chase: 12000, go: 2.4, walk: 1.15, immune: 180000 },
+  2: { cops: 2, range: 7.5, cone: 0.55, sober: 0.25, drunk: 0.85, every: 20000, chase: 15000, go: 2.7, walk: 1.25, immune: 120000 },
+  3: { cops: 2, range: 9.0, cone: 0.65, sober: 0.40, drunk: 1.00, every: 15000, chase: 20000, go: 3.1, walk: 1.45, immune: 90000 },
+};
+const DRUNK = 20;
+const TEST_MS = 60000, CAR_MS = 50000, DANCE_MS = 42000, RAIN_SHOT = 20, RAIN_TIP = 200, VIP_PRICE = 300, ATHLETE_PRICE = 50;
 const SHOT_STAKES = [25, 50, 100];
 
 module.exports = function createN3({ feed, toast, broadcast, plist, money, send, drunkNow, dur, STORY, tipFor }) {
   const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
   // ---- the night ----
-  function start(room, on) {
-    stop(room); if (!on) { room.n3 = null; return; }
-    const now = Date.now(), cine = room.cine ? room.cine.until : now;
-    room.n3 = { on: true, stage: null, groomBy: null, introAt: cine + 400, cops: [
+  // o: { club: The End Zone is open (the last night), level: 1-3 (how hard the cops are tonight), intro: play the squad-car scene }
+  function start(room, o) {
+    stop(room); if (!o) { room.n3 = null; return; }
+    const now = Date.now(), cine = room.cine ? room.cine.until : now, level = Math.max(1, Math.min(3, o.level || 1));
+    room.n3 = { on: true, club: !!o.club, level, T: LEVELS[level], stage: null, groomBy: null, introAt: o.intro ? cine + 400 : 0, outAt: o.intro ? 0 : cine + 2000, cops: [
       { id: 'cop1', name: 'Officer Kowalski', x: CAR.x - 1.4, z: CAR.z - 1.3, ry: 0, wp: 1, state: 'car', target: null, until: 0, moving: false },
-      { id: 'cop2', name: 'Officer Reyes', x: CAR.x + 1.4, z: CAR.z - 1.3, ry: 0, wp: 5, state: 'car', target: null, until: 0, moving: false }] };
-    for (const p of room.players.values()) Object.assign(p, { rain: 0, whisper: null, vip: false, athlete: {}, shots: null, sober: null, carUntil: 0, copImmune: 0 });
+      { id: 'cop2', name: 'Officer Reyes', x: CAR.x + 1.4, z: CAR.z - 1.3, ry: 0, wp: 5, state: 'car', target: null, until: 0, moving: false }].slice(0, LEVELS[level].cops) };
+    for (const p of room.players.values()) Object.assign(p, { rain: 0, whisper: null, vip: false, athlete: {}, shots: null, sober: null, carUntil: 0, copImmune: 0, copRoll: 0 });
     room.n3Timer = setInterval(() => step(room), STEP_MS);
   }
   function stop(room) { clearInterval(room.n3Timer); room.n3Timer = null; if (room.n3) for (const p of room.players.values()) send(p, { type: 'cops', c: null }); }
   // ---- the cops ----
   const walkTo = (c, x, z, sp, dt) => { const dx = x - c.x, dz = z - c.z, d = Math.hypot(dx, dz); c.moving = d > 0.05; if (d < 0.05) return true; const s = Math.min(d, sp * dt); c.x += dx / d * s; c.z += dz / d * s; c.ry = Math.atan2(-dx, -dz); return d <= s + 0.01; };
-  function sees(c, p) { // in the flashlight: close, in front, outside, buzzed, free to be stopped
-    if (!p.x && !p.z) return false; const d = dist(c, p); if (d > SEE.range) return false;
+  function sees(c, p, T) { // in the flashlight: close, in front, outside, free to be stopped (drunk or not)
+    if (!p.x && !p.z) return false; const d = dist(c, p); if (d > T.range) return false;
     const fx = -Math.sin(c.ry), fz = -Math.cos(c.ry), cos = ((p.x - c.x) * fx + (p.z - c.z) * fz) / Math.max(0.01, d);
-    return cos > Math.cos(SEE.cone) && outside(p.x, p.z) && drunkNow(p) >= SEE.drunk && !p.dead && !p.sober && !(p.carUntil > Date.now()) && !(p.copImmune > Date.now()) && !p.heldBy && !(p.koUntil > Date.now());
+    return cos > Math.cos(T.cone) && outside(p.x, p.z) && !p.dead && !p.sober && !(p.carUntil > Date.now()) && !(p.copImmune > Date.now()) && !p.heldBy && !(p.koUntil > Date.now());
   }
+  // spotted: roll whether he bothers (once per player per T.every - standing in the light doesn't reroll every tick)
+  function wantsStop(p, T, now) { if (now < (p.copRoll || 0)) return false; p.copRoll = now + T.every; return Math.random() < (drunkNow(p) >= DRUNK ? T.drunk : T.sober); }
   function step(room) {
     const N = room.n3; if (!N) return; const now = Date.now(), dt = STEP_MS / 1000;
     const quiet = room.phase === 'play' && !room.goons && !room.shake && !(room.cine && now < room.cine.until);
-    if (N.introAt && now >= N.introAt && !(room.cine && now < room.cine.until) && room.phase === 'play') { N.introAt = 0; room.cine = { kind: 'copsIntro', start: now, until: now + 9000 }; broadcast(room); }
+    if (N.introAt && now >= N.introAt && !(room.cine && now < room.cine.until) && room.phase === 'play') { N.introAt = 0; room.cine = { kind: 'copsIntro', start: now, until: now + 9000, level: N.level }; broadcast(room); }
+    if (N.outAt && now >= N.outAt && room.phase === 'play') { N.outAt = 0; for (const c of N.cops) c.state = 'patrol';
+      const line = N.level >= 3 ? '🚔 The cops are out in force tonight. They\'ll stop anybody - and they\'re not in a good mood.' : `🚔 ${N.cops.length > 1 ? 'Two officers' : 'An officer'} on the street again tonight. Keep your head down out there.`;
+      feed(room, line); for (const q of room.players.values()) toast(q, line, 'mob'); }
     for (const c of N.cops) {
       c.moving = false;
-      if (c.state === 'car') { if (!N.introAt && now - (room.cine && room.cine.kind === 'copsIntro' ? room.cine.start : 0) > 3500) c.state = 'patrol'; continue; } // they get out during the intro
+      if (c.state === 'car') { if (!N.introAt && !N.outAt && now - (room.cine && room.cine.kind === 'copsIntro' ? room.cine.start : 0) > 3500) c.state = 'patrol'; continue; } // they get out during the intro
       if (c.state === 'patrol') {
-        const w = BEAT[c.wp]; if (walkTo(c, w[0], w[1], SPEED.walk, dt)) c.wp = (c.wp + 1) % BEAT.length;
-        if (quiet) for (const p of plist(room)) if (sees(c, p) && !N.cops.some((o) => o.target === p.id)) { c.state = 'stop'; c.target = p.id; c.until = now + 15000; toast(p, `🔦 "${c.name}, City Police. Hold it right there, pal."`, 'mob'); break; }
+        const w = BEAT[c.wp]; if (walkTo(c, w[0], w[1], N.T.walk, dt)) c.wp = (c.wp + 1) % BEAT.length;
+        if (quiet) for (const p of plist(room)) if (sees(c, p, N.T) && !N.cops.some((o) => o.target === p.id) && wantsStop(p, N.T, now)) { c.state = 'stop'; c.target = p.id; c.until = now + N.T.chase; toast(p, `🔦 "${c.name}, City Police. Hold it right there, pal."`, 'mob'); break; }
       } else if (c.state === 'stop') { // walk up to them; once there, the test starts
         const p = room.players.get(c.target);
         if (!p || !outside(p.x, p.z) || now > c.until || !quiet) { c.state = 'patrol'; c.target = null; continue; }
-        if (dist(c, p) > 1.5) walkTo(c, p.x, p.z, SPEED.go, dt);
+        if (dist(c, p) > 1.5) walkTo(c, p.x, p.z, N.T.go, dt);
         else { c.state = 'test'; c.ry = Math.atan2(-(p.x - c.x), -(p.z - c.z)); p.sober = { cop: c.id, start: now, until: now + TEST_MS, drunk: Math.round(drunkNow(p)), seed: Math.floor(Math.random() * 1e9) };
           send(p, { type: 'sobriety', t: p.sober, cop: c.name }); feed(room, `🚔 ${c.name} pulled ${p.name} aside for a sobriety test.`); broadcast(room); }
       } else if (c.state === 'test') { const p = room.players.get(c.target); if (!p || !p.sober) { c.state = 'patrol'; c.target = null; } else if (now > p.sober.until + 5000) result(room, p, 0); }
       else if (c.state === 'escort') { const p = room.players.get(c.target); if (!p || !(p.carUntil > now)) { c.state = 'patrol'; c.target = null; } }
     }
-    for (const p of room.players.values()) if (p.carUntil && now >= p.carUntil) { p.carUntil = 0; p.copImmune = now + IMMUNE_MS; toast(p, '🚔 "Alright, you\'re free to go. Walk it off."', 'info'); broadcast(room); }
+    for (const p of room.players.values()) if (p.carUntil && now >= p.carUntil) { p.carUntil = 0; p.copImmune = now + N.T.immune; toast(p, '🚔 "Alright, you\'re free to go. Walk it off."', 'info'); broadcast(room); }
     if (N.stage && now > N.stage.until + 4000) { N.stage = null; broadcast(room); }
     const msg = { type: 'cops', c: N.cops.map((c) => [c.id, +c.x.toFixed(2), +c.z.toFixed(2), +c.ry.toFixed(2), c.state, c.target || '', c.moving ? 1 : 0]) };
     for (const q of room.players.values()) send(q, msg);
   }
   function result(room, p, passed) { // the sobriety test is over: 3 of 5 drills to walk away; otherwise 50 s in the back of the squad car
     const N = room.n3, s = p.sober; if (!s) return; p.sober = null; const c = N.cops.find((o) => o.id === s.cop), now = Date.now();
-    if (passed >= 3) { p.copImmune = now + IMMUNE_MS; toast(p, `🚔 You passed (${passed}/5). "Huh. Alright. Get outta here."`, 'win'); feed(room, `🚔 ${p.name} passed the sobriety test (${passed}/5).`); if (c) { c.state = 'patrol'; c.target = null; } }
+    if (passed >= 3) { p.copImmune = now + N.T.immune; toast(p, `🚔 You passed (${passed}/5). "Huh. Alright. Get outta here."`, 'win'); feed(room, `🚔 ${p.name} passed the sobriety test (${passed}/5).`); if (c) { c.state = 'patrol'; c.target = null; } }
     else { p.carUntil = now + CAR_MS; toast(p, `🚔 You failed (${passed}/5). Back of the squad car for 50 seconds. Your phone still works.`, 'err'); feed(room, `🚔 ${p.name} failed the sobriety test and is sitting in the back of the squad car.`); if (c) c.state = 'escort'; }
     broadcast(room);
   }
   // ---- the club ----
   function handle(room, p, m) {
     const N = room.n3; if (!N || !N.on) return false; const now = Date.now(), play = room.phase === 'play';
+    if (!N.club && m.type !== 'soberResult') return false; // the club's games only on the night it's open
     switch (m.type) {
       case 'soberResult': if (p.sober) result(room, p, Math.max(0, Math.min(5, Math.floor(Number(m.passed) || 0)))); return true;
       case 'rain': { // Make It Rain: $20 a shot from the money gun. Every $200 you put on stage, a dancer leans in with gossip on the open game
@@ -128,7 +142,7 @@ module.exports = function createN3({ feed, toast, broadcast, plist, money, send,
     }
   }
   const view = (room, p) => { const N = room.n3; if (!N) return null; const s = N.stage, w = p.whisper, wev = w && room.events.find((e) => e.status === 'open' && e.idx === w.ev); if (w && !wev) p.whisper = null;
-    return { on: N.on, stage: s ? { pid: s.pid, name: s.name, until: s.until, move: s.move } : null, groomBy: N.groomBy, groomDone: !!N.groomDone, hype: N.hype || 0,
+    return { on: N.on, club: N.club, level: N.level, stage: s ? { pid: s.pid, name: s.name, until: s.until, move: s.move } : null, groomBy: N.groomBy, groomDone: !!N.groomDone, hype: N.hype || 0,
       me: { vip: !!p.vip, shots: p.shots ? { stake: p.shots.stake, pot: p.shots.pot, n: p.shots.n, taken: p.shots.taken } : null, sober: p.sober ? { until: p.sober.until } : null, carUntil: p.carUntil || 0, rain: p.rain || 0, whisper: wev ? { from: w.from, who: w.who, label: wev.label, a: wev.a, b: wev.b } : null } }; };
   const busy = (p) => !!(p.sober || p.carUntil > Date.now());
   return { start, stop, handle, view, busy, inClub, CLUB };

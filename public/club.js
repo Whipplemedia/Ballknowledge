@@ -110,7 +110,7 @@ export function createClub({ scene, BK, audio, camera, stations, obstacles, avat
   BK.clubRain = () => rain;
 
   // ---------- stations ----------
-  const S_ = () => BK.S, on = () => !!(S_() && S_().n3 && S_().n3.on), me_ = () => S_() && S_().n3 && S_().n3.me;
+  const S_ = () => BK.S, on = () => !!(S_() && S_().n3 && S_().n3.club), me_ = () => S_() && S_().n3 && S_().n3.me;
   const npcAt = (n) => () => (cast[n] ? cast[n].P.group.position : { x: 1e9, z: 1e9 });
   stations.push(
     { x: CLUB_SPOTS.rain.x, z: CLUB_SPOTS.rain.z, r: 1.8, on: () => on() && !BK.clubDancing(), get text() { const left = 200 - ((me_() && me_().rain) || 0); return rain ? `E - Put the money gun away (click fires $20 · $${left} more and a dancer talks)` : 'E - Make it rain ($20 a shot - every $200 on stage, a dancer answers a question about the game)'; }, act: () => { rain = !rain; gun.visible = rain; audio.sfx(rain ? 'chip' : 'click'); } },

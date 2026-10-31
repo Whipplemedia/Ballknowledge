@@ -280,7 +280,7 @@ function startGame(room) {
   feed(room, `🏚️ ${camp ? `Night ${night} of ${camp.nights}. ` : ''}${STORY.dev.full} wants ${money(fund.buyout)} to walk away from ${STORY.bar}. The fund has ${money(fund.banked)}. Tonight's goal: ${money(room.goal)} in winnings.`);
   if (plist(room).some((p) => p.tab > 0)) feed(room, `💼 Uncle Sal remembers who still owes him from last night. He collects at closing time.`);
   room.cine = { kind: 'opening', start: now, until: now + 11500, goal: room.goal, buyout: fund.buyout, banked: fund.banked, at: room.quota[0].idx + 1, night, nights: camp ? camp.nights : 1 };
-  n3.start(room, !camp || night === camp.nights); // night 3: the club opens and the cops come (n3.js)
+  n3.start(room, { club: !camp || night === camp.nights, level: camp ? night : 3, intro: !camp || night === 1 }); // the cops patrol every night, harder each night; the club opens on the last (n3.js)
   clearInterval(room.tick); room.tick = setInterval(() => tick(room), 400);
   broadcast(room);
 }
@@ -641,7 +641,7 @@ function hintFor(room, p, ev) {
 const SPOTS = { 'Groom': [7.2, -2.6] /* night 3's bachelor-party groom, by the end of the counter (public/club.js) */, 'Gina': [5.4, 3.4], 'Celtics Ray': [8.3, 4.6], 'Sloppy Steve': [7.6, 6.2], 'Dealer': [21.5, 43.15] /* the gas-station casino (public/outside.js OUT.dealer) */, 'Clerk': [-8.6, 6.4], bar: [8.3, 2.5] };
 const JOB_MS = 180000, JOB_GAP_MS = 20000;
 function makeJob(p, room) {
-  if (room && room.n3 && room.n3.on && !room.n3.groomBy && !room.n3.groomDone && Math.random() < 0.5) // night 3: the bachelor party left the groom at the bar
+  if (room && room.n3 && room.n3.club && !room.n3.groomBy && !room.n3.groomDone && Math.random() < 0.5) // night 3: the bachelor party left the groom at the bar
     return { kind: 'groom', target: 'Groom', stage: 'go', reward: 200, text: 'A bachelor party left their groom here and went next door. Walk him over to The End Zone before he passes out on my floor.', step: 'Find the groom at the end of the bar' };
   const kind = pick(['deliver', 'deliver', 'collect', 'bounce', 'hustle']);
   if (kind === 'deliver') { const t = pick(['Gina', 'Celtics Ray', 'Dealer', 'Clerk']); return { kind, target: t, stage: 'go', reward: 90 + rnd(5) * 15, text: `Take this round over to ${t}.`, step: `Bring the drinks to ${t}` }; }
