@@ -112,6 +112,7 @@ export const SFX = {
   cork: (c, o, t) => { T(c, o, t, 0.05, { f: 520, f2: 180, g: 0.5 }); N(c, o, t, 0.03, { f: 1800, q: 1.5, g: 0.5 }); N(c, o, t + 0.04, 1.2, { type: 'highpass', f: 3500, f2: 6000, g: 0.2, at: 0.02 }); }, // champagne: the pop, then the spray
   rev: (c, o, t) => { const g = lp(c, o, 900); T(c, g, t, 2.2, { type: 'sawtooth', f: 55, f2: 190, g: 0.32, at: 0.08 }); T(c, g, t, 2.2, { type: 'square', f: 110, f2: 380, g: 0.1, at: 0.08 }); N(c, o, t + 0.1, 0.5, { type: 'lowpass', f: 600, g: 0.2 }); }, // a supercar leaving in a hurry
   crash: (c, o, t) => { T(c, o, t, 0.9, { f: 70, f2: 28, g: 0.9 }); N(c, o, t, 1.6, { type: 'lowpass', f: 2200, f2: 160, g: 0.7 }); for (let i = 0; i < 18; i++) { const u = t + rnd(0.05, 1.2); N(c, o, u, 0.08, { f: rnd(500, 3000), q: 2, g: rnd(0.1, 0.3) }); } SFX.glassBreak(c, o, t + 0.05); }, // the wrecking ball
+  siren: (c, o, t) => { const g = lp(c, o, 2600); for (let i = 0; i < 3; i++) T(c, g, t + i * 0.9, 0.85, { type: 'square', f: i % 2 ? 960 : 640, f2: i % 2 ? 640 : 960, g: 0.09, at: 0.03 }); }, // a squad car's two-tone whoop
   whoosh: (c, o, t) => { N(c, o, t, 0.35, { f: 600, f2: 2500, q: 0.8, g: 0.4, at: 0.15 }); },
   roll: (c, o, t) => { N(c, o, t, 0.5, { type: 'lowpass', f: 300, g: 0.14 }); },
 };

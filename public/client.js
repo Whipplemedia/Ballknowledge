@@ -56,6 +56,10 @@ function connect(msg) {
     else if (m.type === 'bottleGot') window.BK.onBottleGot && window.BK.onBottleGot(m);
     else if (m.type === 'goons') window.BK.onGoons && window.BK.onGoons(m);
     else if (m.type === 'bum') window.BK.onBum && window.BK.onBum(m);
+    else if (m.type === 'cops') window.BK.onCops && window.BK.onCops(m); // night 3 (public/cops.js, public/club.js)
+    else if (m.type === 'sobriety') { closePanel(); window.BK.onSobriety && window.BK.onSobriety(m); }
+    else if (m.type === 'stage') window.BK.onStage && window.BK.onStage(m);
+    else if (m.type === 'tip') { (ui.gossip = ui.gossip || []).unshift({ ...m, at: Date.now(), idx: S && S.cur ? S.cur.idx : -1 }); toast(`💬 ${m.who}: ${m.text}`, 'win', 14000); render(); }
     else if (m.type === 'fx') window.BK.onFx && window.BK.onFx(m);
     else if (m.type === 'drag') window.BK.onDrag && window.BK.onDrag(m);
     else if (m.type === 'scratch') { ui.scratch = m.t; ui.scratchDone = false; openPanel('scratch'); }
@@ -404,9 +408,9 @@ function goalText() {
 }
 function gameView() {
   const me = S.me, hunt = S.phase === 'hunt';
-  const extra = ui.tab === 'bar' ? [['bar', '🍺 Bar']] : ui.tab === 'vinnie' ? [['vinnie', '🍷 Old Vinnie']] : ui.tab === 'paper' ? [['paper', '📰 Paper']] : ui.tab === 'wheel' ? [['wheel', '🎰 Roulette']] : ui.tab === 'challenge' ? [['challenge', '🎯 Challenge']] : ui.tab === 'pool' ? [['pool', '🎱 Pool']] : ui.tab === 'slot' ? [['slot', '🎰 Slots']] : ui.tab === 'gas' ? [['gas', '⛽ Counter']] : ui.tab === 'atm' ? [['atm', '🏧 ATM']] : ui.tab === 'scratch' ? [['scratch', '🎟️ Scratch-off']] : [];
+  const extra = ui.tab === 'bar' ? [['bar', '🍺 Bar']] : ui.tab === 'vinnie' ? [['vinnie', '🍷 Old Vinnie']] : ui.tab === 'paper' ? [['paper', '📰 Paper']] : ui.tab === 'wheel' ? [['wheel', '🎰 Roulette']] : ui.tab === 'challenge' ? [['challenge', '🎯 Challenge']] : ui.tab === 'pool' ? [['pool', '🎱 Pool']] : ui.tab === 'slot' ? [['slot', '🎰 Slots']] : ui.tab === 'gas' ? [['gas', '⛽ Counter']] : ui.tab === 'atm' ? [['atm', '🏧 ATM']] : ui.tab === 'scratch' ? [['scratch', '🎟️ Scratch-off']] : ui.tab === 'shots' ? [['shots', '🥃 Shot roulette']] : [];
   const tabs = [['book', '📱 Sportsbook'], ['bets', '🧾 My Bets'], ['mob', '🕴️ The Mob'], ['crew', '👥 Crew'], ...extra];
-  const body = { book: bookView, bets: betsView, mob: mobView, crew: crewView, bar: barView, vinnie: vinnieView, paper: paperView, wheel: wheelView, challenge: challengeView, slot: slotView, gas: gasView, atm: atmView, scratch: scratchView, pool: typeof poolView === 'function' ? poolView : () => '' }[ui.tab]();
+  const body = { book: bookView, bets: betsView, mob: mobView, crew: crewView, bar: barView, vinnie: vinnieView, paper: paperView, wheel: wheelView, challenge: challengeView, slot: slotView, gas: gasView, shots: shotsView, atm: atmView, scratch: scratchView, pool: typeof poolView === 'function' ? poolView : () => '' }[ui.tab]();
   if (!window.__worldReady) return `<div class="center"><div class="card col" style="width:min(420px,100%)"><div class="big">Getting the bar ready...</div>${loadBar()}<div class="muted">Your crew can already see you. The game has started - you'll be dropped in as soon as the bar finishes loading.</div></div></div>`;
   const crew = S.players.length > 1, f = S.fund;
   return `<div class="hud">
@@ -486,6 +490,7 @@ function bookView() {
       <div class="clock"><div class="muted">BETTING CLOSES IN</div><div id="tl2" class="tl2"></div></div></div>
     <div class="tlbar"><div id="tlbar"></div></div>
     <div class="matchup">${teamCard(A, 'a', cur, ev)}<div class="vs">VS</div>${teamCard(B, 'b', cur, ev)}</div>
+    ${(ui.gossip || []).filter((gs) => gs.idx === cur.idx).map((gs) => `<div class="gossip">💬 <b>${esc(gs.who)}:</b> ${esc(gs.text)}</div>`).join('')}
     ${ev.final ? '<div class="champ-note">To win the game you need a <b>Moneyline</b> bet on the champion of this game.</div>' : ''}
     ${cur.tip ? `<div class="tipcard">🗒️ <b>${esc(cur.tip.from)}</b> slid a napkin across the bar: "I like <b>${esc(cur.intel[cur.tip.side].name)}</b> tonight." <span class="muted">(unverified)</span></div>` : ''}
     ${h ? hintView(h) : ''}
@@ -898,6 +903,16 @@ function startPractice() { closePanel(); window.BK.startGame && window.BK.startG
 function resumeChallenge() { const ch = S.me.challenge; closePanel(); window.BK.startGame && window.BK.startGame(ch.game, ch); }
 function cancelChallenge() { send({ type: 'challengeCancel' }); render(); }
 
+// ---------- shot roulette (night 3, Candy the shot girl): six shots, one is ghost pepper; each safe one grows the pot ----------
+function shotsView() {
+  const sh = S.n3 && S.n3.me && S.n3.me.shots;
+  if (!sh) return `<div class="card col"><div class="big">🥃 Shot roulette</div><div class="muted">Six shots on Candy's tray. One of them is ghost-pepper hot sauce. Pick shots one at a time: every safe one grows the pot (about x1.2, then more as fewer are left). Cash out any time - or find the pepper and lose it all, eyes watering.</div>
+    <div class="row">${[25, 50, 100].map((v) => `<button ${S.me.money < v ? 'disabled' : ''} onclick="send({type:'shotStart',stake:${v}})">Buy in ${$$(v)}</button>`).join('')}</div></div>`;
+  const next = Math.round(sh.pot * 0.95 * sh.n / (sh.n - 1));
+  return `<div class="card col"><div class="big">🥃 Pot: ${$$(sh.pot)}</div><div class="muted">${sh.n} shots left, one is the pepper. Next safe shot: ${$$(next)}.</div>
+    <div class="shots">${[0, 1, 2, 3, 4, 5].map((i) => sh.taken.includes(i) ? '<button class="shot empty" disabled>✓</button>' : `<button class="shot" onclick="send({type:'shotPick',i:${i}})">🥃</button>`).join('')}</div>
+    <div class="row"><button class="ghost" onclick="send({type:'shotCash'})">Cash out ${$$(sh.pot)}</button></div></div>`;
+}
 // ---------- pool ----------
 window.BK.openPool = () => openPanel('pool');
 window.BK.playChase = () => { send({ type: 'poolStart', opp: 'chase' }); ui.pendingPool = { at: Date.now() }; }; // Chase's dare: straight to the table

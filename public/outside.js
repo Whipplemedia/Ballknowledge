@@ -97,7 +97,7 @@ export function createOutside({ scene, BK, stations, obstacles, bar, ROOM }) {
     const jam = M(0x1e2e22); box(0.1, DOOR.h, 0.32, jam, d0 - 0.05, DOOR.h / 2, ROOM.z + 0.15); box(0.1, DOOR.h, 0.32, jam, d1 + 0.05, DOOR.h / 2, ROOM.z + 0.15); box(DOOR.w + 0.2, 0.1, 0.32, jam, DOOR.x, DOOR.h + 0.05, ROOM.z + 0.15);
     { const l = new THREE.PointLight(0xffd9a0, 10, 7, 1.6); l.position.set(DOOR.x, 4.6, Z0 + 0.8); l.userData.noDim = true; scene.add(l); } // the sign's gooseneck lamps
     // the rest of the block either side of the bar: walk-ups (art/facade_brick, art/facade_greystone)
-    [-32, -24, -16, 16, 24, 32].forEach((x, k) => facade(8, 12, x, Z0, 0, k % 2 ? 'grey' : 'red', k + 1, k % 2 ? 'facade_greystone' : 'facade_brick'));
+    [-32, 16, 24, 32].forEach((x, k) => facade(8, 12, x, Z0, 0, k % 2 ? 'grey' : 'red', k + 1, k % 2 ? 'facade_greystone' : 'facade_brick'));
   }
   // across the street (left of the lot), the lot's side walls, and the block past it
   [-32, -24, -16, -8, 0, 8, 40, 48, 56].forEach((x, k) => facade(8, 12, x, ST.z1 + 4, Math.PI, k % 3 === 1 ? 'grey' : 'red', k + 7, k % 3 === 1 ? 'facade_greystone' : 'facade_brick'));

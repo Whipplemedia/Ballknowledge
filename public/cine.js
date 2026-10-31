@@ -9,7 +9,7 @@ import { createFinale } from './finale.js';
 const FRONT_IN = new THREE.Vector3(5, 1.3, 7.9), BACK_IN = new THREE.Vector3(11.7, 1.2, -6.6);
 // the kill: dragged out (0 - DRAG s), then the restroom: Sal, a bat, lights out (BR = seconds after the cut)
 const DRAG = 6.5, BR = { talk: 2.3, wind: 3.5, hit: 3.75, black: 4.4 };
-export function createCine({ camera, BK, doors, goons, audio, backroom, owner, dev, scene, bar, castOf, tickCos, avatars }) {
+export function createCine({ camera, BK, doors, goons, audio, backroom, owner, dev, scene, bar, castOf, tickCos, avatars, cops }) {
   const top = document.createElement('div'), bot = document.createElement('div'), cap = document.createElement('div'), fade = document.createElement('div'), flash = document.createElement('div');
   top.className = 'lbox top'; bot.className = 'lbox bot'; cap.id = 'cinecap'; fade.id = 'cinefade'; flash.id = 'cineflash'; document.body.append(top, bot, cap, fade, flash);
   const lerp = (a, b, k) => a + (b - a) * Math.max(0, Math.min(1, k)), ease = (k) => { k = Math.max(0, Math.min(1, k)); return k * k * (3 - 2 * k); };
@@ -113,6 +113,7 @@ export function createCine({ camera, BK, doors, goons, audio, backroom, owner, d
         return 'camera';
       }
       if (c.kind === 'opening' || c.kind === 'checkIn') { storyShot(c, t, dt); return 'camera'; }
+      if (c.kind === 'copsIntro' && cops) { cops.scene(c, t, dt, wt, { shot, caption, cue }); return 'camera'; } // night 3: the squad car pulls up (public/cops.js)
       if (c.kind === 'nightEnd' || c.kind === 'verdict' || c.kind === 'finalOn' || c.kind === 'finalCall') { finale.scene(c, t, dt, wt); return 'camera'; }
       if (c.kind === 'huntBeaten' || c.kind === 'shakeBeaten') {
         door(doors.front, t > 2.2, dt); if (t > 2.2) cue('door', () => audio.sfx('knock'));

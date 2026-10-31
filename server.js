@@ -10,6 +10,7 @@ const { makeFakeSeason } = require('./fakeseason');
 const { paperFor } = require('./paper');
 const createGoons = require('./goons');
 const createBum = require('./bum');
+const createN3 = require('./n3');
 
 const PORT = process.env.PORT || 3000;
 const SPEED = Number(process.env.BK_SPEED || 1); // dev: divide all timers
@@ -279,6 +280,7 @@ function startGame(room) {
   feed(room, `🏚️ ${camp ? `Night ${night} of ${camp.nights}. ` : ''}${STORY.dev.full} wants ${money(fund.buyout)} to walk away from ${STORY.bar}. The fund has ${money(fund.banked)}. Tonight's goal: ${money(room.goal)} in winnings.`);
   if (plist(room).some((p) => p.tab > 0)) feed(room, `💼 Uncle Sal remembers who still owes him from last night. He collects at closing time.`);
   room.cine = { kind: 'opening', start: now, until: now + 11500, goal: room.goal, buyout: fund.buyout, banked: fund.banked, at: room.quota[0].idx + 1, night, nights: camp ? camp.nights : 1 };
+  n3.start(room, !camp || night === camp.nights); // night 3: the club opens and the cops come (n3.js)
   clearInterval(room.tick); room.tick = setInterval(() => tick(room), 400);
   broadcast(room);
 }
@@ -539,7 +541,7 @@ function finish(room) {
     feed(room, dep > 0 ? `🏦 The crew put ${money(dep)} in the Save the Bar fund: ${money(room.fund.banked)} of ${money(room.fund.buyout)}.` : `🏦 Nothing for the fund tonight. ${money(room.fund.banked)} of ${money(room.fund.buyout)}.`);
     const last = !camp || room.night >= camp.nights, now = Date.now();
     // the closing scene plays first (cine.js); tick() comes back here when it's done
-    clearInterval(room.tick); room.tick = setInterval(() => tick(room), 400); room.barEvent = null; room.shake = null; goons.stop(room); if (room.bum) bum.stop(room);
+    clearInterval(room.tick); room.tick = setInterval(() => tick(room), 400); room.barEvent = null; room.shake = null; goons.stop(room); if (room.bum) bum.stop(room); n3.stop(room);
     const gave = ps.filter((p) => p.gave > 0).sort((a, b) => b.gave - a.gave).map((p) => ({ name: p.name, gave: p.gave }));
     if (last) { // the verdict: the fund against the buyout, then the bar's fate, then the credits
       const saved = room.fund.banked >= room.fund.buyout, correct = ps.filter((p) => p.finalCorrect).length, mvp = [...ps].sort((a, b) => (b.bk || 0) - (a.bk || 0) || b.money - a.money)[0], len = saved ? 36000 : 28000;
@@ -553,7 +555,7 @@ function finish(room) {
     room.cine = { kind: 'nightEnd', start: now, until: now + 15000, night: room.night, nights: camp.nights, deposit: dep, goal: room.goal, banked: room.fund.banked, buyout: room.fund.buyout, need, gave, dead: ps.filter((p) => p.dead).map((p) => p.name) };
     room.verdictAt = now + 15000; broadcast(room); return;
   }
-  clearInterval(room.tick); room.barEvent = null; room.shake = null; room.cine = null; goons.stop(room); if (room.bum) bum.stop(room);
+  clearInterval(room.tick); room.barEvent = null; room.shake = null; room.cine = null; goons.stop(room); if (room.bum) bum.stop(room); n3.stop(room);
   const s = room.season;
   for (const p of ps) if (!p.fate) p.fate = 'paid up';
   const correct = ps.filter((p) => p.finalCorrect).length, fin = room.events[room.events.length - 1], fr = (fin && fin.result) || {};
@@ -636,9 +638,11 @@ function hintFor(room, p, ev) {
 // ---------- side jobs from the bartender ----------
 // One job at a time, 3 minutes to finish it. Targets are named regulars at fixed spots (they match bar.js); the server
 // checks you are standing next to them. Collecting for Sal pays in a smaller tab instead of cash.
-const SPOTS = { 'Gina': [5.4, 3.4], 'Celtics Ray': [8.3, 4.6], 'Sloppy Steve': [7.6, 6.2], 'Dealer': [21.5, 43.15] /* the gas-station casino (public/outside.js OUT.dealer) */, 'Clerk': [-8.6, 6.4], bar: [8.3, 2.5] };
+const SPOTS = { 'Groom': [7.2, -2.6] /* night 3's bachelor-party groom, by the end of the counter (public/club.js) */, 'Gina': [5.4, 3.4], 'Celtics Ray': [8.3, 4.6], 'Sloppy Steve': [7.6, 6.2], 'Dealer': [21.5, 43.15] /* the gas-station casino (public/outside.js OUT.dealer) */, 'Clerk': [-8.6, 6.4], bar: [8.3, 2.5] };
 const JOB_MS = 180000, JOB_GAP_MS = 20000;
-function makeJob(p) {
+function makeJob(p, room) {
+  if (room && room.n3 && room.n3.on && !room.n3.groomBy && !room.n3.groomDone && Math.random() < 0.5) // night 3: the bachelor party left the groom at the bar
+    return { kind: 'groom', target: 'Groom', stage: 'go', reward: 200, text: 'A bachelor party left their groom here and went next door. Walk him over to The End Zone before he passes out on my floor.', step: 'Find the groom at the end of the bar' };
   const kind = pick(['deliver', 'deliver', 'collect', 'bounce', 'hustle']);
   if (kind === 'deliver') { const t = pick(['Gina', 'Celtics Ray', 'Dealer', 'Clerk']); return { kind, target: t, stage: 'go', reward: 90 + rnd(5) * 15, text: `Take this round over to ${t}.`, step: `Bring the drinks to ${t}` }; }
   if (kind === 'collect') { const t = pick(['Sloppy Steve', 'Celtics Ray']); return { kind, target: t, stage: 'go', tabCut: 150, text: `${t} owes Sal and keeps "forgetting". Get the envelope and bring it back to me - Sal pays $150 (off your tab, if you owe him).`, step: `Collect from ${t}` }; }
@@ -721,6 +725,7 @@ function view(room, p) {
   if (room.season && room.phase !== 'lobby') {
     v.events = room.events.map((e) => evSummary(e));
     v.teams = Object.fromEntries(Object.entries(room.season.teams).map(([n, t]) => [n, { short: t.short, color: t.color }]));
+    v.n3 = n3.view(room, p);
     v.chaseDare = room.chaseDare ? { fee: room.chaseDare.fee, until: room.chaseDare.until, by: room.chaseDare.by ? (room.players.get(room.chaseDare.by) || {}).name || '?' : null, mine: room.chaseDare.by === p.id } : null;
     v.quota = room.quota.map((q) => ({ kind: q.kind, idx: q.idx, target: q.target, status: q.status, crew: q.crew }));
     v.crewNow = Math.round(plist(room).reduce((a, q) => a + networth(room, q), 0));
@@ -741,7 +746,10 @@ function view(room, p) {
   if (inPlay(room)) v.paper = room.paper || null;
   return v;
 }
+// a tip on the open game for night 3's gossip (the dancer, the athlete): right acc of the time, the same answer every time it's asked
+function tipFor(room, ev, key, acc = 0.7) { const rng = seeded(room.code + ':' + key + ':' + ev.idx + ':' + room.t0), nat = ev.sa > ev.sb ? 'a' : 'b'; return { side: rng() < acc ? nat : nat === 'a' ? 'b' : 'a', acc }; }
 const bum = createBum({ feed, toast: (p, t, k) => toast(p, t, k), broadcast: (r) => broadcast(r), plist, money, send: (p, m) => send(p, m), STORY });
+const n3 = createN3({ feed, toast: (p, t, k) => toast(p, t, k), broadcast: (r) => broadcast(r), plist, money, send: (p, m) => send(p, m), drunkNow, dur, STORY, tipFor });
 const goons = createGoons({ feed, toast: (p, t, k) => toast(p, t, k), broadcast: (r) => broadcast(r), plist, money, send: (p, m) => send(p, m),
   onDone: (room, kind, how) => { // an ending sequence finished
     if (kind === 'hunt') { if (how === 'kill') endHunt(room, false); else if (how === 'beaten') endHunt(room, true); else finish(room); }
@@ -753,6 +761,7 @@ function broadcast(room) { for (const p of room.players.values()) send(p, view(r
 const inPlay = (room) => room.phase === 'play' || room.phase === 'hunt';
 
 function handle(room, p, m) {
+  if (n3.handle(room, p, m)) return; // night 3: The End Zone and the cops (n3.js)
   switch (m.type) {
     case 'setSport': if (room.hostId === p.id && room.phase === 'lobby' && SPORTS[m.sport]) { room.sport = m.sport; broadcast(room); } break;
     case 'setMode': if (room.hostId === p.id && room.phase === 'lobby' && MODES[m.mode]) { room.mode = m.mode; broadcast(room); } break;
@@ -764,15 +773,17 @@ function handle(room, p, m) {
       const now = Date.now(); if (room.phase !== 'play') break;
       if (p.job && now < p.job.until) { toast(p, 'Finish the job you have first.', 'err'); break; }
       if (now < (p.jobNext || 0)) { toast(p, 'Bartender: "Give me a minute. I\'ll have something for you."', 'info'); break; }
-      p.job = { ...makeJob(p), until: now + dur(JOB_MS) }; toast(p, `🍸 Job: ${p.job.text}`, 'info'); broadcast(room); break;
+      p.job = { ...makeJob(p, room), until: now + dur(JOB_MS) }; toast(p, `🍸 Job: ${p.job.text}`, 'info'); broadcast(room); break;
     }
-    case 'jobDrop': if (p.job) { p.job = null; p.jobNext = Date.now() + dur(JOB_GAP_MS); broadcast(room); } break;
+    case 'jobDrop': if (p.job) { if (room.n3 && room.n3.groomBy === p.id) room.n3.groomBy = null; p.job = null; p.jobNext = Date.now() + dur(JOB_GAP_MS); broadcast(room); } break;
     case 'jobAct': { // pressed E next to a job target (or back at the bar)
       const j = p.job; if (!j || !inPlay(room) || Date.now() > j.until) break;
       const at = (n, r = 2.2) => SPOTS[n] && Math.hypot(p.x - SPOTS[n][0], p.z - SPOTS[n][1]) < r;
       if (j.kind === 'deliver' && at(j.target)) finishJob(room, p, `${j.target} got the round.`);
       else if (j.kind === 'collect' && j.stage === 'go' && at(j.target)) { j.stage = 'back'; j.step = 'Bring Sal\'s envelope back to the bar'; toast(p, `${j.target} grumbles and hands over an envelope. Don't drop it.`, 'info'); }
       else if (j.kind === 'collect' && j.stage === 'back' && at('bar', 3.2)) finishJob(room, p, 'Envelope delivered.');
+      else if (j.kind === 'groom' && j.stage === 'go' && at('Groom') && room.n3 && !room.n3.groomBy) { j.stage = 'escort'; j.step = 'Walk the groom to The End Zone (stay close or he sits down)'; room.n3.groomBy = p.id; toast(p, `🤵 "You're my best man now, buddy. Where's the party?" He's following you.`, 'info'); }
+      else if (j.kind === 'groom' && j.stage === 'escort' && room.n3 && n3.inClub(p.x, p.z)) { room.n3.groomBy = null; room.n3.groomDone = true; finishJob(room, p, 'The groom made it to his party.'); feed(room, `🤵 ${p.name} delivered the groom to his bachelor party.`); }
       broadcast(room); break;
     }
     case 'vinnie': {

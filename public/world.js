@@ -22,6 +22,9 @@ import { STORY } from './story.js';
 import { createBrawl } from './brawl.js';
 import { createCine } from './cine.js';
 import { createVO } from './vo.js';
+import { createClub } from './club.js';
+import { createCops } from './cops.js';
+import { createPoleGame } from './polegame.js';
 import { CATALOG, BY_ID, RARITY, SLOTS, rollCrate, createPreview, applyCosmetics, tickCosmetics } from './cosmetics.js';
 
 const BK = window.BK;
@@ -143,8 +146,12 @@ BK.stand = () => { const s = me.sit; if (!s) return; audio.sfx('stand'); me.sit 
 const active = () => { const S = BK.S; return S && ['play', 'hunt'].includes(S.phase); };
 const nearest = () => (bottles.aimedStation && bottles.aimedStation()) || stations.filter((s) => (!s.on || s.on()) && Math.hypot(s.x - me.x, s.z - me.z) < s.r).sort((a, b) => (b.prio || 0) - (a.prio || 0) || Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
 
+const n3Lock = () => cops.testing() || cops.inCar() || polegame.active(); // the sobriety test, the back of the squad car, the pole
 addEventListener('keydown', (e) => {
   if (!active() || BK.ui.open || BK.ui.shop) return;
+  if (cops.testing()) { cops.key(e); return; }
+  if (polegame.active()) { if (polegame.key(e)) return; }
+  if (n3Lock()) return;
   keys[e.code] = true;
   if (me.sit && (e.code === 'KeyE' || e.code === 'Space' || ['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code))) { BK.stand(); return; }
   if (koNow()) return;
@@ -153,7 +160,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyE') { if (games.active()) games.leave(); else { const s = nearest(); if (s) s.act(); } }
   if (e.code === 'KeyC') { games.leave(); BK.openPanel('crew'); }
 });
-addEventListener('keyup', (e) => { keys[e.code] = false; });
+addEventListener('keyup', (e) => { keys[e.code] = false; if (cops.testing()) cops.key(e); });
 let lockAt = 0;
 document.addEventListener('pointerlockchange', () => {
   lockAt = performance.now(); if (games.active()) games.setPaused(document.pointerLockElement !== canvas);
@@ -164,6 +171,8 @@ document.addEventListener('pointerlockchange', () => {
 addEventListener('mousemove', (e) => {
   if (document.pointerLockElement !== canvas || roulette.lookTarget() || performance.now() - lockAt < 250 || koNow()) return;
   const mx = Math.max(-150, Math.min(150, e.movementX)), my = Math.max(-150, Math.min(150, e.movementY)); // ignore bogus jumps when the lock is (re)acquired
+  if (cops.testing()) { cops.mouse(mx, my); return; } // the pen drill
+  if (cops.inCar() || polegame.active()) return;
   if (games.active() && games.move(mx, my)) return; // the golf trackball
   const ks = 0.0022 * ((BK.settings && BK.settings.sens) || 1), inv = BK.settings && BK.settings.invert ? -1 : 1; me.yaw -= mx * ks; me.pitch = Math.max(-1.3, Math.min(1.3, me.pitch - my * ks * inv));
   if (me.sit) { const d = Math.atan2(Math.sin(me.yaw - me.sit.yaw), Math.cos(me.yaw - me.sit.yaw)); if (Math.abs(d) > 1.75) me.yaw = me.sit.yaw + Math.sign(d) * 1.75; me.pitch = Math.max(-0.9, Math.min(0.8, me.pitch)); }
@@ -207,8 +216,12 @@ function grabDrops() { for (const [id, o] of drops) if (Math.hypot(o.x - me.x, o
 // ---------- Sal's muscle: hitmen + collectors are simulated on the server (goons.js) and streamed here ----------
 const goons = createGoonsView({ scene, BK, audio }); BK.goons = goons;
 const bumView = createBumView({ scene, audio }); BK.onBum = (m) => bumView.onMsg(m); // the pickpocket (server bum.js)
-const cine = createCine({ camera, BK, doors: bar.doors, goons, audio, backroom: bar.backroom, owner: bar.owner, dev: bar.dev, scene, bar, avatars, tickCos: tickCosmetics,
-  castOf: (p) => { const P = makePreset('bub', playerLook(p)); applyCosmetics(P, p.cos || {}); return P; } }); // the finale's cast: everyone as they look in game
+const castOf = (p) => { const P = makePreset('bub', playerLook(p)); applyCosmetics(P, p.cos || {}); return P; }; // a cutscene's cast: everyone as they look in game
+// ---------- night 3: The End Zone next door (public/club.js), Amateur Night on the pole (polegame.js), the cops out front (cops.js) ----------
+const club = createClub({ scene, BK, audio, camera, stations, obstacles, avatars, castOf, tickCos: tickCosmetics, me });
+const cops = createCops({ scene, BK, audio, camera });
+const polegame = createPoleGame({ BK, audio, club });
+const cine = createCine({ camera, BK, doors: bar.doors, goons, audio, backroom: bar.backroom, owner: bar.owner, dev: bar.dev, scene, bar, avatars, tickCos: tickCosmetics, castOf, cops });
 let wasHeld = null;
 // guided first night: a regular calls out to you (bubble + voice line when the clip exists)
 BK.guideSay = (who, text, vo) => { const n = bar.say(who, text, 7); if (n) { const g = n.P.group.position; BK.vo.play(vo, { x: g.x, y: 1.6, z: g.z }); } };
@@ -228,6 +241,8 @@ canvas.addEventListener('mousedown', (e) => {
   if (document.pointerLockElement !== canvas) { if (active() && !BK.ui.open) canvas.requestPointerLock(); return; }
   if (e.button !== 0 || koNow()) return;
   if (games.active()) return games.down();
+  if (n3Lock()) return;
+  if (BK.clubRain && BK.clubRain()) return club.shoot(); // the money gun
   const S = BK.S;
   if (bottles.held > 0 && bottles.throw()) return; // left click throws when you're holding bottles
   const bumNear = bumView.list().filter((o) => Math.hypot(o.P.group.position.x - me.x, o.P.group.position.z - me.z) < 3); // Dusty is around all night: only a punch when he's in reach
@@ -246,6 +261,7 @@ canvas.addEventListener('mousedown', (e) => {
 // joined by doorway lanes. px/pz: how close to a space's edges you can walk; h: its ceiling (bottles shatter on it)
 const openOut = () => !!(BK.S && BK.S.phase === 'play'); // the street, the lot and the store stay open when Sal's collectors come (they follow you out there); the hitmen at closing time pull everyone in
 const openRest = () => openOut() && !BK.S.shake; // no hiding in the men's room from the collectors
+const openClub = () => openOut() && !!(BK.S.n3 && BK.S.n3.on); // The End Zone only opens on the last night
 const SPACES = (() => { const B = bar.backroom.bounds, D = OUT.door, C = OUT.casino, S = OUT.street, L = OUT.lot;
   return [
     { x0: -ROOM.x, x1: ROOM.x, z0: -ROOM.z, z1: ROOM.z, px: 0.6, pz: 0.6, h: ROOM.h },
@@ -256,8 +272,10 @@ const SPACES = (() => { const B = bar.backroom.bounds, D = OUT.door, C = OUT.cas
     { x0: L.x0, x1: L.x1, z0: S.z1 + 3, z1: C.z0, px: 0.3, pz: 0.3, h: 60, gated: true },                                // gas-station lot
     { x0: C.door.x - C.door.w / 2, x1: C.door.x + C.door.w / 2, z0: C.z0 - 0.5, z1: C.z0 + 0.5, px: 0.28, pz: 0, h: C.door.h, gated: true },
     { x0: C.x0 + 0.06, x1: C.x1 - 0.06, z0: C.z0 + 0.06, z1: C.z1 - 0.06, px: 0.32, pz: 0.32, h: C.h, gated: true },   // casino
+    { x0: club.CLUB.door.x - club.CLUB.door.w / 2, x1: club.CLUB.door.x + club.CLUB.door.w / 2, z0: club.CLUB.z1 - 0.3, z1: club.CLUB.front + 0.6, px: 0.28, pz: 0, h: club.CLUB.door.h, gated: 'club' }, // The End Zone's door (night 3)
+    { x0: club.CLUB.x0 + 0.06, x1: club.CLUB.x1 - 0.06, z0: club.CLUB.z0 + 0.06, z1: club.CLUB.z1 - 0.06, px: 0.32, pz: 0.32, h: club.CLUB.h, gated: 'club' },
   ]; })();
-const spaceAt = (x, z, walk = true) => { for (const s of SPACES) { if (walk && s.gated && !(s.gated === 'rest' ? openRest() : openOut())) continue; const px = walk ? s.px : 0, pz = walk ? s.pz : 0; if (x >= s.x0 + px && x <= s.x1 - px && z >= s.z0 + pz && z <= s.z1 - pz) return s; } return null; };
+const spaceAt = (x, z, walk = true) => { for (const s of SPACES) { if (walk && s.gated && !(s.gated === 'rest' ? openRest() : s.gated === 'club' ? openClub() : openOut())) continue; const px = walk ? s.px : 0, pz = walk ? s.pz : 0; if (x >= s.x0 + px && x <= s.x1 - px && z >= s.z0 + pz && z <= s.z1 - pz) return s; } return null; };
 BK.spaceAt = spaceAt;
 function walkClamp(ox, oz) { // slide along whichever axis still lands somewhere walkable
   if (spaceAt(me.x, me.z)) return; if (spaceAt(me.x, oz)) { me.z = oz; return; } if (spaceAt(ox, me.z)) { me.x = ox; return; } if (spaceAt(ox, oz)) { me.x = ox; me.z = oz; return; }
@@ -266,7 +284,7 @@ function walkClamp(ox, oz) { // slide along whichever axis still lands somewhere
 }
 function move(dt, t, drunkAmt) {
   if (kissLook(dt)) return;
-  if (BK.ui.open || games.active() || me.sit || koNow() || heldBy() || draggedBy() || (BK.S && BK.S.cine && BK.now() < BK.S.cine.until)) return;
+  if (BK.ui.open || games.active() || me.sit || koNow() || heldBy() || draggedBy() || n3Lock() || (BK.S && BK.S.cine && BK.now() < BK.S.cine.until)) return;
   const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
   const sp = (keys.ShiftLeft ? 6.2 : 3.8) * (items.wired() ? 1.18 : 1), sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
   let dx = -sin * f + cos * s, dz = -cos * f - sin * s; const len = Math.hypot(dx, dz) || 1;
@@ -357,7 +375,7 @@ function frame(now) {
   camera.rotation.set(me.pitch + off.p + Math.sin(t * 0.7) * drunkAmt * 0.03, me.yaw + off.y + Math.sin(t * 0.5) * drunkAmt * 0.05, Math.sin(t * 0.9) * drunkAmt * 0.07);
   { const f = (BK.settings && BK.settings.fov) || 72; if (Math.abs(camera.fov - f) > 0.01) { camera.fov = f; camera.updateProjectionMatrix(); } }
   games.update(dt); games.rig(camera);
-  { const cOn = !!(BK.S && BK.S.cine && BK.now() < BK.S.cine.until), gOn = games.active() || cOn; const ring = brawl.spot(); for (const n of bar.npcs) { if (n.cine) continue; /* cine.js shows/hides the developer */ const g = n.P.group, hide = (ring && !n.seated && Math.hypot(g.position.x - ring.x, g.position.z - ring.z) < 1.5) || gOn && !(cOn && /^(opening|checkIn|verdict|nightEnd|finalOn|finalCall)$/.test(BK.S.cine.kind)) && Math.hypot(g.position.x - camera.position.x, g.position.z - camera.position.z) < (cOn ? 2.6 : 1.1) && !n.seated; /* the story's scenes frame their own close-ups */ if (g.visible === hide) g.visible = !hide; } }
+  { const cOn = !!(BK.S && BK.S.cine && BK.now() < BK.S.cine.until), gOn = games.active() || cOn; const ring = brawl.spot(); for (const n of bar.npcs) { if (n.cine) continue; /* cine.js shows/hides the developer */ const g = n.P.group, hide = (ring && !n.seated && Math.hypot(g.position.x - ring.x, g.position.z - ring.z) < 1.5) || gOn && !(cOn && /^(opening|checkIn|verdict|nightEnd|finalOn|finalCall|copsIntro)$/.test(BK.S.cine.kind)) && Math.hypot(g.position.x - camera.position.x, g.position.z - camera.position.z) < (cOn ? 2.6 : 1.1) && !n.seated; /* the story's scenes frame their own close-ups */ if (g.visible === hide) g.visible = !hide; } }
   // ---- audio frame: listener, footsteps, bar-event cues, voice
   audio.update(dt, camera); audioUI.show(active()); voice.update(dt, avatars);
   grabDrops(); for (const o of drops.values()) o.g.rotation.y += dt * 0.6;
@@ -366,7 +384,13 @@ function frame(now) {
     if (o) { const g = o.P.group.position, want = Math.atan2(-(g.x - me.x), -(g.z - me.z)); let d = want - me.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); me.yaw += d * Math.min(1, dt * 6); me.pitch += (-0.22 - me.pitch) * Math.min(1, dt * 4); camera.rotation.set(me.pitch + Math.sin(t * 13) * 0.02, me.yaw + Math.sin(t * 9) * 0.03, Math.sin(t * 7) * 0.05); } }
   items.update(dt); // first-person hands, smoke, buff timers (after the camera is placed)
   if (me.punch) { me.punch = Math.max(0, me.punch - dt * 6); camera.position.y -= me.punch * 0.04; camera.rotation.z += me.punch * 0.03; }
+  club.update(dt, t); cops.update(dt, t); polegame.update();
+  { const n3 = BK.S && BK.S.n3; if (n3 && n3.stage && n3.stage.pid === BK.S.you && !polegame.active()) { if (me.sit) BK.stand(); polegame.start(); } else if (polegame.active() && !(n3 && n3.stage && n3.stage.pid === BK.S.you)) polegame.stop(); }
   const cineOn = !!cine.update(dt, BK.S && BK.S.you, t); if (cineOn) cross.style.display = 'none';
+  if (!cineOn) { // night 3 owns the camera: the back of the squad car, your own pole dance, facing the officer for the test
+    if (cops.carCam(t)) cross.style.display = 'none';
+    else if (BK.clubDancing && BK.clubDancing()) { club.performerCam(dt, t); cross.style.display = 'none'; }
+    else { const cp = cops.lookAtCop(); if (cp) { const dx = cp.x - me.x, dz = cp.z - me.z, want = Math.atan2(-dx, -dz); let d = want - me.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); me.yaw += d * Math.min(1, dt * 5); me.pitch += (0.02 - me.pitch) * Math.min(1, dt * 5); camera.rotation.set(me.pitch, me.yaw, 0); } } }
   { const c = BK.S && BK.S.cine, sal = bar.npcs.find((n) => n.name === 'Uncle Sal'); // Sal talks through the opening scene
     if (sal) sal.P.group.visible = !(cineOn && c && c.kind === 'kill'); // he's in the back room with the bat
     if (sal && sal.life) { const talk = cineOn && c && c.kind === 'opening'; if (talk) { sal.life.act = 'talk'; sal.life.actT = 1; sal.life.dur = 99; sal.life.gaze.target = { local: { y: 0, p: 0.05 } }; sal.life.gaze.next = 2; } else if (sal.life.dur === 99) { sal.life.act = null; sal.life.dur = 1; } } }
@@ -382,7 +406,7 @@ function frame(now) {
         if (was) { const tv = { x: 0, y: 2.6, z: -7.2 }; if ([...sig].some((c, i) => c === 'a' && was[i] !== 'a')) BK.vo.play('an_underway', tv, { v: 0.8 }); else if ([...sig].some((c, i) => c === 'f' && was[i] !== 'f')) BK.vo.play('an_final', tv, { v: 0.8 }); } } } }
   const ev = BK.S && BK.S.barEvent, blackout = !!(ev && ev.kind === 'blackout'), happy = !!(ev && ev.kind === 'happy');
   tv.blackout = blackout;
-  { const cn = BK.S && BK.S.cine, ce = cn ? BK.now() - cn.start : 1e9, flick = cn && /Intro$/.test(cn.kind) && ce > 400 && ce < 1500;
+  { const cn = BK.S && BK.S.cine, ce = cn ? BK.now() - cn.start : 1e9, flick = cn && /^(hunt|shake)Intro$/.test(cn.kind) && ce > 400 && ce < 1500;
     const tgt = blackout ? (Math.random() < 0.06 ? 0.5 : 0.05) : flick ? (Math.random() < 0.35 ? 0.45 : 0.95) : 1; for (const [l, base] of lightList) l.intensity += (base * tgt - l.intensity) * Math.min(1, dt * 9); party.intensity += ((happy ? 26 : 0) - party.intensity) * Math.min(1, dt * 4); party.color.setHSL((t * 0.25) % 1, 1, 0.55); }
   brawl.update(dt, t, BK.now());
   for (const n of bar.npcs) n.offscreen = !(zones.mask & n.P.group.layers.mask);
@@ -443,8 +467,9 @@ for (const d of [bar.doors.front, bar.doors.back]) d.traverse((o) => { o.userDat
 const zones = (() => { const B = bar.backroom.bounds, C = OUT.casino, V = (x, y, z) => new THREE.Vector3(x, y, z), fd = bar.doors.front, bd = bar.doors.back, fBase = fd.rotation.y, bBase = bd.rotation.y;
   return createZones({ scene, camera, bar: new THREE.Box3(V(-ROOM.x, -1, -ROOM.z), V(ROOM.x - 0.25, 12, ROOM.z - 0.25)), rest: new THREE.Box3(V(B.x0, -1, B.z0), V(B.x1, 12, B.z1)),
     store: new THREE.Box3(V(C.x0, -1, C.z0), V(C.x1, 12, C.z1)), frontDoor: { x: OUT.door.x, z: ROOM.z }, backDoor: { x: ROOM.x, z: (B.dz0 + B.dz1) / 2 }, storeDoor: { x: C.door.x, z: C.z0 },
+    club: new THREE.Box3(V(club.CLUB.x0, -1, club.CLUB.z0), V(club.CLUB.x1, 12, club.CLUB.z1)), clubDoor: { x: club.CLUB.door.x, z: club.CLUB.front },
     frontOpen: () => Math.abs(fd.rotation.y - (fd.userData.base ?? fBase)) > 0.03, backOpen: () => Math.abs(bd.rotation.y - (bd.userData.base ?? bBase)) > 0.03 }); })();
-zones.tagAll(); onPlace(zones.tag);
+zones.tagAll(); onPlace(zones.tag); BK.zonesMask = () => zones.mask;
 // ---------- mirrors (public/mirror.js): the Pro Shop's dressing mirror and the one over the restroom sinks ----------
 // You are never drawn in first person, so the mirror gets a stand-in: your own Bub, in your gear (the same look the others see),
 // following you, shown only while the mirror renders. Your first-person hands are hidden for that render.
@@ -471,6 +496,6 @@ BK.onFx = (m) => items.onFx(m); BK.onDrag = (m) => items.onDrag(m);
 stations.push({ get x() { const b = bumView.list()[0]; return b ? b.P.group.position.x : 1e9; }, get z() { const b = bumView.list()[0]; return b ? b.P.group.position.z : 1e9; }, r: 2.4, prio: 3,
   get text() { return `E - Give ${STORY.bum ? STORY.bum.name : 'Dusty'} a cigarette (he'll leave you alone next time)`; },
   on: () => !!(BK.S && BK.S.me && BK.S.me.inv && BK.S.me.inv.cigs > 0 && bumView.list()[0] && !['run', 'flee'].includes(bumView.list()[0].state)), act: () => { items.give(); BK.send({ type: 'bumCig' }); } });
-window.__dbg = { items, zones, brawl, renderer, scene, camera, me, games, roulette, bar, fx, tv, avatars, bottles, voice, keys };
+window.__dbg = { club, cops, polegame, items, zones, brawl, renderer, scene, camera, me, games, roulette, bar, fx, tv, avatars, bottles, voice, keys };
 requestAnimationFrame(frame);
 window.__worldReady = true; if (typeof window.render === 'function') window.render(); // drop the loading bar / loading screen

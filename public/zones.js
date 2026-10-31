@@ -9,14 +9,14 @@ import * as THREE from 'three';
 // The scene's point lights become "virtual": they keep their own position/colour/intensity (blackouts, the party light and cutscenes
 // still drive them), but only a pool of POOL (10) real lights is ever on, fed from the strongest ones nearby in visible zones and crossfaded.
 // The light count never changes, so shaders never recompile when you walk through a door.
-export const ZL = { bar: 1, out: 2, store: 3, rest: 4 };
+export const ZL = { bar: 1, out: 2, store: 3, rest: 4, club: 5 };
 const POOL = 10;
 
-export function createZones({ scene, camera, bar: barBox, rest: restBox, store: storeBox, frontDoor, backDoor, storeDoor, frontOpen, backOpen }) {
+export function createZones({ scene, camera, bar: barBox, rest: restBox, store: storeBox, club: clubBox, frontDoor, backDoor, storeDoor, clubDoor, frontOpen, backOpen }) {
   const _b = new THREE.Box3(), _v = new THREE.Vector3(), frustum = new THREE.Frustum(), _m = new THREE.Matrix4(), _s = new THREE.Sphere();
   const inside = (b, box, m = 0) => b.min.x >= box.min.x - m && b.max.x <= box.max.x + m && b.min.z >= box.min.z - m && b.max.z <= box.max.z + m;
   const touches = (b, box, m = 0.45) => b.max.x > box.min.x - m && b.min.x < box.max.x + m && b.max.z > box.min.z - m && b.min.z < box.max.z + m; // padded: a zone's walls (and whatever hangs on their outside) stay always-drawn
-  const Z = [[barBox, ZL.bar], [restBox, ZL.rest], [storeBox, ZL.store]];
+  const Z = [[barBox, ZL.bar], [restBox, ZL.rest], [storeBox, ZL.store], ...(clubBox ? [[clubBox, ZL.club]] : [])];
   const zoneOfBox = (b) => {
     for (const [box, z] of Z) if (inside(b, box)) return z;
     return Z.some(([box]) => touches(b, box)) ? 0 : ZL.out; // straddles a wall: always drawn (or split below)
@@ -61,21 +61,23 @@ export function createZones({ scene, camera, bar: barBox, rest: restBox, store: 
   }
 
   // ---- per frame: which zones the camera can see ----
-  const fd = new THREE.Vector3(frontDoor.x, 1.2, frontDoor.z), bd = new THREE.Vector3(backDoor.x, 1.2, backDoor.z), sd = new THREE.Vector3(storeDoor.x, 1.5, storeDoor.z);
+  const fd = new THREE.Vector3(frontDoor.x, 1.2, frontDoor.z), bd = new THREE.Vector3(backDoor.x, 1.2, backDoor.z), sd = new THREE.Vector3(storeDoor.x, 1.5, storeDoor.z), cd = clubDoor ? new THREE.Vector3(clubDoor.x, 1.5, clubDoor.z) : null;
   const seen = (p, r) => frustum.intersectsSphere(_s.set(p, r));
-  const api = { mask: 0xffff, barOn: true,
+  const api = { mask: 0xffff, barOn: true, ZL,
     tagAll() { for (const c of [...scene.children]) tag(c); initLights(); },
     tag,
     update() {
       const now = performance.now(), dt = Math.min(0.5, Math.max(0, (now - (api.last || now)) / 1000)); api.last = now; // own clock: the loop's dt can come in negative on its first frames
       camera.updateMatrixWorld(); frustum.setFromProjectionMatrix(_m.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
       const p = camera.position, z = zoneOfPoint(p), nearF = p.distanceTo(fd) < 1.7, nearB = p.distanceTo(bd) < 1.5, nearS = p.distanceTo(sd) < 2.0;
+      const nearC = !!cd && p.distanceTo(cd) < 2.0, cSee = !!cd && seen(cd, 2.4);
       const fThru = frontOpen() && seen(fd, 1.8), bThru = backOpen() && seen(bd, 1.6), sSee = seen(sd, 2.4); // a doorway you can see through
       const bar = z === ZL.bar || nearF || nearB || fThru || (z === ZL.rest && bThru);
       const rest = z === ZL.rest || nearB || (z === ZL.bar && bThru);
-      const out = z === ZL.out || nearF || nearS || (z === ZL.bar && fThru) || (z === ZL.store && sSee);
+      const out = z === ZL.out || nearF || nearS || (z === ZL.bar && fThru) || (z === ZL.store && sSee) || nearC || (z === ZL.club && cSee);
+      const club = !!cd && (z === ZL.club || nearC || (out && cSee));
       const store = z === ZL.store || nearS || (out && sSee);
-      const mask = 1 | (bar ? 1 << ZL.bar : 0) | (rest ? 1 << ZL.rest : 0) | (out ? 1 << ZL.out : 0) | (store ? 1 << ZL.store : 0);
+      const mask = 1 | (bar ? 1 << ZL.bar : 0) | (rest ? 1 << ZL.rest : 0) | (out ? 1 << ZL.out : 0) | (store ? 1 << ZL.store : 0) | (club ? 1 << ZL.club : 0);
       camera.layers.mask = api.mask = mask; api.barOn = bar;
       updateLights(dt, mask);
       if ((propT -= dt) <= 0) { propT = 1; propagate(); }
