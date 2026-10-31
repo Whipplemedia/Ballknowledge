@@ -9,7 +9,7 @@ import { label } from './textures.js';
 // and the staff (Meshy models, loaded only when the club opens). The games: Make It Rain at the stage, bottle service and
 // the athlete in the VIP, shot roulette with the shot girl, Amateur Night on the pole (public/polegame.js); the bachelor-party
 // groom waits at the end of the bar for whoever takes the job. Everything here is on the 'club' zone (zones.js).
-export const CLUB = { x0: -27, x1: -13, z0: -4, z1: 8, h: 4.2, front: 8.3, door: { x: -20, w: 1.2, h: 2.4 } };
+export const CLUB = { x0: -27, x1: -13, z0: -4, z1: 8, h: 4.2, front: 8.3, door: { x: -20, w: 2.0, h: 2.5 } };
 const STAGE = { x: -20, z: 0.4, h: 3.83 }, POLE = { x: -20, z: -0.56 }, DECK = 0.76; // main_stage.glb: pole at -0.3 of its 1.9 length, deck at 0.2 of its height
 export const CLUB_SPOTS = { rain: { x: -20, z: 4.5 }, dance: { x: -17.4, z: -1.7 }, rope: { x: -24.6, z: -0.3 }, athlete: { x: -23.4, z: -1.9 }, groom: { x: 7.2, z: -2.6 } };
 const SHOT_PATH = [[-24.5, 5.2], [-15.5, 5.2], [-15.5, 2.2], [-24.2, 2.2]];
@@ -27,6 +27,8 @@ export function createClub({ scene, BK, audio, camera, stations, obstacles, avat
   const brick = std({ color: 0x1a1418, roughness: 0.95 });
   const piece = (mat, x0, x1, y0, y1, uv) => { const m = plane(x1 - x0, y1 - y0, mat, (x0 + x1) / 2, (y0 + y1) / 2, C.front, 0); if (uv) { const a = m.geometry.attributes.uv; [[x0, y1], [x1, y1], [x0, y0], [x1, y0]].forEach(([x, y], k) => a.setXY(k, (x - AX0) / AW, y / AH)); a.needsUpdate = true; } return m; };
   piece(artMat, AX0, d0, 0, AH, true); piece(artMat, d1, AX1, 0, AH, true); piece(artMat, d0, d1, D.h, AH, true);
+  { const gold = std({ color: 0xd4af37, metalness: 0.6, roughness: 0.35, emissive: 0x3a2a08 }); // a gold frame round the (widened) doorway on the street side
+    box(0.16, D.h + 0.16, 0.14, gold, d0 - 0.08, (D.h + 0.16) / 2, C.front + 0.05); box(0.16, D.h + 0.16, 0.14, gold, d1 + 0.08, (D.h + 0.16) / 2, C.front + 0.05); box(D.w + 0.32, 0.16, 0.14, gold, D.x, D.h + 0.08, C.front + 0.05); }
   piece(brick, -28, AX0, 0, 9); piece(brick, AX1, -12, 0, 9); piece(brick, AX0, AX1, AH, 9);
   { const l = new THREE.PointLight(0xff4fb0, 14, 9, 1.6); l.position.set(D.x, 4.4, C.front + 1.2); l.userData.noDim = true; scene.add(l); } // the neon's glow on the sidewalk
   const closed = plane(D.w, D.h, std({ color: 0x0c0a10 }), D.x, D.h / 2, C.front + 0.01); // nights 1-2: the door's shut
@@ -111,10 +113,10 @@ export function createClub({ scene, BK, audio, camera, stations, obstacles, avat
   const S_ = () => BK.S, on = () => !!(S_() && S_().n3 && S_().n3.on), me_ = () => S_() && S_().n3 && S_().n3.me;
   const npcAt = (n) => () => (cast[n] ? cast[n].P.group.position : { x: 1e9, z: 1e9 });
   stations.push(
-    { x: CLUB_SPOTS.rain.x, z: CLUB_SPOTS.rain.z, r: 1.8, on: () => on() && !BK.clubDancing(), get text() { return rain ? 'E - Put the money gun away (click fires $20)' : 'E - Make it rain ($20 a shot, every $200 gets you gossip)'; }, act: () => { rain = !rain; gun.visible = rain; audio.sfx(rain ? 'chip' : 'click'); } },
+    { x: CLUB_SPOTS.rain.x, z: CLUB_SPOTS.rain.z, r: 1.8, on: () => on() && !BK.clubDancing(), get text() { const left = 200 - ((me_() && me_().rain) || 0); return rain ? `E - Put the money gun away (click fires $20 · $${left} more and a dancer talks)` : 'E - Make it rain ($20 a shot - every $200 on stage, a dancer answers a question about the game)'; }, act: () => { rain = !rain; gun.visible = rain; audio.sfx(rain ? 'chip' : 'click'); } },
     { x: CLUB_SPOTS.dance.x, z: CLUB_SPOTS.dance.z, r: 1.6, on: () => on() && !(S_().n3.stage), text: 'E - Amateur Night: dance on the pole for tips', act: () => BK.send({ type: 'danceStart' }) },
     { x: CLUB_SPOTS.rope.x, z: CLUB_SPOTS.rope.z, r: 1.8, on: () => on() && !(me_() && me_().vip), text: 'E - Bottle service in the VIP ($300)', act: () => BK.send({ type: 'vip' }) },
-    { get x() { return npcAt('vip_athlete')().x; }, get z() { return npcAt('vip_athlete')().z + 0.9; }, r: 1.7, on: () => on() && !!(me_() && me_().vip), text: 'E - Buy Primetime a drink ($50) - he talks', act: () => BK.send({ type: 'athlete' }) },
+    { get x() { return npcAt('vip_athlete')().x; }, get z() { return npcAt('vip_athlete')().z + 0.9; }, r: 1.7, on: () => on() && !!(me_() && me_().vip), text: 'E - Talk to Primetime (a $50 drink buys one question about the game)', act: () => BK.send({ type: 'athleteTalk' }) },
     { get x() { return npcAt('shot_girl')().x; }, get z() { return npcAt('shot_girl')().z; }, r: 1.6, on: () => on(), text: 'E - Shot roulette with Candy', act: () => BK.openPanel && BK.openPanel('shots') },
     { get x() { return npcAt('groom')().x; }, get z() { return npcAt('groom')().z; }, r: 1.8, on: () => { const j = S_() && S_().me && S_().me.job; return on() && j && j.kind === 'groom' && j.stage === 'go'; }, text: 'E - "Come on, buddy. Your party\'s next door."', act: () => BK.send({ type: 'jobAct' }) },
   );

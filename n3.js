@@ -29,7 +29,7 @@ module.exports = function createN3({ feed, toast, broadcast, plist, money, send,
     room.n3 = { on: true, stage: null, groomBy: null, introAt: cine + 400, cops: [
       { id: 'cop1', name: 'Officer Kowalski', x: CAR.x - 1.4, z: CAR.z - 1.3, ry: 0, wp: 1, state: 'car', target: null, until: 0, moving: false },
       { id: 'cop2', name: 'Officer Reyes', x: CAR.x + 1.4, z: CAR.z - 1.3, ry: 0, wp: 5, state: 'car', target: null, until: 0, moving: false }] };
-    for (const p of room.players.values()) Object.assign(p, { rain: 0, vip: false, athlete: {}, shots: null, sober: null, carUntil: 0, copImmune: 0 });
+    for (const p of room.players.values()) Object.assign(p, { rain: 0, whisper: null, vip: false, athlete: {}, shots: null, sober: null, carUntil: 0, copImmune: 0 });
     room.n3Timer = setInterval(() => step(room), STEP_MS);
   }
   function stop(room) { clearInterval(room.n3Timer); room.n3Timer = null; if (room.n3) for (const p of room.players.values()) send(p, { type: 'cops', c: null }); }
@@ -79,7 +79,7 @@ module.exports = function createN3({ feed, toast, broadcast, plist, money, send,
         if (!play || !inClub(p.x, p.z)) return true; const n = Math.max(1, Math.min(10, Math.floor(Number(m.n) || 1))), k = Math.min(n, Math.floor(p.money / RAIN_SHOT)); if (k <= 0) { toast(p, 'You\'re out of singles.', 'err'); return true; }
         p.money -= k * RAIN_SHOT; p.rain = (p.rain || 0) + k * RAIN_SHOT; N.hype = Math.min(100, (N.hype || 0) + k * 3); N.rainAt = now; N.rainBy = p.id;
         if (p.rain >= RAIN_TIP) { p.rain -= RAIN_TIP; const ev = room.events.find((e) => e.status === 'open');
-          if (ev) { const t = tipFor(room, ev, 'dancer:' + p.id); send(p, { type: 'tip', who: pick(['Destiny', 'Diamond']), side: t.side, team: ev[t.side], text: `${pick(['Okay, don\'t tell anyone, but', 'Between us?', 'Babe. Listen.'])} ${ev[t.side]}'s coach was in here last night celebrating early. ${t.side === 'a' ? ev.a : ev.b} wins this one.`, acc: t.acc }); toast(p, `💋 The dancer leans in with some gossip on ${ev.label}.`, 'win'); }
+          if (ev) { p.whisper = { from: 'dancer', who: pick(['Destiny', 'Diamond']), ev: ev.idx }; toast(p, '💋 A dancer leans in close. She wants to tell you something.', 'win'); }
           else toast(p, '💋 "Come back when there\'s a game on, sugar."', 'info'); }
         broadcast(room); return true;
       }
@@ -87,13 +87,23 @@ module.exports = function createN3({ feed, toast, broadcast, plist, money, send,
         if (!play || p.vip) return true; if (p.money < VIP_PRICE) { toast(p, `Bottle service is ${money(VIP_PRICE)}.`, 'err'); return true; }
         p.money -= VIP_PRICE; p.vip = true; feed(room, `🍾 ${p.name} got bottle service at The End Zone.`); toast(p, '🍾 You\'re in the VIP. Buy the athlete a drink - he talks when he drinks.', 'win'); broadcast(room); return true;
       }
-      case 'athlete': { // the star in the VIP: a drink gets you injury news on the open game, once a game
+      case 'athleteTalk': { // the star in the VIP: buy him a drink and ask one question about the open game, once a game
         if (!play) return true; if (!p.vip) { toast(p, 'Bouncer: "VIP only, buddy. Bottle service first."', 'err'); return true; }
         const ev = room.events.find((e) => e.status === 'open'); if (!ev) { toast(p, '"No game on? Then I\'m off the clock, bro."', 'info'); return true; }
         p.athlete = p.athlete || {}; if (p.athlete[ev.idx]) { toast(p, '"I already told you everything, bro."', 'info'); return true; }
-        if (p.money < ATHLETE_PRICE) { toast(p, `A drink for him is ${money(ATHLETE_PRICE)}.`, 'err'); return true; }
-        p.money -= ATHLETE_PRICE; const t = tipFor(room, ev, 'athlete:' + p.id, 0.75), bad = t.side === 'a' ? ev.b : ev.a; p.athlete[ev.idx] = 1;
-        send(p, { type: 'tip', who: 'The athlete', side: t.side, team: ev[t.side], text: `"Off the record? ${bad}'s best player rolled his ankle at practice. They're hiding it. ${ev[t.side]} all day."`, acc: t.acc }); broadcast(room); return true;
+        p.whisper = { from: 'athlete', who: 'Primetime', ev: ev.idx }; broadcast(room); return true;
+      }
+      case 'askCancel': if (p.whisper && p.whisper.from === 'athlete') { p.whisper = null; broadcast(room); } return true;
+      case 'ask': { // a question for whoever's whispering (the dancer after $200 on stage, or the athlete for a $50 drink)
+        const w = p.whisper, q = Math.floor(Number(m.q)); if (!w || !(q >= 0 && q < 3)) return true;
+        const ev = room.events.find((e) => e.status === 'open' && e.idx === w.ev); if (!ev) { p.whisper = null; toast(p, 'Too late - that game\'s betting closed.', 'info'); broadcast(room); return true; }
+        if (w.from === 'athlete') { if (p.money < ATHLETE_PRICE) { toast(p, `A drink for him is ${money(ATHLETE_PRICE)}.`, 'err'); return true; } p.money -= ATHLETE_PRICE; p.athlete = p.athlete || {}; p.athlete[ev.idx] = 1; }
+        const t = tipFor(room, ev, w.from + ':' + p.id, w.from === 'athlete' ? 0.75 : 0.7), win = ev[t.side], lose = t.side === 'a' ? ev.b : ev.a;
+        const A = w.from === 'athlete'
+          ? [`"Off the record? ${win} all day. Bet the house."`, `"${lose}'s best player rolled his ankle at practice. They're hiding it."`, `"${lose}'s locker room is a mess. Two guys fighting about minutes. ${win} walks."`]
+          : [`"${win}. Trust me, babe - I hear things in here."`, `"${lose}'s best player was in here Tuesday on crutches. Don't tell anyone I said that."`, `"${win}'s coach was in here last night celebrating early. Like, real early."`];
+        p.whisper = null;
+        send(p, { type: 'tip', who: w.who, from: w.from, q, side: t.side, team: win, label: ev.label, text: A[q], acc: t.acc }); broadcast(room); return true;
       }
       case 'shotStart': { // shot roulette with the shot girl: six shots, one is ghost pepper. Each safe one grows the pot; cash out any time
         if (!play || p.shots) return true; const st = SHOT_STAKES.includes(Number(m.stake)) ? Number(m.stake) : 25; if (p.money < st) { toast(p, 'Not enough cash.', 'err'); return true; }
@@ -117,9 +127,9 @@ module.exports = function createN3({ feed, toast, broadcast, plist, money, send,
       default: return false;
     }
   }
-  const view = (room, p) => { const N = room.n3; if (!N) return null; const s = N.stage;
+  const view = (room, p) => { const N = room.n3; if (!N) return null; const s = N.stage, w = p.whisper, wev = w && room.events.find((e) => e.status === 'open' && e.idx === w.ev); if (w && !wev) p.whisper = null;
     return { on: N.on, stage: s ? { pid: s.pid, name: s.name, until: s.until, move: s.move } : null, groomBy: N.groomBy, groomDone: !!N.groomDone, hype: N.hype || 0,
-      me: { vip: !!p.vip, shots: p.shots ? { stake: p.shots.stake, pot: p.shots.pot, n: p.shots.n, taken: p.shots.taken } : null, sober: p.sober ? { until: p.sober.until } : null, carUntil: p.carUntil || 0, rain: p.rain || 0 } }; };
+      me: { vip: !!p.vip, shots: p.shots ? { stake: p.shots.stake, pot: p.shots.pot, n: p.shots.n, taken: p.shots.taken } : null, sober: p.sober ? { until: p.sober.until } : null, carUntil: p.carUntil || 0, rain: p.rain || 0, whisper: wev ? { from: w.from, who: w.who, label: wev.label, a: wev.a, b: wev.b } : null } }; };
   const busy = (p) => !!(p.sober || p.carUntil > Date.now());
   return { start, stop, handle, view, busy, inClub, CLUB };
 };

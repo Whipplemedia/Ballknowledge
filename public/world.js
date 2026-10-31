@@ -272,7 +272,7 @@ const SPACES = (() => { const B = bar.backroom.bounds, D = OUT.door, C = OUT.cas
     { x0: L.x0, x1: L.x1, z0: S.z1 + 3, z1: C.z0, px: 0.3, pz: 0.3, h: 60, gated: true },                                // gas-station lot
     { x0: C.door.x - C.door.w / 2, x1: C.door.x + C.door.w / 2, z0: C.z0 - 0.5, z1: C.z0 + 0.5, px: 0.28, pz: 0, h: C.door.h, gated: true },
     { x0: C.x0 + 0.06, x1: C.x1 - 0.06, z0: C.z0 + 0.06, z1: C.z1 - 0.06, px: 0.32, pz: 0.32, h: C.h, gated: true },   // casino
-    { x0: club.CLUB.door.x - club.CLUB.door.w / 2, x1: club.CLUB.door.x + club.CLUB.door.w / 2, z0: club.CLUB.z1 - 0.3, z1: club.CLUB.front + 0.6, px: 0.28, pz: 0, h: club.CLUB.door.h, gated: 'club' }, // The End Zone's door (night 3)
+    { x0: club.CLUB.door.x - club.CLUB.door.w / 2, x1: club.CLUB.door.x + club.CLUB.door.w / 2, z0: club.CLUB.z1 - 1.0, z1: club.CLUB.front + 0.9, px: 0.2, pz: 0, h: club.CLUB.door.h, gated: 'club' }, // The End Zone's door (night 3)
     { x0: club.CLUB.x0 + 0.06, x1: club.CLUB.x1 - 0.06, z0: club.CLUB.z0 + 0.06, z1: club.CLUB.z1 - 0.06, px: 0.32, pz: 0.32, h: club.CLUB.h, gated: 'club' },
   ]; })();
 const spaceAt = (x, z, walk = true) => { for (const s of SPACES) { if (walk && s.gated && !(s.gated === 'rest' ? openRest() : s.gated === 'club' ? openClub() : openOut())) continue; const px = walk ? s.px : 0, pz = walk ? s.pz : 0; if (x >= s.x0 + px && x <= s.x1 - px && z >= s.z0 + pz && z <= s.z1 - pz) return s; } return null; };

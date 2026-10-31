@@ -59,7 +59,7 @@ function connect(msg) {
     else if (m.type === 'cops') window.BK.onCops && window.BK.onCops(m); // night 3 (public/cops.js, public/club.js)
     else if (m.type === 'sobriety') { closePanel(); window.BK.onSobriety && window.BK.onSobriety(m); }
     else if (m.type === 'stage') window.BK.onStage && window.BK.onStage(m);
-    else if (m.type === 'tip') { (ui.gossip = ui.gossip || []).unshift({ ...m, at: Date.now(), idx: S && S.cur ? S.cur.idx : -1 }); toast(`💬 ${m.who}: ${m.text}`, 'win', 14000); render(); }
+    else if (m.type === 'tip') { (ui.gossip = ui.gossip || []).unshift({ ...m, at: Date.now(), idx: S && S.cur ? S.cur.idx : -1 }); ui.answer = { ...m, until: Date.now() + 16000 }; window.BK.sfx && window.BK.sfx('coin'); render(); setTimeout(render, 16100); }
     else if (m.type === 'fx') window.BK.onFx && window.BK.onFx(m);
     else if (m.type === 'drag') window.BK.onDrag && window.BK.onDrag(m);
     else if (m.type === 'scratch') { ui.scratch = m.t; ui.scratchDone = false; openPanel('scratch'); }
@@ -425,7 +425,7 @@ function gameView() {
       <span class="w-buzz" title="Drunk confidence">🍺<span class="dm"><span id="drunkfill" style="width:${me.drunk}%"></span></span></span></div>
     ${crew ? `<div class="hud-crew">${playerList()}</div>` : ''}
     ${ui.reconnecting ? '<div class="reconn">📶 Connection lost - reconnecting...</div>' : ''}
-    ${eventBanner()}${napkinOn() ? napkinHud() : bountyHud()}${jobHud()}${shakeBanner()}
+    ${eventBanner()}${whisperHud()}${napkinOn() ? napkinHud() : bountyHud()}${jobHud()}${shakeBanner()}
     ${hunt ? huntBanner() : ''}
     ${tickerHtml()}
   </div>
@@ -490,7 +490,7 @@ function bookView() {
       <div class="clock"><div class="muted">BETTING CLOSES IN</div><div id="tl2" class="tl2"></div></div></div>
     <div class="tlbar"><div id="tlbar"></div></div>
     <div class="matchup">${teamCard(A, 'a', cur, ev)}<div class="vs">VS</div>${teamCard(B, 'b', cur, ev)}</div>
-    ${(ui.gossip || []).filter((gs) => gs.idx === cur.idx).map((gs) => `<div class="gossip">💬 <b>${esc(gs.who)}:</b> ${esc(gs.text)}</div>`).join('')}
+    ${(ui.gossip || []).filter((gs) => gs.idx === cur.idx).map((gs) => `<div class="gossip"><span class="gs-tag">INSIDE INFO</span> <b>${esc(gs.who)}</b> ${esc(gs.text)} <span class="gs-lean">Lean: <b>${esc(gs.team)}</b></span></div>`).join('')}
     ${ev.final ? '<div class="champ-note">To win the game you need a <b>Moneyline</b> bet on the champion of this game.</div>' : ''}
     ${cur.tip ? `<div class="tipcard">🗒️ <b>${esc(cur.tip.from)}</b> slid a napkin across the bar: "I like <b>${esc(cur.intel[cur.tip.side].name)}</b> tonight." <span class="muted">(unverified)</span></div>` : ''}
     ${h ? hintView(h) : ''}
@@ -853,6 +853,19 @@ const FIGHT_STAKES = [50, 100, 300];
 function fightOpen() { const be = S && S.barEvent; return !!(be && be.kind === 'fight' && !be.mine && now() < be.betUntil); }
 function fightBet(side) { if (!fightOpen()) return; if (S.me.money < ui.fightStake) return toast(`You need ${$$(ui.fightStake)} to bet that.`, 'err'); window.BK.sfx && window.BK.sfx('chip'); send({ type: 'fightBet', side, stake: ui.fightStake }); }
 function fightStakeNext() { ui.fightStake = FIGHT_STAKES[(FIGHT_STAKES.indexOf(ui.fightStake) + 1) % FIGHT_STAKES.length]; render(); }
+// night 3: a dancer (after $200 on stage) or the VIP athlete (for a $50 drink) leans in - pick a question, get the answer on the open game.
+// HUD buttons get number hotkeys, so this works with the mouse locked (and the money gun out).
+const WHISPER_Q = ['Who wins tonight?', 'Anybody hurt?', 'Heard anything else?'];
+function whisperHud() {
+  const w = S.n3 && S.n3.me && S.n3.me.whisper, a = ui.answer && ui.answer.until > Date.now() ? ui.answer : null;
+  if (w) { const ath = w.from === 'athlete';
+    return `<div class="hud-event whisper"><div class="wh-who">${ath ? '🏈' : '💋'} ${esc(w.who)} ${ath ? 'leans back in the booth' : 'leans in close'}</div>
+      <div class="wh-sub">${ath ? `Buy him a drink (${$$(50)}) and ask about` : 'She\'ll tell you one thing about'} <b>${esc(w.label)}</b>: ${esc(w.a)} vs ${esc(w.b)}</div>
+      <div class="wh-qs">${WHISPER_Q.map((q, i) => `<button onclick="send({type:'ask',q:${i}})">"${q}"</button>`).join('')}${ath ? `<button class="ghost" onclick="send({type:'askCancel'})">Never mind</button>` : ''}</div></div>`; }
+  if (a) return `<div class="hud-event whisper ans"><div class="wh-who">${a.from === 'athlete' ? '🏈' : '💋'} ${esc(a.who)}</div>${a.q !== undefined ? `<div class="wh-q">You: "${WHISPER_Q[a.q]}"</div>` : ''}<div class="wh-a">${esc(a.text)}</div>
+    <div class="wh-lean">INSIDE INFO on ${esc(a.label || 'this game')}: lean <b>${esc(a.team)}</b> <span class="muted">(saved in the Sportsbook)</span></div></div>`;
+  return '';
+}
 function eventBanner() {
   const be = S.barEvent, fin = S.cur && S.events && S.events[S.cur.idx] && S.events[S.cur.idx].final && S.events[S.cur.idx].status === 'open' ? S.events[S.cur.idx] : null;
   const dare = S.chaseDare;
