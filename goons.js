@@ -12,7 +12,7 @@ const STEP_MS = 100;
 const T = { huntIntro: 7000, shakeIntro: 4500, beaten: 6000, kill: 12500, leave: 4500, grabTake: 2000, patDown: 2600, stun: 2500, regrab: 3000 };
 // hitmen only go down to bottles: fists bounce off, a free-moving hitman sidesteps some throws (one that is busy holding
 // someone can't), and a downed one gets back up after TUNE.getUp unless the crew drops them all at the same time
-const TUNE = { dodge: 0.3, getUp: 13000, regain: 0.5, breakFree: 10, regrab: 4000 }; // playtest: the first tuning was near-impossible. breakFree = Space presses within 2.5s to wrench loose // regain: share of his hits a hitman gets back when he stands up
+const TUNE = { dodge: 0.3, getUp: 13000, regain: 0.5, breakFree: 10, regrab: 4000, caughtEnd: 20000 }; // caughtEnd: once a hitman grabs someone, the hunt is over within 20 s (playtest: being held for the rest of the 100 s dragged) // playtest: the first tuning was near-impossible. breakFree = Space presses within 2.5s to wrench loose // regain: share of his hits a hitman gets back when he stands up
 const SPEED = { enter: 1.7, hitman: 2.4, collector: 2.2, leave: 2.2, drag: 1.5 }; // players walk 3.8 and run 6.2: you can get away
 
 // ---- navigation: a 0.4 m grid of free cells (furniture circles + walls blocked, door corridors open), BFS distance fields
@@ -175,7 +175,7 @@ module.exports = function createGoons({ feed, toast, broadcast, plist, money, se
         if (!p) continue;
         if (g.state === 'chase') {
           if (dist(g, p) > 1.05) route((x, z) => fieldFor(room, 'f' + Math.round(x * 2) + ',' + Math.round(z * 2), x, z), g, p.x, p.z, G.kind === 'hunt' ? SPEED.hitman : SPEED.collector, dt); // wherever you are: the street, the gas station
-          else if (now >= g.cool && !p.heldBy && !(p.slippery > now) && !(p.koUntil > now && G.kind !== 'hunt')) { g.state = 'grab'; p.heldBy = g.id; g.until = now + (G.kind === 'hunt' ? T.grabTake : T.patDown); g.ry = Math.atan2(-(p.x - g.x), -(p.z - g.z)); toast(p, G.kind === 'hunt' ? 'A hitman has you! Mash SPACE to break free - crew, bottle him now.' : 'A collector is going through your pockets... mash SPACE to shake him off.', 'mob'); }
+          else if (now >= g.cool && !p.heldBy && !(p.slippery > now) && !(p.koUntil > now && G.kind !== 'hunt')) { g.state = 'grab'; p.heldBy = g.id; if (G.kind === 'hunt' && room.huntEnd > now + TUNE.caughtEnd) { room.huntEnd = now + TUNE.caughtEnd; feed(room, `⏱️ A hitman has ${p.name}! 20 seconds to drop them all or pay up.`); broadcast(room); } g.until = now + (G.kind === 'hunt' ? T.grabTake : T.patDown); g.ry = Math.atan2(-(p.x - g.x), -(p.z - g.z)); toast(p, G.kind === 'hunt' ? 'A hitman has you! Mash SPACE to break free - crew, bottle him now.' : 'A collector is going through your pockets... mash SPACE to shake him off.', 'mob'); }
           else g.ry = Math.atan2(-(p.x - g.x), -(p.z - g.z));
         } else if (g.state === 'grab') {
           g.ry = Math.atan2(-(p.x - g.x), -(p.z - g.z));

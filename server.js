@@ -59,7 +59,7 @@ const POOL_MULT = { rookie: 1.7, shark: 2.6 };
 // Sal is now the bank of last resort: loans (and debts that escaped the hitmen, +50%, carried to the next night) are all the
 // mob cares about. His collectors only come for people who owe him; the hitmen only for what's unpaid at closing.
 const STORY = JSON.parse(fs.readFileSync(path.join(__dirname, 'public', 'story.json'), 'utf8'));
-const NIGHTS = 3, ROLL_VIG = 1.5, FLOOR_CASH = 250; // under $250 at the start of a night: the owner slips you the difference from the till
+const NIGHTS = 3, ROLL_VIG = 1.5, FLOOR_CASH = 250, BUM_GAP = 60000; // BUM_GAP: Dusty keeps a minute clear of check-ins, Sal's men and bar events // under $250 at the start of a night: the owner slips you the difference from the till
 const BUYOUT_PER = { campaign: 1500, single: 600 }, PERMIT_FEE = 150, CHECK_AT = [0.33, 0.7]; // buyout per player; the developer's check-ins (share of the night's games)
 const FORMATS = {
   campaign: { label: '📖 Campaign (3 nights)', blurb: `${STORY.dev.full} wants ${STORY.bar} gone. Win enough over three nights to buy him out. Winnings go to the fund; your bankroll carries over.` },
@@ -271,7 +271,7 @@ function startGame(room) {
   room.fund = fund; room.crewStart = start; const nightsLeft = camp ? camp.nights - night + 1 : 1;
   room.goal = Math.max(0, Math.ceil((fund.buyout - fund.banked) / nightsLeft / 50) * 50);
   room.quota = [...CHECK_AT.map((f, i) => ({ kind: 'mid', idx: Math.max(i, Math.round(nE * f) - 1), frac: f })), { kind: 'final', idx: nE - 1, frac: 1 }].map((q) => ({ ...q, target: Math.round(start + room.goal * q.frac), status: 'pending', crew: 0 }));
-  room.verdictAt = 0; room.deposited = false; room.deposit = 0; room.nextBum = now + (process.env.BK_BUM_SOON ? 20000 : dur(55000 + rnd(35000))); /* BK_BUM_SOON: dev/testing only */ bum.stop(room); bum.ensure(room); /* Dusty is out on the street all night */ room.pendingShake = 0; room.zynAt = 0; room.zynSpot = rnd(2);
+  room.verdictAt = 0; room.deposited = false; room.deposit = 0; room.nextBum = now + (process.env.BK_BUM_SOON ? 20000 : dur(240000 + rnd(60000))); room.lastMark = null; /* first try after about game 2 */ /* BK_BUM_SOON: dev/testing only */ bum.stop(room); bum.ensure(room); /* Dusty is out on the street all night */ room.pendingShake = 0; room.zynAt = 0; room.zynSpot = rnd(2);
   room.shake = null; room.barEvent = null; room.nextBarEvent = now + dur(55000 + rnd(30000)); room.lastBarKind = null;
   room.altered = false; room.finalWinner = null; room.phase = 'play'; room.paper = paperFor(room);
   feed(room, season.fake ? `${sport.emoji} Welcome to the ${season.league}. None of these teams exist and nothing is written yet - every result is rolled live from the odds.` : `${sport.emoji} A season has been assigned. Nobody will tell you which one. Place your bets before the clock runs out.`);
@@ -311,9 +311,10 @@ function tick(room) {
   if (room.guided && !room.trained && !room.shake && !room.goons && !bum.busy(room) && room.events.some((e) => e.status === 'airing')) { startTraining(room); changed = true; }
   if (room.pendingShake && now >= room.pendingShake && !room.goons && !(room.cine && now < room.cine.until)) { room.pendingShake = 0; bum.scram(room); startShake(room); changed = true; }
   if (!room.bum) bum.ensure(room); // (after a restart)
-  if (!bum.busy(room) && !room.shake && !room.goons && !(room.cine && now < room.cine.until) && now >= room.nextBum) { // chaos: the bum goes for somebody's wallet
-    room.nextBum = now + dur(80000 + rnd(60000)); const marked = plist(room).find((q) => q.atmMark && q.money >= 40 && q.connected !== false && !q.dead); if (marked) marked.atmMark = false;
-    const t = marked || bum.pickTarget(room, false);
+  const gap = dur(BUM_GAP), quiet = !room.barEvent && !(room.pendingShake && room.pendingShake - now < gap) && !(room.cine && now < room.cine.until + gap) && now - (room.lastLoud || 0) > gap; // a minute clear of check-ins, Sal's men and bar events
+  if (!bum.busy(room) && !room.shake && !room.goons && quiet && now >= room.nextBum) { // chaos: the bum goes for somebody's wallet, about 4-5 times a night
+    room.nextBum = now + dur(240000 + rnd(120000)); const marked = plist(room).find((q) => q.atmMark && q.money >= 40 && q.connected !== false && !q.dead); if (marked) marked.atmMark = false;
+    const t = marked || bum.pickTarget(room, false, room.lastMark); if (t) room.lastMark = t.id;
     if (t && t.bumPass) { t.bumPass = false; toast(t, `${STORY.bum ? STORY.bum.name : 'Dusty'} was coming your way - then he recognized you, nodded, and kept walking. That cigarette paid off.`, 'win'); changed = true; }
     else if (t) { bum.spawn(room, t, false); changed = true; } }
   if (room.drops && room.drops.some((d) => now >= d.until)) { room.drops = room.drops.filter((d) => now < d.until); changed = true; }
@@ -436,6 +437,7 @@ function startShake(room) {
   feed(room, `🔫 Sal's collectors walk in for an installment: ${money(tax)} from ${owing(room).map((p) => p.name).join(', ')}. Pay it - or throw them out.`);
 }
 function endShake(room, beaten) {
+  room.lastLoud = Date.now(); // Dusty waits a minute after it (BUM_GAP)
   const sh = room.shake; if (!sh) return; room.shake = null;
   if (room.goons && room.goons.kind === 'shake' && room.goons.phase !== 'outro') goons.outro(room, beaten ? 'beaten' : 'leave');
   if (beaten) { tallyOf(room).fights++; feed(room, `👊 The crew threw Sal's collectors out. The loans are still due at closing time.`); awardAll(room, 'shakeBeat'); return; }
@@ -459,6 +461,7 @@ function startBarEvent(room) {
   else { const nat = open.sa > open.sb ? 'a' : 'b', side = Math.random() < 0.62 ? nat : nat === 'a' ? 'b' : 'a', who = pick(['Old Pete', 'Dizzy Dave', 'The Guy In The Corner', 'Sketchy Steve']); room.barEvent = { kind, until: now + dur(45000), title: 'HOT TIP', text: `${who} slides you a napkin...`, tip: { from: who, idx: open.idx, side } }; feed(room, `🗒️ ${who} whispers a hot tip to the crew.`); }
 }
 function endBarEvent(room) {
+  room.lastLoud = Date.now(); // Dusty waits a minute after it (BUM_GAP)
   const be = room.barEvent; room.barEvent = null; room.nextBarEvent = Date.now() + dur(65000 + rnd(50000));
   if (be.kind === 'fight') {
     const h = be.hits || { red: 0, blue: 0 }, pRed = clamp(0.5 + 0.12 * (h.blue - h.red), 0.15, 0.85), win = Math.random() < pRed ? 'red' : 'blue'; /* every bottle on a fighter tips it against him */

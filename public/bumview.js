@@ -13,7 +13,8 @@ export function createBumView({ scene, audio }) {
     const P = makePreset('bum'); P.group.position.set(x, 0, z); P.group.traverse((c) => { c.userData.goonId = 'bum'; });
     const tag = label(name, '#c8b48a', 0.75); tag.position.y = 2.3; P.group.add(tag);
     const loot = label('💰', '#7dff9a', 0.6); loot.position.y = 2.62; loot.visible = false; P.group.add(loot);
-    scene.add(P.group); return { id: 'bum', P, loot, lootAmt: 0, dizzy: makeDizzy(scene), tx: x, tz: z, try: 0, state: 'walk', moving: 0, hp: 2 };
+    const say = label('"Hey buddy, got a minute?"', '#ffe9b8', 0.62); say.position.y = 2.62; say.visible = false; P.group.add(say); // the tell: he's coming for somebody
+    scene.add(P.group); return { id: 'bum', P, loot, say, lootAmt: 0, dizzy: makeDizzy(scene), tx: x, tz: z, try: 0, state: 'walk', moving: 0, hp: 2 };
   }
   function drop() { if (!o) return; scene.remove(o.P.group); o.dizzy.update(1, 0, null, false); scene.remove(o.dizzy.root); o = null; }
   return {
@@ -24,6 +25,8 @@ export function createBumView({ scene, audio }) {
       if (hit && hp < o.hp) audio.sfx('punch', { pos: { x, y: 1.3, z } });
       if (state !== o.state && state === 'flee' && loot > 0) audio.sfx('coin', { pos: { x, y: 1.2, z } });
       if (state !== o.state && state === 'run') audio.sfx('boing', { pos: { x, y: 1.4, z } });
+      if (state !== o.state && state === 'walk') audio.sfx('murmur', { pos: { x, y: 1.6, z }, v: 0.7 });
+      o.say.visible = state === 'walk' && !(loot > 0);
       Object.assign(o, { tx: x, tz: z, try: ry, state, hp, moving, smoking: !!smoking }); // smoking: somebody gave him a cigarette (public/items.js puts it in his mouth)
       if (loot !== o.lootAmt) { o.lootAmt = loot; o.P.group.remove(o.loot); o.loot = label(loot > 0 ? `💰 $${loot}` : '', '#7dff9a', 0.6); o.loot.position.y = 2.62; o.loot.visible = loot > 0; o.P.group.add(o.loot); }
     },

@@ -51,8 +51,9 @@ module.exports = function createBum({ feed, toast, broadcast, plist, money, send
   function stop(room) { clearInterval(room.bumTimer); room.bumTimer = null; room.bum = null; fields.delete(room.code); for (const p of room.players.values()) send(p, { type: 'bum', b: null }); }
 
   // somebody to rob: connected, carrying cash, not in the restroom. Players outside the bar look like easier marks.
-  function pickTarget(room, avoidBar) {
-    const ok = plist(room).filter((p) => p.connected !== false && p.money >= 150 && !p.dead && !inRestroom(p.x || 0, p.z || 0) && !(avoidBar && inBar(p.x || 0, p.z || 0)));
+  function pickTarget(room, avoidBar, notId = null) { // notId: last time's mark (never the same player twice in a row, unless they're the only one)
+    let ok = plist(room).filter((p) => p.connected !== false && p.money >= 150 && !p.dead && !inRestroom(p.x || 0, p.z || 0) && !(avoidBar && inBar(p.x || 0, p.z || 0)));
+    if (ok.length > 1 && notId) ok = ok.filter((p) => p.id !== notId);
     if (!ok.length) return null;
     const w = ok.map((p) => (inBar(p.x || 0, p.z || 0) ? 1 : 3)), tot = w.reduce((a, b) => a + b, 0); let r = Math.random() * tot;
     for (let i = 0; i < ok.length; i++) { r -= w[i]; if (r <= 0) return ok[i]; } return ok[0];
