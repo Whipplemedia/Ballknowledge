@@ -113,6 +113,7 @@ export function createCine({ camera, BK, doors, goons, audio, backroom, owner, d
         return 'camera';
       }
       if (c.kind === 'opening' || c.kind === 'checkIn') { storyShot(c, t, dt); return 'camera'; }
+      if (c.kind === 'busted' && cops) { cops.bustedScene(c, t, dt, wt, { shot, caption, cue }); return 'camera'; } // the whole crew arrested: game over (public/cops.js)
       if (c.kind === 'copsIntro' && cops) { cops.scene(c, t, dt, wt, { shot, caption, cue }); return 'camera'; } // night 3: the squad car pulls up (public/cops.js)
       if (c.kind === 'nightEnd' || c.kind === 'verdict' || c.kind === 'finalOn' || c.kind === 'finalCall') { finale.scene(c, t, dt, wt); return 'camera'; }
       if (c.kind === 'huntBeaten' || c.kind === 'shakeBeaten') {

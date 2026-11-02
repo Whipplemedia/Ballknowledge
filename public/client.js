@@ -56,7 +56,8 @@ function connect(msg) {
     else if (m.type === 'bottleGot') window.BK.onBottleGot && window.BK.onBottleGot(m);
     else if (m.type === 'goons') window.BK.onGoons && window.BK.onGoons(m);
     else if (m.type === 'bum') window.BK.onBum && window.BK.onBum(m);
-    else if (m.type === 'cops') window.BK.onCops && window.BK.onCops(m); // night 3 (public/cops.js, public/club.js)
+    else if (m.type === 'cops') window.BK.onCops && window.BK.onCops(m);
+    else if (m.type === 'breakout') window.BK.onBreakout && window.BK.onBreakout(m); // a crewmate picked the squad car's lock (public/cops.js) // night 3 (public/cops.js, public/club.js)
     else if (m.type === 'sobriety') { closePanel(); window.BK.onSobriety && window.BK.onSobriety(m); }
     else if (m.type === 'stage') window.BK.onStage && window.BK.onStage(m);
     else if (m.type === 'tip') { (ui.gossip = ui.gossip || []).unshift({ ...m, at: Date.now(), idx: S && S.cur ? S.cur.idx : -1 }); ui.answer = { ...m, until: Date.now() + 16000 }; window.BK.sfx && window.BK.sfx('coin'); render(); setTimeout(render, 16100); }
@@ -425,7 +426,7 @@ function gameView() {
       <span class="w-buzz" title="Drunk confidence">🍺<span class="dm"><span id="drunkfill" style="width:${me.drunk}%"></span></span></span></div>
     ${crew ? `<div class="hud-crew">${playerList()}</div>` : ''}
     ${ui.reconnecting ? '<div class="reconn">📶 Connection lost - reconnecting...</div>' : ''}
-    ${eventBanner()}${whisperHud()}${napkinOn() ? napkinHud() : bountyHud()}${jobHud()}${shakeBanner()}
+    ${eventBanner()}${whisperHud()}${copsHud()}${napkinOn() ? napkinHud() : bountyHud()}${jobHud()}${shakeBanner()}
     ${hunt ? huntBanner() : ''}
     ${tickerHtml()}
   </div>
@@ -798,7 +799,7 @@ function endView() {
   return `<div class="center"><div class="card col" style="width:min(560px,100%)">
     <div class="logo" style="font-size:34px">${{ legendary: '<span>LEGENDARY NIGHT</span>', survived: 'YOU SURVIVED', busted: 'BUSTED' }[s.tier] || (s.crewWon ? '<span>YOU WIN</span>' : 'GAME OVER')}${s.vacated ? '<span>*</span>' : ''}</div>
     <div class="tiers"><span class="${s.crewWon ? 'ok' : 'bad'}">${s.crewWon ? '✅' : '❌'} Called the champion (${s.correct}/${s.total})</span><span class="${s.quotaMet ? 'ok' : 'bad'}">${s.quotaMet ? '✅' : '❌'} Made tonight's goal for the fund</span></div>
-    ${s.fund ? `<div class="card camp col"><div class="big">🏦 ${s.fund.last ? (s.fund.saved ? `${esc(ST().bar)} is SAVED!` : `${esc(ST().bar)} was SOLD`) : `The crew put ${$$(s.fund.deposit)} in the fund`}</div>${fundBar(s.fund)}${s.fund.last ? `<div class="muted">${s.fund.saved ? `${esc(ST().dev.name)} took the check and stormed out. ${esc(ST().owner.name)} is pouring for the house. +25 tickets each.` : `Coming soon: ${esc(ST().plan.name)}. ${esc(ST().owner.name)} is packing up the jerseys.`}</div>` : '<div class="muted">Everyone\'s winnings above tonight\'s bankroll went in. Bankrolls carry over.</div>'}</div>` : ''}
+    ${s.fund ? `<div class="card camp col"><div class="big">🏦 ${s.fund.last ? (s.arrested ? `🚔 The whole crew got ARRESTED - ${esc(ST().bar)} was sold` : s.fund.saved ? `${esc(ST().bar)} is SAVED!` : `${esc(ST().bar)} was SOLD`) : `The crew put ${$$(s.fund.deposit)} in the fund`}</div>${fundBar(s.fund)}${s.fund.last ? `<div class="muted">${s.fund.saved ? `${esc(ST().dev.name)} took the check and stormed out. ${esc(ST().owner.name)} is pouring for the house. +25 tickets each.` : `Coming soon: ${esc(ST().plan.name)}. ${esc(ST().owner.name)} is packing up the jerseys.`}</div>` : '<div class="muted">Everyone\'s winnings above tonight\'s bankroll went in. Bankrolls carry over.</div>'}</div>` : ''}
     ${s.mvp ? `<div class="mvp">🏅 MVP of the night: <b>${esc(s.mvp.name)}</b> · ${s.mvp.bk} Ball Knowledge</div>` : ''}
     ${s.vacated ? '<div class="bad">* The championship was fixed. The league struck your title from the books (half the crew bonus).</div>' : ''}${s.voidedFinal ? '<div class="bad">🚨 The league caught a fix on the championship and voided it. Nobody gets the title.</div>' : ''}
     <div class="title">${s.fake ? 'A made-up season' : 'The season was'}</div>
@@ -815,7 +816,7 @@ function endView() {
 function campEnd(s) {
   const c = s.camp; if (!c) return '';
   if (c.last) {
-    const R = { saved: ['🏆 THE BAR IS SAVED', `${ST().bar} stays open. Your names go on the wall.`], saved_cost: ['🏆 SAVED - AT A PRICE', 'The bar stays open. Not everyone walked out of Sal\'s back room, though.'], sold: ['🏗️ SOLD', `${ST().dev.full} got his ${ST().plan.name}.`] }[c.result] || ['', ''];
+    const R = { saved: ['🏆 THE BAR IS SAVED', `${ST().bar} stays open. Your names go on the wall.`], saved_cost: ['🏆 SAVED - AT A PRICE', 'The bar stays open. Not everyone walked out of Sal\'s back room, though.'], sold: ['🏗️ SOLD', `${ST().dev.full} got his ${ST().plan.name}.`], arrested: ['🚔 ARRESTED', `The whole crew spent the night in county with nobody left to pick the lock. ${ST().dev.full} got his ${ST().plan.name}.`] }[c.result] || ['', ''];
     return `<div class="card camp col"><div class="big">📖 Campaign over: ${R[0]}</div><div class="muted">${R[1]}</div><div class="muted">${c.log.map((l) => `Night ${l.night}: ${esc(l.season)} - ${esc(l.tier)}`).join('<br>')}</div></div>`;
   }
   return `<div class="card camp col"><div class="big">📖 Night ${c.night} of ${c.nights} done</div>
@@ -856,6 +857,12 @@ function fightStakeNext() { ui.fightStake = FIGHT_STAKES[(FIGHT_STAKES.indexOf(u
 // night 3: a dancer (after $200 on stage) or the VIP athlete (for a $50 drink) leans in - pick a question, get the answer on the open game.
 // HUD buttons get number hotkeys, so this works with the mouse locked (and the money gun out).
 const WHISPER_Q = ['Who wins tonight?', 'Anybody hurt?', 'Heard anything else?'];
+// the cops: who's locked in the squad car (and how to get them out), and how hot the street is after breakouts
+function copsHud() {
+  const n = S.n3; if (!n || !n.on || (n.me && n.me.arrested)) return '';
+  const car = n.car || [], heat = n.heat || 0; if (!car.length && !heat) return '';
+  return `<div class="copshud">${car.length ? `<div class="ch-car">🚔 In the squad car: <b>${car.map((q) => esc(q.name)).join(', ')}</b> · pick the lock at the curb out front</div>` : ''}${heat ? `<div class="ch-heat">🚨 COP HEAT ${'<i class="on"></i>'.repeat(heat)}${'<i></i>'.repeat(Math.max(0, (n.heatMax || 5) - heat))}</div>` : ''}</div>`;
+}
 function whisperHud() {
   const w = S.n3 && S.n3.me && S.n3.me.whisper, a = ui.answer && ui.answer.until > Date.now() ? ui.answer : null;
   if (w) { const ath = w.from === 'athlete';

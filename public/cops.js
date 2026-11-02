@@ -3,14 +3,17 @@ import { place } from './props.js';
 import { makePreset, animate, loadModels, loadN3Clips, hasClip } from './people.js';
 import { label } from './textures.js';
 
-// Night 3's police (server n3.js streams them as {type:'cops'}): the squad car at the bar-side curb with its light bar going,
-// two officers walking the beat with flashlights (a beam cone + a pool of light on the ground), their intro scene when the
-// night starts (cine 'copsIntro'), the 60 s sobriety test when one of them stops you (five drills, harder the drunker you
-// are), and the 50 s view from the back seat if you fail.
+// The police (nights 2-3 and single nights; server n3.js streams them as {type:'cops'}): the squad car at the bar-side curb with its
+// light bar going, officers walking the beat with flashlights (a beam cone + a pool of light on the ground), their intro scene the first
+// night they're out (cine 'copsIntro'), the 60 s sobriety test when one of them stops you (five drills, harder the drunker you are), the
+// back seat for the rest of the night if you fail (look around through the cage), the lock a crewmate can pick to get you out
+// (public/lockpick.js), and the scene where both cars pull away with the whole crew in the back (cine 'busted': game over).
 export const CAR = { x: -3.5, z: 13.6 };
-const OFFICERS = { cop1: { model: 'cop_1', name: 'Officer Kowalski' }, cop2: { model: 'cop_2', name: 'Officer Reyes' } };
+const OFFICERS = { cop1: { model: 'cop_1', name: 'Officer Kowalski' }, cop2: { model: 'cop_2', name: 'Officer Reyes' }, cop3: { model: 'cop_1', name: 'Officer Dunn' } };
+export const CAR_DOOR = { x: CAR.x - 0.6, z: CAR.z - 1.25 }; // the rear door on the curb side (server n3.js carDoor)
+const SEAT = { x: CAR.x - 0.6, z: CAR.z - 0.4 };
 
-export function createCops({ scene, BK, audio, camera }) {
+export function createCops({ scene, BK, audio, camera, stations, castOf, me }) {
   // ---------- the car ----------
   const car = new THREE.Group(); car.position.set(CAR.x, 0, CAR.z); car.visible = false; car.userData.zone = 'all'; scene.add(car);
   place(car, 'squad_car', { w: 4.6, rotY: Math.PI }, 0, -0.08, 0, (o) => o.traverse((m) => { m.userData.zone = 'all'; }));
@@ -18,6 +21,10 @@ export function createCops({ scene, BK, audio, camera }) {
   const red = flash(0xff2030), blue = flash(0x2a6bff); red.position.set(-0.35, 1.62, 0.18); blue.position.set(-0.35, 1.62, -0.18); car.add(red, blue);
   const glow = (c) => { const m = new THREE.Mesh(new THREE.CircleGeometry(3.2, 24), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.position.y = 0.03; return m; };
   const gR = glow(0xff2030), gB = glow(0x2a6bff); gR.position.z = 1.6; gB.position.z = -1.6; car.add(gR, gB);
+  // the second cruiser: only in the 'busted' scene (both cars pull away with the crew)
+  const car2 = new THREE.Group(); car2.visible = false; car2.userData.zone = 'all'; scene.add(car2);
+  place(car2, 'squad_car', { w: 4.6, rotY: Math.PI }, 0, -0.08, 0, (o) => o.traverse((m) => { m.userData.zone = 'all'; }));
+  const red2 = flash(0xff2030), blue2 = flash(0x2a6bff); red2.position.copy(red.position); blue2.position.copy(blue.position); car2.add(red2, blue2);
 
   // ---------- the officers ----------
   const cops = new Map(); let loading = false;
@@ -32,10 +39,10 @@ export function createCops({ scene, BK, audio, camera }) {
     place(P.group, 'flashlight', { w: 0.32 }, 0, 0, 0, (f) => { c.light = f; f.traverse((m) => { m.userData.zone = 'all'; }); });
     cops.set(id, c); return c;
   }
+  const loadCast = () => { if (!loading) { loading = true; Promise.all([loadModels(['cop_1', 'cop_2']), loadN3Clips()]).then(() => { loading = 'done'; }); } };
   BK.onCops = (m) => {
     if (!m.c) { for (const c of cops.values()) { scene.remove(c.P.group, c.beam, c.pool); } cops.clear(); return; }
-    if (!loading) { loading = true; Promise.all([loadModels(['cop_1', 'cop_2']), loadN3Clips()]).then(() => { loading = 'done'; }); }
-    if (loading !== 'done') return;
+    loadCast(); if (loading !== 'done') return;
     for (const [id, x, z, ry, state, target, moving] of m.c) { const c = cops.get(id) || make(id); if (!c.seen) { c.P.group.position.set(x, 0, z); c.seen = true; } Object.assign(c, { tx: x, tz: z, ry, state, target, moving }); }
   };
   const bone = (P) => { const s = P.skinMesh; return s && s.skeleton ? s.skeleton.bones.find((b) => /right.?hand$/i.test(b.name)) : null; };
@@ -101,9 +108,12 @@ export function createCops({ scene, BK, audio, camera }) {
   let introT = null;
   function update(dt, t) {
     const S = BK.S, on = !!(S && S.n3 && S.n3.on), cine = S && S.cine && BK.now() < S.cine.until ? S.cine : null;
-    car.visible = on && !(cine && cine.kind === 'opening');
+    const busted = cine && cine.kind === 'busted';
+    car.visible = (on || busted) && !(cine && cine.kind === 'opening'); car2.visible = !!busted; if (!busted) red.visible = blue.visible = true; if (!busted && riders.length) { for (const r of riders) r.P.group.parent && r.P.group.parent.remove(r.P.group); riders.length = 0; }
+    { const b = Math.floor(t * 4 + 1) % 2; red2.material.opacity = b ? 1 : 0.15; blue2.material.opacity = b ? 0.15 : 1; }
     const blink = Math.floor(t * 4) % 2; red.material.opacity = blink ? 1 : 0.15; blue.material.opacity = blink ? 0.15 : 1; gR.material.opacity = blink ? 0.12 : 0.02; gB.material.opacity = blink ? 0.02 : 0.12;
-    if (!(cine && cine.kind === 'copsIntro')) car.position.set(CAR.x, 0, CAR.z);
+    if (!(cine && (cine.kind === 'copsIntro' || busted))) car.position.set(CAR.x, 0, CAR.z);
+    for (const r of riders) { animate(r.P, 'sit', t); }
     for (const c of cops.values()) {
       const P = c.P, gp = P.group.position, k = Math.min(1, dt * 8), px = gp.x, pz = gp.z; gp.x += (c.tx - gp.x) * k; gp.z += (c.tz - gp.z) * k;
       let d = c.ry - P.group.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); P.group.rotation.y += d * Math.min(1, dt * 6);
@@ -131,13 +141,34 @@ export function createCops({ scene, BK, audio, camera }) {
   }
   // failing: the back seat, behind the cage
   const cage = document.createElement('div'); cage.id = 'cagefx'; cage.innerHTML = '<div class="cg-bars"></div><div class="cg-time"></div>'; document.body.append(cage);
-  function carCam(t) {
-    const S = BK.S, until = S && S.n3 && S.n3.me && S.n3.me.carUntil, left = until ? (until - BK.now()) / 1000 : 0;
-    cage.classList.toggle('on', left > 0); if (left <= 0) return false;
-    cage.querySelector('.cg-time').textContent = `IN THE BACK OF THE SQUAD CAR · ${Math.ceil(left)}s`;
-    camera.position.set(CAR.x - 0.6, 1.2, CAR.z - 1.05); camera.rotation.set(-0.04 + Math.sin(t * 0.4) * 0.02, Math.sin(t * 0.23) * 0.3, 0, 'YXZ'); return true; // the rear window on the curb side, looking out at the bar through the cage
+  function carCam(t) { // locked in for the night: you sit behind the cage at the curb-side window and can look around (mouse)
+    const S = BK.S, n = S && S.n3, inn = !!(n && n.me && n.me.arrested);
+    cage.classList.toggle('on', inn); if (!inn) return false;
+    const crew = (n.car || []).filter((q) => q.id !== S.you).map((q) => q.name);
+    cage.querySelector('.cg-time').innerHTML = `LOCKED IN THE SQUAD CAR · until a crewmate picks the lock${crew.length ? ` <span>(${crew.join(', ')} ${crew.length > 1 ? 'are' : 'is'} in here too)</span>` : ''}`;
+    me.x = SEAT.x; me.z = SEAT.z; me.yaw = Math.max(-1.3, Math.min(1.3, Math.atan2(Math.sin(me.yaw), Math.cos(me.yaw)))); me.pitch = Math.max(-0.45, Math.min(0.35, me.pitch));
+    camera.position.set(CAR.x - 0.6, 1.2, CAR.z - 1.05); camera.rotation.set(me.pitch + Math.sin(t * 0.4) * 0.01, me.yaw, 0, 'YXZ'); return true;
+  }
+  // the lock: a station at the rear door while somebody's inside (the minigame is public/lockpick.js)
+  if (stations) stations.push({ x: CAR_DOOR.x, z: CAR_DOOR.z - 0.3, r: 1.9, prio: 3,
+    on: () => { const n = BK.S && BK.S.n3; return !!(n && n.on && (n.car || []).length && !(n.me && (n.me.arrested || n.me.picking))); },
+    get text() { const n = BK.S && BK.S.n3; return `E - Pick the squad car's lock (get ${((n && n.car) || []).map((q) => q.name).join(' and ')} out)`; },
+    act: () => BK.send({ type: 'pickStart' }) });
+  BK.onBreakout = (m) => { audio.sfx('siren', { v: 0.8 }); audio.sfx('sting'); if (BK.S && m.freed.includes(BK.S.you)) { me.x = CAR_DOOR.x; me.z = CAR_DOOR.z - 1.2; me.yaw = 0; me.pitch = 0; } };
+  // ---------- busted: both cruisers pull away with the whole crew in the back seats ----------
+  const riders = [];
+  function bustedScene(c, u, dt, wt, ui) {
+    const { shot, caption, cue } = ui; loadCast(); car.visible = car2.visible = true;
+    if (!riders.length && castOf && BK.S) { const ps = (c.crew || []).map((id) => BK.S.players.find((p) => p.id === id)).filter(Boolean);
+      ps.forEach((p, i) => { const P = castOf(p), host = i < 2 ? car : car2, side = i % 2 ? 0.38 : -0.38; P.group.position.set(-0.6, 0.5 + 0.09 - (P.hipY || 0.98), side); P.group.rotation.y = -Math.PI / 2; P.group.userData.zone = 'all'; P.group.traverse((o) => { o.userData.zone = 'all'; }); host.add(P.group); riders.push({ P }); }); }
+    const go = Math.max(0, u - 4.2), x = CAR.x + go * go * 1.1; car.position.set(x, 0, CAR.z); car2.position.set(x + 6.2, 0, CAR.z);
+    if (u > 4.2) cue('siren', () => { audio.sfx('siren', { v: 1 }); audio.sfx('siren', { v: 0.8, delay: 2.6 }); audio.sfx('siren', { v: 0.6, delay: 5.2 }); });
+    cage.classList.toggle('on', u < 4.2); cage.querySelector('.cg-time').textContent = ''; red.visible = blue.visible = u >= 4.2;
+    if (u < 4.2) { shot(CAR.x + 0.55 - u * 0.03, 1.22, CAR.z + 0.15, CAR.x - 0.6, 1.0, CAR.z); caption('BUSTED.', 'The whole crew is in the back of a squad car. Nobody is left to pick the lock.'); return; } // from the front seat, through the cage
+    if (u < 10.5) { shot(CAR.x + 1.5, 1.5, CAR.z + 6, x + 2.5, 1.0, CAR.z); caption('', ''); return; } // from across the street as they pull out
+    shot(CAR.x + 1.5, 1.8, CAR.z + 6, x + 1, 1.0, CAR.z); caption('NOBODY CAME BACK TO THE DUGOUT.', `The crew spent the night in county. ${(c.names || []).join(', ')} - booked.`);
   }
   const testing = () => !!(test && !test.over);
   const lookAtCop = () => { const S = BK.S; if (!S || !testing()) return null; const c = [...cops.values()].find((o) => o.target === S.you); return c ? c.P.group.position : null; };
-  return { update, scene: scene_, key, mouse, carCam, testing, lookAtCop, inCar: () => { const S = BK.S, u = S && S.n3 && S.n3.me && S.n3.me.carUntil; return !!(u && u > BK.now()); } };
+  return { update, scene: scene_, bustedScene, key, mouse, carCam, testing, lookAtCop, inCar: () => !!(BK.S && BK.S.n3 && BK.S.n3.me && BK.S.n3.me.arrested) };
 }

@@ -611,3 +611,13 @@ body.hascrew #buffs{top:auto;bottom:44px;right:auto;left:14px}
 .hud .hud-event.whisper{top:38%;left:24px;width:min(420px,80vw);background:#2a0f2cf2;border:2px solid #ff5ad2;border-radius:14px;padding:12px 14px;box-shadow:0 0 30px #ff3ec860}
 .hud .hud-event.whisper>div{background:none!important;padding:0}.hud .hud-event.whisper>div.wh-lean{background:#ffd04a!important;padding:6px 10px;margin-top:6px}
 .hud .hud-event.whisper .wh-qs{margin-top:8px}
+/* the cops: the squad-car / heat strip, the cage label, the lock pick */
+.copshud{position:absolute;left:50%;bottom:118px;transform:translateX(-50%);display:flex;flex-direction:column;gap:4px;align-items:center;pointer-events:none;font:700 14px system-ui;color:#fff;text-shadow:0 1px 4px #000}
+.copshud>div{background:#0b1226e0;border:1px solid #3e7bff;border-radius:8px;padding:5px 12px}.copshud .ch-car{border-color:#ff4d5e;animation:sbflash 1s steps(2) infinite}
+.ch-heat i{display:inline-block;width:14px;height:10px;margin-left:3px;border-radius:2px;background:#ffffff22}.ch-heat i.on{background:#ff3a3a;box-shadow:0 0 6px #ff3a3a}
+.cg-time span{color:#cbd5ff;font-weight:600;letter-spacing:0}
+#lockpick{position:fixed;inset:0;z-index:44;display:none;place-items:center;background:radial-gradient(#0000 35%,#000c);pointer-events:none}#lockpick.on{display:grid}
+.lp-card{background:#0b0d12f0;border:2px solid #c9a548;border-radius:12px;padding:12px 14px;color:#fff;font-family:system-ui;box-shadow:0 10px 40px #000}
+.lp-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}.lp-head b{font:900 18px system-ui;letter-spacing:3px;color:#ffd04a}.lp-slips{color:#ff6a78;font-weight:800}
+#lockpick canvas{display:block;border-radius:8px;width:520px;max-width:86vw}.lp-help{margin-top:8px;color:#cbd5ff;font-size:13px;text-align:center}
+.lp-help kbd{display:inline-block;min-width:18px;padding:0 5px;border-radius:5px;background:#0008;border:1px solid #fff6;font:800 12px system-ui}

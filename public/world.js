@@ -25,6 +25,7 @@ import { createVO } from './vo.js';
 import { createClub } from './club.js';
 import { createCops } from './cops.js';
 import { createPoleGame } from './polegame.js';
+import { createLockpick } from './lockpick.js';
 import { CATALOG, BY_ID, RARITY, SLOTS, rollCrate, createPreview, applyCosmetics, tickCosmetics } from './cosmetics.js';
 
 const BK = window.BK;
@@ -60,6 +61,7 @@ const games = createGames({ scene, camera, BK, me, keys, helpers, stations, obst
 const roulette = createRoulette({ scene, BK, me, stations, obstacles, at: OUT.roulette }); // in the gas-station casino across the street
 BK.onSpin = (m) => roulette.onSpin(m);
 const outside = createOutside({ scene, BK, stations, obstacles, bar, ROOM });
+stations.push({ x: OUT.door.x, z: ROOM.z - 1.0, r: 1.4, on: () => !!(BK.S && BK.S.phase === 'play' && BK.S.outside === false), text: 'The front door is locked tonight - the street and the gas station open tomorrow night', act: () => {} });
 BK.onSlot = (m) => outside.onSlot(m); BK.slotDraw = drawSym;
 BK.leaveGames = () => games.leave();
 BK.startGame = (name, ch) => games.start(name, ch);
@@ -146,11 +148,12 @@ BK.stand = () => { const s = me.sit; if (!s) return; audio.sfx('stand'); me.sit 
 const active = () => { const S = BK.S; return S && ['play', 'hunt'].includes(S.phase); };
 const nearest = () => (bottles.aimedStation && bottles.aimedStation()) || stations.filter((s) => (!s.on || s.on()) && Math.hypot(s.x - me.x, s.z - me.z) < s.r).sort((a, b) => (b.prio || 0) - (a.prio || 0) || Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
 
-const n3Lock = () => cops.testing() || cops.inCar() || polegame.active(); // the sobriety test, the back of the squad car, the pole
+const n3Lock = () => cops.testing() || cops.inCar() || polegame.active() || lockpick.active(); // the sobriety test, the back of the squad car, the pole
 addEventListener('keydown', (e) => {
   if (!active() || BK.ui.open || BK.ui.shop) return;
   if (cops.testing()) { cops.key(e); return; }
   if (polegame.active()) { if (polegame.key(e)) return; }
+  if (lockpick.active()) { lockpick.key(e); return; }
   if (n3Lock()) return;
   keys[e.code] = true;
   if (me.sit && (e.code === 'KeyE' || e.code === 'Space' || ['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code))) { BK.stand(); return; }
@@ -172,7 +175,8 @@ addEventListener('mousemove', (e) => {
   if (document.pointerLockElement !== canvas || roulette.lookTarget() || performance.now() - lockAt < 250 || koNow()) return;
   const mx = Math.max(-150, Math.min(150, e.movementX)), my = Math.max(-150, Math.min(150, e.movementY)); // ignore bogus jumps when the lock is (re)acquired
   if (cops.testing()) { cops.mouse(mx, my); return; } // the pen drill
-  if (cops.inCar() || polegame.active()) return;
+  if (cops.inCar()) { const ks = 0.0022 * ((BK.settings && BK.settings.sens) || 1); me.yaw -= mx * ks; me.pitch -= my * ks; return; } // looking round the back seat (cops.carCam clamps it)
+  if (polegame.active() || lockpick.active()) return;
   if (games.active() && games.move(mx, my)) return; // the golf trackball
   const ks = 0.0022 * ((BK.settings && BK.settings.sens) || 1), inv = BK.settings && BK.settings.invert ? -1 : 1; me.yaw -= mx * ks; me.pitch = Math.max(-1.3, Math.min(1.3, me.pitch - my * ks * inv));
   if (me.sit) { const d = Math.atan2(Math.sin(me.yaw - me.sit.yaw), Math.cos(me.yaw - me.sit.yaw)); if (Math.abs(d) > 1.75) me.yaw = me.sit.yaw + Math.sign(d) * 1.75; me.pitch = Math.max(-0.9, Math.min(0.8, me.pitch)); }
@@ -219,7 +223,8 @@ const bumView = createBumView({ scene, audio }); BK.onBum = (m) => bumView.onMsg
 const castOf = (p) => { const P = makePreset('bub', playerLook(p)); applyCosmetics(P, p.cos || {}); return P; }; // a cutscene's cast: everyone as they look in game
 // ---------- night 3: The End Zone next door (public/club.js), Amateur Night on the pole (polegame.js), the cops out front (cops.js) ----------
 const club = createClub({ scene, BK, audio, camera, stations, obstacles, avatars, castOf, tickCos: tickCosmetics, me });
-const cops = createCops({ scene, BK, audio, camera });
+const cops = createCops({ scene, BK, audio, camera, stations, castOf, me });
+const lockpick = createLockpick({ BK, audio });
 const polegame = createPoleGame({ BK, audio, club });
 const cine = createCine({ camera, BK, doors: bar.doors, goons, audio, backroom: bar.backroom, owner: bar.owner, dev: bar.dev, scene, bar, avatars, tickCos: tickCosmetics, castOf, cops });
 let wasHeld = null;
@@ -241,6 +246,7 @@ canvas.addEventListener('mousedown', (e) => {
   if (document.pointerLockElement !== canvas) { if (active() && !BK.ui.open) canvas.requestPointerLock(); return; }
   if (e.button !== 0 || koNow()) return;
   if (games.active()) return games.down();
+  if (lockpick.active()) return lockpick.press();
   if (n3Lock()) return;
   if (BK.clubRain && BK.clubRain()) return club.shoot(); // the money gun
   const S = BK.S;
@@ -259,7 +265,7 @@ canvas.addEventListener('mousedown', (e) => {
 // the bar, plus the restroom through the door past Sal's booth (open while the bar is: no hiding in there from collectors or hitmen)
 // where you can be: the bar, plus (while the bar is open, i.e. no collectors or hitmen) the restroom, the street, the gas-station lot and its casino,
 // joined by doorway lanes. px/pz: how close to a space's edges you can walk; h: its ceiling (bottles shatter on it)
-const openOut = () => !!(BK.S && BK.S.phase === 'play'); // the street, the lot and the store stay open when Sal's collectors come (they follow you out there); the hitmen at closing time pull everyone in
+const openOut = () => !!(BK.S && BK.S.phase === 'play' && BK.S.outside !== false); // night 1 of a campaign: the bar only // the street, the lot and the store stay open when Sal's collectors come (they follow you out there); the hitmen at closing time pull everyone in
 const openRest = () => openOut() && !BK.S.shake; // no hiding in the men's room from the collectors
 const openClub = () => openOut() && !!(BK.S.n3 && BK.S.n3.club); // The End Zone only opens on the last night
 const SPACES = (() => { const B = bar.backroom.bounds, D = OUT.door, C = OUT.casino, S = OUT.street, L = OUT.lot;
@@ -317,7 +323,7 @@ const myDizzy = makeDizzy(camera, { radius: 0.17, scale: 1 }); myDizzy.root.posi
 let lastSend = 0, lastPos = '', lastBeat = 0;
 function netSend(t) {
   if (t - lastSend < 80) return; lastSend = t;
-  const sitH = me.sit ? me.sit.sit : 0, jy = +(me.jy || 0).toFixed(2), lp = +me.pitch.toFixed(2), k = `${me.x.toFixed(2)},${me.z.toFixed(2)},${me.yaw.toFixed(2)},${sitH},${jy},${me.sit ? lp : 0}`;
+  const sitH = me.sit ? me.sit.sit : cops.inCar() ? 0.5 : 0, jy = +(me.jy || 0).toFixed(2), lp = +me.pitch.toFixed(2), k = `${me.x.toFixed(2)},${me.z.toFixed(2)},${me.yaw.toFixed(2)},${sitH},${jy},${me.sit ? lp : 0}`;
   if (k === lastPos && !(sitH && t - lastBeat > 2500)) return; lastPos = k; lastBeat = t; BK.send({ type: 'pos', x: me.x, z: me.z, ry: me.yaw, sit: sitH, jy, p: me.sit ? lp : 0 });
 }
 
@@ -375,7 +381,7 @@ function frame(now) {
   camera.rotation.set(me.pitch + off.p + Math.sin(t * 0.7) * drunkAmt * 0.03, me.yaw + off.y + Math.sin(t * 0.5) * drunkAmt * 0.05, Math.sin(t * 0.9) * drunkAmt * 0.07);
   { const f = (BK.settings && BK.settings.fov) || 72; if (Math.abs(camera.fov - f) > 0.01) { camera.fov = f; camera.updateProjectionMatrix(); } }
   games.update(dt); games.rig(camera);
-  { const cOn = !!(BK.S && BK.S.cine && BK.now() < BK.S.cine.until), gOn = games.active() || cOn; const ring = brawl.spot(); for (const n of bar.npcs) { if (n.cine) continue; /* cine.js shows/hides the developer */ const g = n.P.group, hide = (ring && !n.seated && Math.hypot(g.position.x - ring.x, g.position.z - ring.z) < 1.5) || gOn && !(cOn && /^(opening|checkIn|verdict|nightEnd|finalOn|finalCall|copsIntro)$/.test(BK.S.cine.kind)) && Math.hypot(g.position.x - camera.position.x, g.position.z - camera.position.z) < (cOn ? 2.6 : 1.1) && !n.seated; /* the story's scenes frame their own close-ups */ if (g.visible === hide) g.visible = !hide; } }
+  { const cOn = !!(BK.S && BK.S.cine && BK.now() < BK.S.cine.until), gOn = games.active() || cOn; const ring = brawl.spot(); for (const n of bar.npcs) { if (n.cine) continue; /* cine.js shows/hides the developer */ const g = n.P.group, hide = (ring && !n.seated && Math.hypot(g.position.x - ring.x, g.position.z - ring.z) < 1.5) || gOn && !(cOn && /^(opening|checkIn|verdict|nightEnd|finalOn|finalCall|copsIntro|busted)$/.test(BK.S.cine.kind)) && Math.hypot(g.position.x - camera.position.x, g.position.z - camera.position.z) < (cOn ? 2.6 : 1.1) && !n.seated; /* the story's scenes frame their own close-ups */ if (g.visible === hide) g.visible = !hide; } }
   // ---- audio frame: listener, footsteps, bar-event cues, voice
   audio.update(dt, camera); audioUI.show(active()); voice.update(dt, avatars);
   grabDrops(); for (const o of drops.values()) o.g.rotation.y += dt * 0.6;
@@ -384,12 +390,14 @@ function frame(now) {
     if (o) { const g = o.P.group.position, want = Math.atan2(-(g.x - me.x), -(g.z - me.z)); let d = want - me.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); me.yaw += d * Math.min(1, dt * 6); me.pitch += (-0.22 - me.pitch) * Math.min(1, dt * 4); camera.rotation.set(me.pitch + Math.sin(t * 13) * 0.02, me.yaw + Math.sin(t * 9) * 0.03, Math.sin(t * 7) * 0.05); } }
   items.update(dt); // first-person hands, smoke, buff timers (after the camera is placed)
   if (me.punch) { me.punch = Math.max(0, me.punch - dt * 6); camera.position.y -= me.punch * 0.04; camera.rotation.z += me.punch * 0.03; }
-  club.update(dt, t); cops.update(dt, t); polegame.update();
+  club.update(dt, t); cops.update(dt, t); polegame.update(); lockpick.update(dt);
+  { const n3 = BK.S && BK.S.n3, pk = !!(n3 && n3.me && n3.me.picking); if (pk && !lockpick.active()) { if (me.sit) BK.stand(); lockpick.start(); } else if (!pk && lockpick.active()) lockpick.stop(false); }
   { const n3 = BK.S && BK.S.n3; if (n3 && n3.stage && n3.stage.pid === BK.S.you && !polegame.active()) { if (me.sit) BK.stand(); polegame.start(); } else if (polegame.active() && !(n3 && n3.stage && n3.stage.pid === BK.S.you)) polegame.stop(); }
   const cineOn = !!cine.update(dt, BK.S && BK.S.you, t); if (cineOn) cross.style.display = 'none';
   if (!cineOn) { // night 3 owns the camera: the back of the squad car, your own pole dance, facing the officer for the test
     if (cops.carCam(t)) cross.style.display = 'none';
     else if (BK.clubDancing && BK.clubDancing()) { club.performerCam(dt, t); cross.style.display = 'none'; }
+    else if (lockpick.active()) { camera.position.set(me.x, 0.95, me.z); camera.lookAt(-4.1, 0.95, 12.6); cross.style.display = 'none'; } // crouched at the squad car's rear door
     else { const cp = cops.lookAtCop(); if (cp) { const dx = cp.x - me.x, dz = cp.z - me.z, want = Math.atan2(-dx, -dz); let d = want - me.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); me.yaw += d * Math.min(1, dt * 5); me.pitch += (0.02 - me.pitch) * Math.min(1, dt * 5); camera.rotation.set(me.pitch, me.yaw, 0); } } }
   { const c = BK.S && BK.S.cine, sal = bar.npcs.find((n) => n.name === 'Uncle Sal'); // Sal talks through the opening scene
     if (sal) sal.P.group.visible = !(cineOn && c && c.kind === 'kill'); // he's in the back room with the bat
@@ -419,7 +427,7 @@ function frame(now) {
     const near = openRest() && (dn(me.x, me.z) || [...avatars.values()].some((a) => dn(a.P.group.position.x, a.P.group.position.z))); bar.backroom.tick(dt, t, killOn ? null : near);
     const cineOnNow = !!(c && BK.now() < c.until + 200), fn = (x, z) => Math.hypot(x - OUT.door.x, z - ROOM.z) < 2.0; // the street door: same, unless a cutscene is using it
     bar.frontDoor(dt, cineOnNow ? null : (fn(me.x, me.z) && openOut()) || [...avatars.values(), ...bumView.list(), ...goons.list()].some((a) => fn(a.P.group.position.x, a.P.group.position.z))); // it swings for players, the bum and Sal's men
-    if (!spaceAt(me.x, me.z) && !cineOnNow && !me.sit) walkClamp(me.x, me.z); // outside when collectors or hitmen showed up: back in the bar
+    if (!spaceAt(me.x, me.z) && !cineOnNow && !me.sit && !cops.inCar()) walkClamp(me.x, me.z); // outside when collectors or hitmen showed up: back in the bar
     outside.update(dt, BK.now()); }
 
   for (const a of avatars.values()) {
@@ -446,6 +454,7 @@ function frame(now) {
       } }
     a.P.moveSpeed = sp;
     if (grabbed) { if (a.life) a.life.act = null; animate(a.P, 'clip:help', t); tickCosmetics(a.P, t); continue; }
+    if (BK.S.n3 && (BK.S.n3.pickers || []).includes(a.id)) { animate(a.P, 'clip:push', t, 0.45); g.position.y = (a.P.baseY || 0) - 0.25; tickCosmetics(a.P, t); continue; } // working the squad car's lock
     if (seat && a.P.skinned) { seatedLife(a, seat); bar.life.tick(a.life, t, dt, {}); animate(a.P, 'seated', t); bar.life.place(a.life); tickCosmetics(a.P, t); continue; }
     if (a.life) { a.life.act = null; if (a.life.glass) a.life.glass.visible = false; }
     animate(a.P, a.sit ? 'sit' : a.drunk >= 40 && sp < 0.4 ? 'stagger' : sp > 0.5 ? 'walk' : 'idle', t, Math.min(1.4, sp / 3.5)); tickCosmetics(a.P, t);
@@ -496,6 +505,6 @@ BK.onFx = (m) => items.onFx(m); BK.onDrag = (m) => items.onDrag(m);
 stations.push({ get x() { const b = bumView.list()[0]; return b ? b.P.group.position.x : 1e9; }, get z() { const b = bumView.list()[0]; return b ? b.P.group.position.z : 1e9; }, r: 2.4, prio: 3,
   get text() { return `E - Give ${STORY.bum ? STORY.bum.name : 'Dusty'} a cigarette (he'll leave you alone next time)`; },
   on: () => !!(BK.S && BK.S.me && BK.S.me.inv && BK.S.me.inv.cigs > 0 && bumView.list()[0] && !['run', 'flee'].includes(bumView.list()[0].state)), act: () => { items.give(); BK.send({ type: 'bumCig' }); } });
-window.__dbg = { club, cops, polegame, items, zones, brawl, renderer, scene, camera, me, games, roulette, bar, fx, tv, avatars, bottles, voice, keys };
+window.__dbg = { club, cops, polegame, lockpick, items, zones, brawl, renderer, scene, camera, me, games, roulette, bar, fx, tv, avatars, bottles, voice, keys };
 requestAnimationFrame(frame);
 window.__worldReady = true; if (typeof window.render === 'function') window.render(); // drop the loading bar / loading screen
