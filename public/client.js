@@ -60,7 +60,7 @@ function connect(msg) {
     else if (m.type === 'breakout') window.BK.onBreakout && window.BK.onBreakout(m); // a crewmate picked the squad car's lock (public/cops.js) // night 3 (public/cops.js, public/club.js)
     else if (m.type === 'sobriety') { closePanel(); window.BK.onSobriety && window.BK.onSobriety(m); }
     else if (m.type === 'stage') window.BK.onStage && window.BK.onStage(m);
-    else if (m.type === 'tip') { (ui.gossip = ui.gossip || []).unshift({ ...m, at: Date.now(), idx: S && S.cur ? S.cur.idx : -1 }); ui.answer = { ...m, until: Date.now() + 16000 }; window.BK.sfx && window.BK.sfx('coin'); render(); setTimeout(render, 16100); }
+    else if (m.type === 'tip') { ui.answer = { ...m, until: Date.now() + (m.none ? 6000 : 16000) }; window.BK.sfx && window.BK.sfx('coin'); render(); setTimeout(render, 16100); }
     else if (m.type === 'fx') window.BK.onFx && window.BK.onFx(m);
     else if (m.type === 'drag') window.BK.onDrag && window.BK.onDrag(m);
     else if (m.type === 'scratch') { ui.scratch = m.t; ui.scratchDone = false; openPanel('scratch'); }
@@ -410,8 +410,9 @@ function goalText() {
 function gameView() {
   const me = S.me, hunt = S.phase === 'hunt';
   const extra = ui.tab === 'bar' ? [['bar', '🍺 Bar']] : ui.tab === 'vinnie' ? [['vinnie', '🍷 Old Vinnie']] : ui.tab === 'paper' ? [['paper', '📰 Paper']] : ui.tab === 'wheel' ? [['wheel', '🎰 Roulette']] : ui.tab === 'challenge' ? [['challenge', '🎯 Challenge']] : ui.tab === 'pool' ? [['pool', '🎱 Pool']] : ui.tab === 'slot' ? [['slot', '🎰 Slots']] : ui.tab === 'gas' ? [['gas', '⛽ Counter']] : ui.tab === 'atm' ? [['atm', '🏧 ATM']] : ui.tab === 'scratch' ? [['scratch', '🎟️ Scratch-off']] : ui.tab === 'shots' ? [['shots', '🥃 Shot roulette']] : [];
-  const tabs = [['book', '📱 Sportsbook'], ['bets', '🧾 My Bets'], ['mob', '🕴️ The Mob'], ['crew', '👥 Crew'], ...extra];
-  const body = { book: bookView, bets: betsView, mob: mobView, crew: crewView, bar: barView, vinnie: vinnieView, paper: paperView, wheel: wheelView, challenge: challengeView, slot: slotView, gas: gasView, shots: shotsView, atm: atmView, scratch: scratchView, pool: typeof poolView === 'function' ? poolView : () => '' }[ui.tab]();
+  const nClues = S.clues ? S.clues.mine.length : 0;
+  const tabs = [['book', '📱 Sportsbook'], ['bets', '🧾 My Bets'], ['case', `🗂 Case File${nClues ? ' (' + nClues + ')' : ''}`], ['mob', '🕴️ The Mob'], ['crew', '👥 Crew'], ...extra];
+  const body = { book: bookView, bets: betsView, case: caseView, mob: mobView, crew: crewView, bar: barView, vinnie: vinnieView, paper: paperView, wheel: wheelView, challenge: challengeView, slot: slotView, gas: gasView, shots: shotsView, atm: atmView, scratch: scratchView, pool: typeof poolView === 'function' ? poolView : () => '' }[ui.tab]();
   if (!window.__worldReady) return `<div class="center"><div class="card col" style="width:min(420px,100%)"><div class="big">Getting the bar ready...</div>${loadBar()}<div class="muted">Your crew can already see you. The game has started - you'll be dropped in as soon as the bar finishes loading.</div></div></div>`;
   const crew = S.players.length > 1, f = S.fund;
   return `<div class="hud">
@@ -491,7 +492,7 @@ function bookView() {
       <div class="clock"><div class="muted">BETTING CLOSES IN</div><div id="tl2" class="tl2"></div></div></div>
     <div class="tlbar"><div id="tlbar"></div></div>
     <div class="matchup">${teamCard(A, 'a', cur, ev)}<div class="vs">VS</div>${teamCard(B, 'b', cur, ev)}</div>
-    ${(ui.gossip || []).filter((gs) => gs.idx === cur.idx).map((gs) => `<div class="gossip"><span class="gs-tag">INSIDE INFO</span> <b>${esc(gs.who)}</b> ${esc(gs.text)} <span class="gs-lean">Lean: <b>${esc(gs.team)}</b></span></div>`).join('')}
+    ${(() => { const n = S.clues ? S.clues.mine.filter((c) => c.idx === cur.idx).length : 0; return `<div class="gossip" onclick="ui.tab='case';render()" style="cursor:pointer"><span class="gs-tag">CASE FILE</span> ${n ? `${n} clue${n > 1 ? 's' : ''} on this game - open the case file` : 'No clues on this game yet. Somebody in town knows something.'}</div>`; })()}
     ${ev.final ? '<div class="champ-note">To win the game you need a <b>Moneyline</b> bet on the champion of this game.</div>' : ''}
     ${cur.tip ? `<div class="tipcard">🗒️ <b>${esc(cur.tip.from)}</b> slid a napkin across the bar: "I like <b>${esc(cur.intel[cur.tip.side].name)}</b> tonight." <span class="muted">(unverified)</span></div>` : ''}
     ${h ? hintView(h) : ''}
@@ -619,7 +620,7 @@ function gasView() {
   const G = S.gas || {}, me = S.me, inv = me.inv || {}, d = Math.round(drunkLevel()), lit = me.cigUntil > window.BK.now();
   const row = (emoji, name, blurb, price, item, extra = '') => `<div class="gasrow"><div><b>${emoji} ${name}</b><div class="muted">${blurb}</div></div><span class="cp">${$$(price)}</span><button class="cta" ${me.money < price || (item === 'beer' && d >= 100) ? 'disabled' : ''} onclick="send({type:'gas',item:'${item}'${extra}})">Buy</button></div>`;
   return `<div class="card col gas"><div class="row" style="justify-content:space-between"><div class="big">⛽ Gas-N-Go counter</div><span class="pill money">${$$(me.money)}</span></div>
-    <div class="muted">Clerk: "Cash only. No, I can't break a hundred."</div>
+    <div class="row" style="justify-content:space-between;align-items:center"><div class="muted">Clerk: "Cash only. No, I can't break a hundred."</div><button class="ghost" onclick="send({type:'clue',src:'clerk'})">🗂 "Seen anything weird tonight?"</button></div>
     ${row('🍺', 'Budget Lite tallboy', `Same buzz as the bar's beer for a quarter of the price.`, G.beer, 'beer')}
     ${row('🚬', 'A single (loosie)', `G lights it: 2 minutes of +15% luck on roulette, slots and scratchers. F takes a drag. Or hand one to ${esc(S.story && S.story.bum ? S.story.bum.name : 'Dusty')} and he skips you next time.`, G.cig, 'cig')}
     ${row('📦', 'Pack of five', 'Five cigarettes. Cheaper by the pack.', G.pack, 'pack')}
@@ -679,6 +680,7 @@ function barView() {
     ${S.drinks.map((x) => `<div class="chalk-row"><span class="cn">${x.emoji} ${esc(x.name)}</span><span class="cd"></span><span class="cp">${$$(x.price)}</span><button class="chalkbtn" ${S.me.money < x.price || d >= 100 ? 'disabled' : ''} onclick="BK.sfx&&(BK.sfx('pour'),BK.sfx('gulp',{delay:1.1}),BK.sfx('glass',{delay:0.95}));send({type:'drink',id:'${x.id}'})">Order</button></div><div class="chalk-sub">${esc(x.blurb)} (+${x.add} buzz)</div>`).join('')}
     <div class="dmeter" style="margin-top:14px;filter:blur(${blur.toFixed(1)}px)"><div style="width:${d}%"></div></div>
     <div class="chalk-sub">You feel <b>${b}</b>${d < 20 ? ` (${d}%)` : ''}. ${S.me.hangover ? '<b>Your head is pounding</b> - no gut feelings until it passes. ' : ''}Somewhere in the buzz your gut gets good: right more often than not. Go past it and it lies to you just as confidently - then the hangover hits. Everyone's sweet spot is different, and it wears off over time.</div>
+    <div class="row" style="margin-top:10px"><button class="chalkbtn" onclick="send({type:'clue',src:'bartender'})">🗂 "Heard anything?"</button></div>
     ${jobBox()}</div>`;
 }
 // ---------- the guided first night: the bartender's napkin ----------
@@ -736,15 +738,12 @@ function jobHud() {
 }
 // ---------- Old Vinnie ----------
 function vinnieView() {
-  const cur = S.cur, t = cur && cur.vinnie, ev = cur && S.events[cur.idx];
-  let body;
-  if (!cur) body = `<div class="muted">"No game open, kid. Come back when there's action."</div>`;
-  else if (t) body = `<div class="side"><div class="muted">On ${esc(ev.label)}: ${esc(ev.a)} vs ${esc(ev.b)}</div><div class="big" style="font-size:18px">"${esc(t.text)}"</div><div class="muted">"${esc(t.totalText)}"</div><div>Vinnie likes <b>${esc(cur.intel[t.side].name)}</b> · ${t.total === 'over' ? 'Over' : 'Under'} ${cur.mk.total.line}</div></div>
-    <div class="muted">He's been right more often than not. Not always. He'll tell the whole crew the same thing.</div>`;
-  else body = `<div class="muted">"Buy an old man a drink and I'll tell you what I think about ${esc(ev.a)} and ${esc(ev.b)}."</div>
-    <button class="gold" ${S.me.money < S.me.vinniePrice ? 'disabled' : ''} onclick="send({type:'vinnie'})">Buy Vinnie a drink (${$$(S.me.vinniePrice)})</button>`;
+  const live = S.clues ? S.clues.games.filter((g) => g.live).map((g) => g.idx) : [], told = S.clues ? S.clues.mine.filter((c) => c.who === 'Old Vinnie' && live.includes(c.idx)) : [];
   return `<div class="card col" style="border-color:#2a6a62"><div class="big">🍷 Old Vinnie</div>
-    <div class="muted">Forty years on the same stool. He's seen every game twice and remembers most of them.</div>${body}</div>`;
+    <div class="muted">Forty years on the same stool. He hears everything that goes on in this town - for the price of a drink. He only charges if he's got something new.</div>
+    ${told.map((c) => `<div class="side"><div class="muted">${esc(S.events[c.idx].a)} vs ${esc(S.events[c.idx].b)}</div><div style="font-size:16px">${esc(c.text)}</div></div>`).join('')}
+    <button class="gold" ${S.me.money < S.me.vinniePrice ? 'disabled' : ''} onclick="send({type:'vinnie'})">Buy Vinnie a drink (${$$(S.me.vinniePrice)})</button>
+    <div class="muted" style="font-size:13px">Everything anybody tells you goes in your 🗂 Case File.</div></div>`;
 }
 // ---------- the newspaper ----------
 function paperView() {
@@ -755,7 +754,7 @@ function paperView() {
     <div class="pp-cols"><div class="pp-main"><div class="pp-head">${esc(P.head)}</div><div class="pp-sub">${esc(P.sub)}</div>
       <div class="pp-box"><div class="pp-bh">STANDINGS</div>${P.standings.map((t) => `<div class="pp-st"><b>${esc(t.short)}</b><span>${esc(t.name)}</span><i>${esc(t.rec)}</i></div>`).join('')}</div>
       ${P.stars.length ? `<div class="pp-box"><div class="pp-bh">WHO'S HOT</div>${P.stars.map((x) => `<div class="pp-st"><b>${esc(x.team)}</b><span>${esc(x.line)}</span></div>`).join('')}</div>` : ''}</div>
-    <div class="pp-side"><div class="pp-bh">IN OTHER NEWS</div>${P.briefs.map((b) => `<div class="pp-brief">${esc(b)}</div>`).join('')}<div class="pp-brief pp-small">${esc(P.filler)}</div>
+    <div class="pp-side">${(P.hotels || []).length ? `<div class="pp-bh">IN TOWN TONIGHT</div><div class="pp-brief pp-small">Where the teams are staying:</div>${P.hotels.map((h) => `<div class="pp-brief pp-small"><b>${esc(h.team)}</b> - ${esc(h.hotel.replace(/^the /, 'The '))}</div>`).join('')}` : ''}<div class="pp-bh">IN OTHER NEWS</div>${P.briefs.map((b) => `<div class="pp-brief">${esc(b)}</div>`).join('')}<div class="pp-brief pp-small">${esc(P.filler)}</div>
       <div class="pp-ad">COLD BEER<br><small>ask the bartender</small></div></div></div></div>`;
 }
 
@@ -856,21 +855,36 @@ function fightBet(side) { if (!fightOpen()) return; if (S.me.money < ui.fightSta
 function fightStakeNext() { ui.fightStake = FIGHT_STAKES[(FIGHT_STAKES.indexOf(ui.fightStake) + 1) % FIGHT_STAKES.length]; render(); }
 // night 3: a dancer (after $200 on stage) or the VIP athlete (for a $50 drink) leans in - pick a question, get the answer on the open game.
 // HUD buttons get number hotkeys, so this works with the mouse locked (and the money gun out).
-const WHISPER_Q = ['Who wins tonight?', 'Anybody hurt?', 'Heard anything else?'];
+const WHISPER_Q = ['Who was out partying?', 'Anybody hurt?', 'Heard anything else?'];
 // the cops: who's locked in the squad car (and how to get them out), and how hot the street is after breakouts
 function copsHud() {
   const n = S.n3; if (!n || !n.on || (n.me && n.me.arrested)) return '';
   const car = n.car || [], heat = n.heat || 0; if (!car.length && !heat) return '';
   return `<div class="copshud">${car.length ? `<div class="ch-car">🚔 In the squad car: <b>${car.map((q) => esc(q.name)).join(', ')}</b> · pick the lock at the curb out front</div>` : ''}${heat ? `<div class="ch-heat">🚨 COP HEAT ${'<i class="on"></i>'.repeat(heat)}${'<i></i>'.repeat(Math.max(0, (n.heatMax || 5) - heat))}</div>` : ''}</div>`;
 }
+// ---------- the case file: every clue you've picked up, by game, with the scouting sheet to decode them (server clues.js) ----------
+// Nobody tells you who wins. Clues point at a player (name, number, nickname), a coach, a team's colours or its hotel: match them
+// to the teams. Hotels are only in the newspaper. Some people lie; your crew has their own clues - talk to them.
+function caseView() {
+  const C = S.clues; if (!C) return '<div class="muted">No case file tonight.</div>';
+  const card = (n) => { const t = C.teams[n]; if (!t) return ''; return `<div class="cf-team"><div class="cf-tn"><i style="background:${t.color}"></i><b>${esc(n)}</b></div>
+    <div class="cf-tl">Colours: <b>${esc(t.colorName)}</b>${t.coach ? ` · Coach <b>${esc(t.coach)}</b>` : ''}</div>${t.stars.map((x) => `<div class="cf-tl">#${x.num} <b>${esc(x.name)}</b> <span class="muted">${esc(x.line || '')}</span></div>`).join('')}</div>`; };
+  const games = C.games.slice().sort((a, b) => (b.live - a.live) || (a.idx - b.idx));
+  return `<div class="card col cf"><div class="big">🗂 Case File</div>
+    <div class="muted">Nobody will tell you who wins. Clues point at a player, a number, a coach, a team's colours or its hotel - match them to the teams below (hotels are in the newspaper). Weigh them: a star who's hurt matters more than a guy who lost his lucky chain. Some people lie. Your crew has their own clues - compare notes.</div>
+    ${games.map((g) => { const mine = C.mine.filter((c) => c.idx === g.idx);
+      return `<div class="cf-game ${g.live ? 'live' : ''}"><div class="cf-gh"><b>${esc(g.label)}</b><span>${g.status === 'open' ? '<b class="ok">BETTING OPEN</b>' : g.status === 'upcoming' ? 'up next' : g.status === 'airing' ? 'on now' : 'final'}</span></div>
+        <div class="cf-teams">${card(g.a)}${card(g.b)}</div>
+        ${mine.length ? mine.map((c) => `<div class="cf-clue"><span>${c.icon}</span><div><b>${esc(c.who)}</b><div>${esc(c.text)}</div></div></div>`).join('') : `<div class="muted">${g.live ? 'Nothing yet. Ask around: the bar, the street, the club.' : 'No clues.'}</div>`}</div>`; }).join('')}</div>`;
+}
 function whisperHud() {
   const w = S.n3 && S.n3.me && S.n3.me.whisper, a = ui.answer && ui.answer.until > Date.now() ? ui.answer : null;
   if (w) { const ath = w.from === 'athlete';
     return `<div class="hud-event whisper"><div class="wh-who">${ath ? '🏈' : '💋'} ${esc(w.who)} ${ath ? 'leans back in the booth' : 'leans in close'}</div>
-      <div class="wh-sub">${ath ? `Buy him a drink (${$$(50)}) and ask about` : 'She\'ll tell you one thing about'} <b>${esc(w.label)}</b>: ${esc(w.a)} vs ${esc(w.b)}</div>
+      <div class="wh-sub">${ath ? `Buy him a drink (${$$(50)}) and ask him one thing` : 'She\'ll answer one question'} about the games coming up.</div>
       <div class="wh-qs">${WHISPER_Q.map((q, i) => `<button onclick="send({type:'ask',q:${i}})">"${q}"</button>`).join('')}${ath ? `<button class="ghost" onclick="send({type:'askCancel'})">Never mind</button>` : ''}</div></div>`; }
-  if (a) return `<div class="hud-event whisper ans"><div class="wh-who">${a.from === 'athlete' ? '🏈' : '💋'} ${esc(a.who)}</div>${a.q !== undefined ? `<div class="wh-q">You: "${WHISPER_Q[a.q]}"</div>` : ''}<div class="wh-a">${esc(a.text)}</div>
-    <div class="wh-lean">INSIDE INFO on ${esc(a.label || 'this game')}: lean <b>${esc(a.team)}</b> <span class="muted">(saved in the Sportsbook)</span></div></div>`;
+  if (a) return `<div class="hud-event whisper ans"><div class="wh-who">${{ athlete: '🏈', dancer: '💋' }[a.from] || '🗂'} ${esc(a.who)}</div>${a.q !== undefined ? `<div class="wh-q">You: "${WHISPER_Q[a.q]}"</div>` : ''}<div class="wh-a">${esc(a.text)}</div>
+    ${a.none ? '' : `<div class="wh-lean">🗂 Saved to your case file${a.idx !== undefined && S.events[a.idx] ? ` · ${esc(S.events[a.idx].a)} vs ${esc(S.events[a.idx].b)}` : ''}</div>`}</div>`;
   return '';
 }
 function eventBanner() {

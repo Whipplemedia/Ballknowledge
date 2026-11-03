@@ -11,6 +11,8 @@ const { paperFor } = require('./paper');
 const createGoons = require('./goons');
 const createBum = require('./bum');
 const createN3 = require('./n3');
+const { createClues } = require('./clues');
+const clue = createClues(); // the clue hunt (clues.js)
 
 const PORT = process.env.PORT || 3000;
 const SPEED = Number(process.env.BK_SPEED || 1); // dev: divide all timers
@@ -264,7 +266,7 @@ function startGame(room) {
     p.heat = 0; p.banUntil = null; p.bk = 0; p.dead = false;
     p.tol = Math.round((Math.random() * 2 - 1) * 10); p.tips = {}; p.over = false; p.hangUntil = 0; // hidden drink sweet spot for this season
     p.bounties = [...BOUNTIES].filter((b) => room.outside || b.id !== 'rlt' /* roulette is in the casino across the street */).sort(() => Math.random() - 0.5).slice(0, 3).map((b) => ({ ...b, done: false }));
-    p.job = null; p.jobNext = 0; p.jobsDone = 0; p.vinnie = {};
+    p.job = null; p.jobNext = 0; p.jobsDone = 0; p.vinnie = {}; p.clues = [];
     Object.assign(p, { atm: 0, atmMark: false, cigs: 0, cans: 0, cigUntil: 0, wiredUntil: 0, zynUntil: 0, bumPass: false, scratch: null });
   }
   const nE = room.events.length, start = plist(room).reduce((a, p) => a + p.startCash - p.tab, 0), crewN = Math.max(1, room.players.size);
@@ -284,6 +286,7 @@ function startGame(room) {
   // A single night has everything. The cops' heat (breakouts) carries through the campaign. (n3.js)
   room.outside = !camp || night >= 2; room.busted = false;
   n3.start(room, room.outside ? { club: !camp || night === camp.nights, level: camp && night === 2 ? 1 : 3, intro: !camp || night === 2, heat: camp ? camp.copHeat || 0 : 0 } : null);
+  clue.build(room); if (room.paper) room.paper.hotels = clue.hotels(room); // tonight's clue hunt: every game's pieces, scattered (clues.js)
   clearInterval(room.tick); room.tick = setInterval(() => tick(room), 400);
   broadcast(room);
 }
@@ -666,18 +669,8 @@ function jobEvent(room, p, type, data = {}) { // hooks: wins at the arcade / poo
   if (j.kind === 'bounce' && type === 'npcBottled' && data.name === j.target) finishJob(room, p, `${j.target} is quiet now.`);
 }
 
-// ---------- Old Vinnie, the bar's tipster ----------
-// Forty years on the same stool. Buy him a drink and he'll tell you what he thinks of the open game: right ~70% of the
-// time, and the whole crew hears the same story (it's seeded per game). Once per game per player.
-const VINNIE_PRICE = 100, VINNIE_ACC = 0.7;
-function vinnieTip(room, ev) {
-  const rng = seeded(room.code + ':vinnie:' + ev.idx + ':' + room.t0), nat = ev.sa > ev.sb ? 'a' : 'b', side = rng() < VINNIE_ACC ? nat : nat === 'a' ? 'b' : 'a';
-  const tot = ev.sa + ev.sb, truth = tot > ev.mk.total.line ? 'over' : 'under', total = rng() < 0.6 ? truth : truth === 'over' ? 'under' : 'over';
-  const team = ev[side], sh = room.season.teams[team].short, T = (a) => a[Math.floor(rng() * a.length)];
-  const text = T([`Listen. I seen a hundred of these. ${team} - they got the look. Mark it down.`, `My knees say rain and my gut says ${sh}. My gut's been right since '79.`, `Everybody's talking about the other guys. That's exactly why I like ${team}.`, `Kid, I'll tell you one thing for free - well, not free. ${sh}. Bet the house. Don't bet the house.`]);
-  const tt = total === 'over' ? `And the number's too low. Points'll come.` : `And it'll be ugly. Low score. Take the under.`;
-  return { side, total, text, totalText: tt };
-}
+// ---------- Old Vinnie: forty years on the same stool. A drink buys whatever he's heard about the games in play (the clue hunt, clues.js) ----------
+const VINNIE_PRICE = 100;
 
 // ---------- intel panel ----------
 function intel(room, ev, side) {
@@ -729,7 +722,7 @@ function view(room, p) {
   if (room.season && room.phase !== 'lobby') {
     v.events = room.events.map((e) => evSummary(e));
     v.teams = Object.fromEntries(Object.entries(room.season.teams).map(([n, t]) => [n, { short: t.short, color: t.color }]));
-    v.n3 = n3.view(room, p); v.outside = room.outside !== false; // night 1 of a campaign: the bar only
+    v.n3 = n3.view(room, p); v.clues = clue.view(room, p); v.outside = room.outside !== false; // night 1 of a campaign: the bar only
     v.chaseDare = room.chaseDare ? { fee: room.chaseDare.fee, until: room.chaseDare.until, by: room.chaseDare.by ? (room.players.get(room.chaseDare.by) || {}).name || '?' : null, mine: room.chaseDare.by === p.id } : null;
     v.quota = room.quota.map((q) => ({ kind: q.kind, idx: q.idx, target: q.target, status: q.status, crew: q.crew }));
     v.crewNow = Math.round(plist(room).reduce((a, q) => a + networth(room, q), 0));
@@ -753,7 +746,19 @@ function view(room, p) {
 // a tip on the open game for night 3's gossip (the dancer, the athlete): right acc of the time, the same answer every time it's asked
 function tipFor(room, ev, key, acc = 0.7) { const rng = seeded(room.code + ':' + key + ':' + ev.idx + ':' + room.t0), nat = ev.sa > ev.sb ? 'a' : 'b'; return { side: rng() < acc ? nat : nat === 'a' ? 'b' : 'a', acc }; }
 const bum = createBum({ feed, toast: (p, t, k) => toast(p, t, k), broadcast: (r) => broadcast(r), plist, money, send: (p, m) => send(p, m), STORY });
-const n3 = createN3({ feed, toast: (p, t, k) => toast(p, t, k), broadcast: (r) => broadcast(r), plist, money, send: (p, m) => send(p, m), drunkNow, dur, STORY, tipFor, onBusted: bustCrew });
+const n3 = createN3({ feed, toast: (p, t, k) => toast(p, t, k), broadcast: (r) => broadcast(r), plist, money, send: (p, m) => send(p, m), drunkNow, dur, STORY, tipFor, onBusted: bustCrew, clue });
+// ---------- the clue hunt: asking around (clues.js) ----------
+// a source tells you what it has on the games in play: the open one and the next. Paid ones only charge when they have something new.
+function tell(room, p, src, got) { if (!got.length) return; const mine = p.clues.slice(-got.length); send(p, { type: 'tip', who: clue.SOURCES[src].name, from: src, text: mine.map((c) => c.text).join('  ·  '), idx: mine[0].idx, n: got.length }); }
+function askSource(room, p, src, opts = {}) {
+  if (room.phase !== 'play') return; const S = clue.SOURCES[src];
+  if ((S.where === 'out' && room.outside === false) || (S.where === 'club' && !(room.n3 && room.n3.club))) return;
+  const fresh = clue.reveal(room, p, src, { ...opts, peek: true });
+  if (!fresh.length) { send(p, { type: 'tip', who: S.name, from: src, text: clue.NOTHING[src], none: true }); return; }
+  const price = clue.PAID[src] || 0; if (price && p.money < price) { toast(p, `${S.name} wants ${money(price)} first.`, 'err'); return; }
+  p.money -= price; if (src === 'vinnie') feed(room, `🍷 ${p.name} bought Old Vinnie a drink.`);
+  tell(room, p, src, clue.reveal(room, p, src, opts)); broadcast(room);
+}
 // the whole crew is in the back of the squad car with nobody left to pick the lock: the cars pull away (cine 'busted', public/cops.js) and the game is over
 function bustCrew(room, ids) {
   if (room.phase !== 'play' || room.verdictAt || room.busted) return; const now = Date.now();
@@ -800,12 +805,8 @@ function handle(room, p, m) {
       else if (j.kind === 'groom' && j.stage === 'escort' && room.n3 && n3.inClub(p.x, p.z)) { room.n3.groomBy = null; room.n3.groomDone = true; finishJob(room, p, 'The groom made it to his party.'); feed(room, `🤵 ${p.name} delivered the groom to his bachelor party.`); }
       broadcast(room); break;
     }
-    case 'vinnie': {
-      const ev = room.events.find((e) => e.status === 'open'); if (room.phase !== 'play' || !ev) { toast(p, 'Vinnie: "No game open, kid. Come back when there\'s action."', 'info'); break; }
-      p.vinnie = p.vinnie || {}; if (p.vinnie[ev.idx]) break;
-      if (p.money < VINNIE_PRICE) { toast(p, 'Vinnie: "No drink, no tip."', 'err'); break; }
-      p.money -= VINNIE_PRICE; p.vinnie[ev.idx] = vinnieTip(room, ev); feed(room, `🍷 ${p.name} bought Old Vinnie a drink.`); broadcast(room); break;
-    }
+    case 'vinnie': askSource(room, p, 'vinnie'); break; // Old Vinnie: a drink buys whatever he's heard (clues.js)
+    case 'clue': { const src = String(m.src || ''); if (!['bartender', 'ray', 'steve', 'stall', 'napkin', 'clerk', 'bouncer', 'dj'].includes(src)) break; askSource(room, p, src, m.spot !== undefined ? { spot: Math.floor(Number(m.spot)) } : {}); break; }
     case 'setPace': if (room.hostId === p.id && room.phase === 'lobby' && PACES[m.pace]) { room.pace = m.pace; broadcast(room); } break;
     case 'start': if (room.hostId === p.id && room.phase === 'lobby') startGame(room); break;
     case 'rematch': if (room.hostId === p.id && room.phase === 'ended') {
@@ -1006,14 +1007,14 @@ function handle(room, p, m) {
       if (!inPlay(room) || !(p.cigs > 0)) break; const r = bum.giveCig(room, p); if (!r) break; p.cigs--;
       if (r === 'now') toast(p, `${STORY.bum ? STORY.bum.name : 'Dusty'}: "...Alright. Alright. We're good." He wanders off, smoking.`, 'win');
       else { p.bumPass = true; toast(p, `${STORY.bum ? STORY.bum.name : 'Dusty'} tucks it behind his ear. "I'll remember you." He'll skip you next time.`, 'win'); }
-      feed(room, `🚬 ${p.name} gave ${STORY.bum ? STORY.bum.name : 'Dusty'} a cigarette.`); broadcast(room); break;
+      feed(room, `🚬 ${p.name} gave ${STORY.bum ? STORY.bum.name : 'Dusty'} a cigarette.`); tell(room, p, 'dusty', clue.reveal(room, p, 'dusty')); broadcast(room); break;
     }
     case 'ginaDrink': { // she takes the drink. She has a boyfriend.
       const t = Date.now(); if (!inPlay(room) || t - (p.lastGina || 0) < 8000) break;
       if (p.money < GINA_PRICE) { toast(p, `A drink for Gina is ${money(GINA_PRICE)}. You don't have it.`, 'err'); break; }
       p.lastGina = t; p.money -= GINA_PRICE;
       for (const q of room.players.values()) send(q, { type: 'npcSay', who: 'Gina', text: 'I have a boyfriend.', secs: 4, vo: 'gina_bf', by: p.id });
-      feed(room, `🍸 ${p.name} bought Gina a drink. She has a boyfriend.`); broadcast(room); break;
+      feed(room, `🍸 ${p.name} bought Gina a drink. She has a boyfriend.`); setTimeout(() => { if (room.phase === 'play') { tell(room, p, 'gina', clue.reveal(room, p, 'gina')); broadcast(room); } }, 4500); broadcast(room); break;
     }
     case 'pickup': { // knocked-out players drop chips; walk over them to grab
       const d = (room.drops || []).find((x) => x.id === m.id); if (!d || !inPlay(room) || Math.hypot(p.x - d.x, p.z - d.z) > 1.4) break;

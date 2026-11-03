@@ -118,6 +118,9 @@ export function createClub({ scene, BK, audio, camera, stations, obstacles, avat
     { x: CLUB_SPOTS.rope.x, z: CLUB_SPOTS.rope.z, r: 1.8, on: () => on() && !(me_() && me_().vip), text: 'E - Bottle service in the VIP ($300)', act: () => BK.send({ type: 'vip' }) },
     { get x() { return npcAt('vip_athlete')().x; }, get z() { return npcAt('vip_athlete')().z + 0.9; }, r: 1.7, on: () => on() && !!(me_() && me_().vip), text: 'E - Talk to Primetime (a $50 drink buys one question about the game)', act: () => BK.send({ type: 'athleteTalk' }) },
     { get x() { return npcAt('shot_girl')().x; }, get z() { return npcAt('shot_girl')().z; }, r: 1.6, on: () => on(), text: 'E - Shot roulette with Candy', act: () => BK.openPanel && BK.openPanel('shots') },
+    // the clue hunt (server clues.js): the door and the booth see everybody. $20, and only if they've got something new.
+    { x: -18.5, z: 6.2, r: 1.3, on: () => on(), text: 'E - Slip the bouncer $20 ("Who came in last night?")', act: () => BK.send({ type: 'clue', src: 'bouncer' }) },
+    { x: -15.4, z: -1.9, r: 1.4, on: () => on(), text: 'E - Request a song from DJ Fumble ($20) - DJs hear everything', act: () => BK.send({ type: 'clue', src: 'dj' }) },
     { get x() { return npcAt('groom')().x; }, get z() { return npcAt('groom')().z; }, r: 1.8, on: () => { const j = S_() && S_().me && S_().me.job; return on() && j && j.kind === 'groom' && j.stage === 'go'; }, text: 'E - "Come on, buddy. Your party\'s next door."', act: () => BK.send({ type: 'jobAct' }) },
   );
 

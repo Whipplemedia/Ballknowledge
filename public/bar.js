@@ -246,6 +246,9 @@ export function buildBar({ scene, BK, tv }) {
   }
   // Gina at the end of the pool table: you can buy her a drink. She has a boyfriend.
   stations.push({ x: 5.4, z: 3.4, r: 1.5, text: 'E - Buy Gina a drink ($20)', act: () => BK.send({ type: 'ginaDrink' }) });
+  // the clue hunt (server clues.js): the regulars hear things. Everything they say goes in your case file.
+  stations.push({ x: 8.3, z: 4.75, r: 0.95, text: 'E - Ask Celtics Ray what he\'s heard', act: () => BK.send({ type: 'clue', src: 'ray' }) });
+  stations.push({ x: 7.6, z: 6.0, r: 1.2, text: 'E - Ask Sloppy Steve for a pick', act: () => BK.send({ type: 'clue', src: 'steve' }) });
   // ---------- the newspaper on the counter: masthead + tonight's headline (redrawn each night) ----------
   const paperTex = TX.canvasTex(512, 384, () => {}), paperG = new THREE.Group();
   const drawPaper = (head) => {
@@ -340,6 +343,7 @@ export function buildBar({ scene, BK, tv }) {
     { const gr = TX.canvasTex(256, 128, (c, w, h) => { c.clearRect(0, 0, w, h); c.font = '700 26px "Segoe Print","Comic Sans MS",cursive'; c.fillStyle = '#111'; c.save(); c.rotate(-0.08); c.fillText('BET THE UNDER', 14, 46); c.restore(); c.fillStyle = '#a01818'; c.font = '700 22px "Segoe Print","Comic Sans MS",cursive'; c.fillText('sal was here', 60, 98); }).t;
       const m = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.4), new THREE.MeshStandardMaterial({ map: gr, transparent: true, roughness: 0.6 })); m.position.set(X1 - 0.8, 1.5, Z0 + 1.28); m.rotation.y = Math.PI; stG.add(m); }
     swap(stG, 'stalls', { w: 1.6, h: 2.0, d: 2.6, rotY: -Math.PI / 2 }, X1 - 0.82, 0, Z0 + 1.32);
+    stations.push({ x: SX - 0.5, z: Z0 + 1.3, r: 1.1, text: 'E - Read the stall wall', act: () => BK.send({ type: 'clue', src: 'stall' }) }); // somebody always writes something (clues.js)
     // sinks + mirror on the near wall
     const skG = new THREE.Group(); g.add(skG);
     box(2.5, 0.08, 0.55, M(0x3a3a3c, { roughness: 0.3 }), BX - 0.3, 0.86, Z1 - 0.29, skG); box(2.5, 0.8, 0.04, M(0x2a2a2c), BX - 0.3, 0.42, Z1 - 0.54, skG);
@@ -419,6 +423,15 @@ export function buildBar({ scene, BK, tv }) {
     cyl(0.035, 0.035, 1.02, metalM, x, 0.52, z, 10); cyl(0.24, 0.26, 0.03, metalM, x, 0.015, z, 18, scene, false);
     obstacles.push({ x, z, r: 0.4 });
   }
+  // napkins with something written on them (the clue hunt, server clues.js NAPKIN_SPOTS = 7): one of these spots, per clue, while it's in play.
+  // Whoever picks it up has it - the rest of the crew has to ask them.
+  { const napTex = TX.canvasTex(64, 64, (c, w, h) => { c.fillStyle = '#f4f1e6'; c.fillRect(0, 0, w, h); c.strokeStyle = '#2a2a6a'; c.lineWidth = 2; for (let k = 0; k < 4; k++) { c.beginPath(); c.moveTo(10, 16 + k * 10); for (let x = 10; x < 54; x += 6) c.lineTo(x, 16 + k * 10 + Math.sin(x * 0.7 + k) * 2); c.stroke(); } }).t;
+    const napMat = new THREE.MeshStandardMaterial({ map: napTex, roughness: 0.9 });
+    const NAPS = [...HIGHTOPS.map(([x, z]) => [x + 0.06, 1.076, z - 0.14, 1.15]), ...[-3.5, -0.5, 2.5].map((bx) => [bx - 0.18, BOOTH.table + 0.024, ROOM.z - 1.75, 1.9])];
+    NAPS.forEach(([x, y, z, r], i) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.15), napMat); m.rotation.set(-Math.PI / 2, 0, 0.4 + i); m.position.set(x, y, z); m.visible = false; scene.add(m);
+      stations.push({ x, z, r, prio: 1, on: () => { const on = !!(BK.S && BK.S.clues && BK.S.clues.napkins.includes(i)); m.visible = on; return on; }, text: 'E - Pick up the napkin (something\'s written on it)', act: () => BK.send({ type: 'clue', src: 'napkin', spot: i }) }); // (on() runs every frame for every station, so it keeps the napkin's visibility current)
+    }); }
   // surface spots: [x, top-of-surface y, z, station radius]; booth/counter spots need a longer reach since you can't walk right up to them
   const bottleSpots = [];
   HIGHTOPS.forEach(([x, z]) => { bottleSpots.push([x - 0.1, 1.075, z + 0.06, 1.15], [x + 0.12, 1.075, z - 0.05, 1.15]); });

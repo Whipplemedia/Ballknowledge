@@ -37,7 +37,7 @@ const DRUNK = 20;
 const TEST_MS = 60000, PICK_MIN_MS = 4500, PICK_REACH = 2.3, DANCE_MS = 42000, RAIN_SHOT = 20, RAIN_TIP = 200, VIP_PRICE = 300, ATHLETE_PRICE = 50;
 const SHOT_STAKES = [25, 50, 100];
 
-module.exports = function createN3({ feed, toast, broadcast, plist, money, send, drunkNow, dur, STORY, tipFor, onBusted }) {
+module.exports = function createN3({ feed, toast, broadcast, plist, money, send, drunkNow, dur, STORY, tipFor, onBusted, clue }) {
   const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
   const carDoor = { x: CAR.x - 0.6, z: CAR.z - 1.25 }; // the rear door on the curb side
@@ -164,13 +164,13 @@ module.exports = function createN3({ feed, toast, broadcast, plist, money, send,
       case 'ask': { // a question for whoever's whispering (the dancer after $200 on stage, or the athlete for a $50 drink)
         const w = p.whisper, q = Math.floor(Number(m.q)); if (!w || !(q >= 0 && q < 3)) return true;
         const ev = room.events.find((e) => e.status === 'open' && e.idx === w.ev); if (!ev) { p.whisper = null; toast(p, 'Too late - that game\'s betting closed.', 'info'); broadcast(room); return true; }
+        // the answer is a piece of the clue hunt (clues.js): the question picks which of her/his pieces comes first
+        const src = w.from === 'athlete' ? 'athlete' : 'dancer', cat = ['who', 'hurt', 'else'][q];
+        if (!clue.reveal(room, p, src, { q: cat, peek: true }).length) { p.whisper = null; send(p, { type: 'tip', who: w.who, from: w.from, q, text: clue.NOTHING[src], none: true }); broadcast(room); return true; } // nothing on these games: and no charge
         if (w.from === 'athlete') { if (p.money < ATHLETE_PRICE) { toast(p, `A drink for him is ${money(ATHLETE_PRICE)}.`, 'err'); return true; } p.money -= ATHLETE_PRICE; p.athlete = p.athlete || {}; p.athlete[ev.idx] = 1; }
-        const t = tipFor(room, ev, w.from + ':' + p.id, w.from === 'athlete' ? 0.75 : 0.7), win = ev[t.side], lose = t.side === 'a' ? ev.b : ev.a;
-        const A = w.from === 'athlete'
-          ? [`"Off the record? ${win} all day. Bet the house."`, `"${lose}'s best player rolled his ankle at practice. They're hiding it."`, `"${lose}'s locker room is a mess. Two guys fighting about minutes. ${win} walks."`]
-          : [`"${win}. Trust me, babe - I hear things in here."`, `"${lose}'s best player was in here Tuesday on crutches. Don't tell anyone I said that."`, `"${win}'s coach was in here last night celebrating early. Like, real early."`];
+        clue.reveal(room, p, src, { q: cat }); const got = p.clues[p.clues.length - 1];
         p.whisper = null;
-        send(p, { type: 'tip', who: w.who, from: w.from, q, side: t.side, team: win, label: ev.label, text: A[q], acc: t.acc }); broadcast(room); return true;
+        send(p, { type: 'tip', who: w.who, from: w.from, q, text: got.text, idx: got.idx }); broadcast(room); return true;
       }
       case 'shotStart': { // shot roulette with the shot girl: six shots, one is ghost pepper. Each safe one grows the pot; cash out any time
         if (!play || p.shots) return true; const st = SHOT_STAKES.includes(Number(m.stake)) ? Number(m.stake) : 25; if (p.money < st) { toast(p, 'Not enough cash.', 'err'); return true; }

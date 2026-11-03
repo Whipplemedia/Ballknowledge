@@ -621,3 +621,9 @@ body.hascrew #buffs{top:auto;bottom:44px;right:auto;left:14px}
 .lp-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}.lp-head b{font:900 18px system-ui;letter-spacing:3px;color:#ffd04a}.lp-slips{color:#ff6a78;font-weight:800}
 #lockpick canvas{display:block;border-radius:8px;width:520px;max-width:86vw}.lp-help{margin-top:8px;color:#cbd5ff;font-size:13px;text-align:center}
 .lp-help kbd{display:inline-block;min-width:18px;padding:0 5px;border-radius:5px;background:#0008;border:1px solid #fff6;font:800 12px system-ui}
+/* the case file (client.js caseView, server clues.js) */
+.cf .cf-game{border:1px solid #ffffff22;border-radius:10px;padding:10px;margin-top:10px;background:#0b1226}.cf .cf-game.live{border-color:#ffd04a80}
+.cf-gh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}.cf-gh span{font-size:12px;color:#9fb0d8}
+.cf-teams{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}.cf-team{background:#ffffff0a;border-radius:8px;padding:6px 8px}
+.cf-tn{display:flex;gap:6px;align-items:center;margin-bottom:2px}.cf-tn i{width:12px;height:12px;border-radius:3px;display:inline-block;border:1px solid #fff4}.cf-tl{font-size:12.5px;line-height:1.4}
+.cf-clue{display:flex;gap:8px;align-items:flex-start;background:#2a1430;border-left:3px solid #ff5ad2;border-radius:6px;padding:6px 8px;margin-top:6px;font-size:14px}.cf-clue>span{font-size:18px}
