@@ -1,9 +1,11 @@
-// The newspaper on the bar: a late edition with the date torn off. It never prints a playoff result. It carries the
-// regular-season story (who's hot, who's hyped) and a few news-of-the-year briefs, so a sharp reader can place the year.
+// The newspaper on the bar: a late edition with the date torn off. It never prints a playoff result, and it never prints a
+// win-loss record (a record is a cheat sheet - the sportsbook's line already prices it in). It carries the season's story in words
+// (who's hot, who's hyped, who's in trouble), news-of-the-year briefs so a sharp reader can place a real season's year, and the
+// clue hunt's hotels (clues.js adds them: "the team staying at the Royal Palms" is decoded here).
 // Keyed by `${sport}:${year}`; made-up seasons get generated filler.
 const HINTS = {
-  'nfl:2007': { head: 'PERFECT SO FAR', sub: 'New England finishes the regular season unbeaten; record 589 points', briefs: ['Lines wrap around the block for a new touch-screen phone', 'Final boy-wizard book sells out at midnight releases', 'Writers\' strike leaves late-night TV in reruns'] },
-  'nfl:2015': { head: 'DAB NATION', sub: 'Carolina\'s quarterback celebrates his way to a 15-1 season', briefs: ['Airlines ban self-balancing "hoverboards" from flights', 'Space saga sequel smashes opening-weekend records', 'Office still arguing: is the dress blue or gold?'] },
+  'nfl:2007': { head: 'PERFECT SO FAR', sub: 'New England\'s offense rewrites the scoring record', briefs: ['Lines wrap around the block for a new touch-screen phone', 'Final boy-wizard book sells out at midnight releases', 'Writers\' strike leaves late-night TV in reruns'] },
+  'nfl:2015': { head: 'DAB NATION', sub: 'Carolina\'s quarterback celebrates his way through a monster season', briefs: ['Airlines ban self-balancing "hoverboards" from flights', 'Space saga sequel smashes opening-weekend records', 'Office still arguing: is the dress blue or gold?'] },
   'nfl:2016': { head: 'ATLANTA CAN\'T STOP SCORING', sub: 'Falcons lead the league in points behind their MVP quarterback', briefs: ['Phone game sends crowds chasing cartoon monsters through parks', 'Mannequin Challenge freezes the internet', 'Presidential election stuns the pollsters'] },
   'nfl:2014': { head: 'THE BOOM IS BACK', sub: 'Defending champs\' secondary still the most feared in football', briefs: ['Celebrities dump ice water on themselves for charity', 'Smartwatch unveiled; nobody sure what it\'s for yet', 'True-crime podcast has the whole office hooked'] },
   'nfl:2019': { head: 'HE RUNS. HE THROWS. HE\'S 22.', sub: 'Baltimore\'s quarterback rewrites the rushing record for his position', briefs: ['Country-rap single camps at No. 1 for a record run', 'Internet jokes about "storming" a desert air base', 'Tiny green alien baby takes over every phone screen'] },
@@ -11,10 +13,10 @@ const HINTS = {
   'cfb:2014': { head: 'FOUR TEAMS, ONE TROPHY', sub: 'First-ever playoff bracket set; Big 12 left on the outside', briefs: ['Celebrities dump ice water on themselves for charity', 'Smartwatch unveiled; nobody sure what it\'s for yet', 'True-crime podcast has the whole office hooked'] },
   'cfb:2019': { head: 'BAYOU BOMBS AWAY', sub: 'LSU\'s transfer quarterback is rewriting the record book', briefs: ['Country-rap single camps at No. 1 for a record run', 'Superhero finale becomes the biggest movie ever', 'Tiny green alien baby takes over every phone screen'] },
   'cfb:2016': { head: 'UNFINISHED BUSINESS', sub: 'Last year\'s runner-up back with its Heisman-finalist quarterback', briefs: ['Phone game sends crowds chasing cartoon monsters through parks', 'Mannequin Challenge freezes the internet', 'Hip-hop founding-fathers musical: tickets impossible to find'] },
-  'cfb:2017': { head: 'THE DAWGS ARE BACK', sub: 'Georgia\'s freshman quarterback steers a 12-1 run', briefs: ['Total solar eclipse crosses the country coast to coast', 'Fidget spinners sold out at every gas station', 'Spanish-language hit won\'t leave the radio'] },
+  'cfb:2017': { head: 'THE DAWGS ARE BACK', sub: 'Georgia\'s freshman quarterback steers the Dawgs back to the top', briefs: ['Total solar eclipse crosses the country coast to coast', 'Fidget spinners sold out at every gas station', 'Spanish-language hit won\'t leave the radio'] },
   'cfb:2022': { head: 'STILL THE TEAM TO BEAT', sub: 'Defending champs unbeaten again; a surprise from Fort Worth crashes the party', briefs: ['Five-letter word game floods every group chat', 'Fighter-pilot sequel soars at the box office', 'Soccer\'s world tournament played in winter for the first time'] },
   'cfb:2023': { head: 'UNBEATEN - AND UNDER INVESTIGATION', sub: 'Michigan perfect on the field amid a sign-stealing scandal', briefs: ['Moviegoers make a double feature of a doll movie and a bomb movie', 'Pop star\'s stadium tour lifts local economies', 'Chatbots are all anyone at the office talks about'] },
-  'nba:2016': { head: '73 AND 9', sub: 'Golden State breaks the record for regular-season wins', briefs: ['5,000-to-1 long shot wins the English soccer title', 'Powerball jackpot tops a billion dollars', 'Everyone is dabbing. Everyone.'] },
+  'nba:2016': { head: 'THE SPLASH BROTHERS', sub: 'Golden State\'s shooters break the regular-season record book', briefs: ['5,000-to-1 long shot wins the English soccer title', 'Powerball jackpot tops a billion dollars', 'Everyone is dabbing. Everyone.'] },
   'nba:2011': { head: 'THE BIG THREE', sub: 'Miami\'s new superteam lives up to the summer hype', briefs: ['Royal wedding draws millions of early-morning viewers', 'Slingshot-the-birds game on every phone', 'Last space shuttle readies for its final flight'] },
   'nba:2014': { head: 'THE SLIM REAPER', sub: 'Oklahoma City\'s scorer locks up the MVP with 32 a game', briefs: ['Soccer world tournament set to kick off in Brazil', 'Animated ice-princess song stuck in every kid\'s head', 'Maddening flapping-bird game pulled from app stores'] },
   'nba:2019': { head: 'ONE-YEAR RENTAL', sub: 'Toronto bet its future on a superstar with a year left on his deal', briefs: ['Fantasy-dragon TV finale divides fans', 'Superhero finale becomes the biggest movie ever', 'Country-rap single climbs the charts'] },
@@ -31,14 +33,22 @@ const HINTS = {
 };
 const FILLER = ['Local man insists he "has a system"', 'Bar\'s jukebox still only plays the one song', 'Weather: cloudy, chance of bad decisions', 'Lost: one lucky napkin. Reward offered.'];
 
+// the league's gossip column: a line on each team, in words. Strength shows only as a mood ("rolling", "limping in"), never a number
+const BUZZ = {
+  hi: ['rolling into the playoffs', 'everybody\'s pick to go all the way', 'haven\'t lost a meaningful game in months', 'the team nobody wants to draw'],
+  mid: ['quietly dangerous', 'healthy at the right time', 'a coin flip every night', 'hard to read'],
+  lo: ['limping into the postseason', 'just happy to be here', 'the long shots of the bracket', 'playing with house money'],
+};
 function paperFor(room) {
   const s = room.season; if (!s) return null;
   const sport = room.sportDef || {}, pct = (rec) => { const n = String(rec).split('-').map(Number); const g = n.reduce((a, b) => a + b, 0); return g ? n[0] / g : 0; };
-  const teams = Object.entries(s.teams).map(([name, t]) => ({ name, short: t.short, rec: t.rec, note: t.note || '', star: t.stars && t.stars[0] ? `${t.stars[0][0]} - ${t.stars[0][1]}` : '' }));
-  const standings = teams.slice().sort((a, b) => pct(b.rec) - pct(a.rec)).slice(0, 6);
+  let k = (room.t0 || 0) % 997; const pick = (a) => a[(k = (k * 31 + 7) % 997) % a.length];
+  const teams = Object.entries(s.teams).map(([name, t]) => ({ name, short: t.short, p: pct(t.rec), note: t.note || '', star: t.stars && t.stars[0] ? `${t.stars[0][0]} - ${t.stars[0][1]}` : '' }));
+  // "around the league": every team in alphabetical order (not ranked), with its note or a mood line
+  const around = teams.slice().sort((a, b) => a.name.localeCompare(b.name)).slice(0, 8).map((t) => ({ name: t.name, short: t.short, line: t.note || pick(BUZZ[t.p >= 0.68 ? 'hi' : t.p >= 0.55 ? 'mid' : 'lo']) }));
   const stars = teams.filter((t) => t.star).slice(0, 5).map((t) => ({ team: t.short, line: t.star }));
   let h = !s.fake && HINTS[`${room.sport}:${s.year}`];
-  if (!h) { const top = standings[0]; h = { head: `${top.name.split(' ').pop().toUpperCase()} ON TOP`, sub: `${top.name} finish ${top.rec} in the ${s.league}`, briefs: FILLER.slice(0, 3) }; }
-  return { name: 'The Daily Ledger', edition: 'Late Edition', sport: sport.label || '', head: h.head, sub: h.sub, briefs: h.briefs, standings: standings.map((t) => ({ name: t.name, short: t.short, rec: t.rec, note: t.note })), stars, filler: FILLER[(room.t0 || 0) % FILLER.length] };
+  if (!h) h = { head: 'THE PLAYOFFS ARE HERE', sub: `${teams.length} teams left standing in the ${s.league}. Nobody's safe.`, briefs: FILLER.slice(0, 3) };
+  return { name: 'The Daily Ledger', edition: 'Late Edition', sport: sport.label || '', head: h.head, sub: h.sub, briefs: h.briefs, around, stars, filler: FILLER[(room.t0 || 0) % FILLER.length] };
 }
 module.exports = { paperFor, HINTS };

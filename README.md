@@ -125,7 +125,7 @@ Server-timed like every cutscene (`finish()` sets `room.cine` and `room.verdictA
 ## Side jobs, Old Vinnie, the newspaper
 - **Bartender side jobs** (bar panel): one at a time, 3 minutes, 20 s between jobs. Deliver a round to a named regular, collect Sal's envelope (Sal pays $150, off your tab if you owe him; getting bottled on the way back loses it), bottle a rowdy regular, or beat the Shark/Regular (pool or arcade). Target spots are checked server-side (`SPOTS` in server.js matches bar.js).
 - **Old Vinnie** (stool by the taps): $100 buys a tip on the open game, right ~70% of the time; the whole crew hears the same tip (seeded per game).
-- **The Daily Ledger** (on the counter, E to read): a sports page with the date torn off. Real seasons carry a regular-season headline plus three news-of-the-year briefs (`paper.js`); standings and hot players come from the season data. It never prints a playoff result.
+- **The Daily Ledger** (on the counter, E to read): a sports page with the date torn off. Real seasons carry a regular-season headline plus three news-of-the-year briefs (`paper.js`); "Around the league" gives every team a line in words (its scouting note, or a mood like "limping into the postseason"), plus hot players and the clue hunt's team hotels. It never prints a playoff result or a win-loss record - nor does the sportsbook (team cards show home/away only): records were a cheat sheet, and the line already prices them in.
 - New regulars from Meshy (`gina`, `vinnie`, `ray`, `steve`, and the story's `owner`, `exec`, `bum` in `public/models`, task ids in `blender/meshy_tasks.json`): Gina at the pool table, Old Vinnie and Celtics Ray on the stools, Sloppy Steve on the couch.
 
 ## Guided first night

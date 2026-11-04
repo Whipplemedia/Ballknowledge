@@ -679,7 +679,7 @@ function intel(room, ev, side) {
     const mine = e.a === name ? 'a' : 'b', won = e.result.winner === mine;
     return { res: won ? 'W' : 'L', opp: e.a === name ? e.b : e.a, score: `${e.result[mine === 'a' ? 'sa' : 'sb']}-${e.result[mine === 'a' ? 'sb' : 'sa']}`, label: e.label };
   });
-  return { name, short: team.short, color: team.color, rec: team.rec, stars: team.stars, note: team.note, form, home: !ev.n && side === 'a' };
+  return { name, short: team.short, color: team.color, stars: team.stars, /* no season record: it's a cheat sheet */ note: team.note, form, home: !ev.n && side === 'a' };
 }
 function seriesText(room, ev) {
   if (!ev.series) return null;

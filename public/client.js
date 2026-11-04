@@ -456,7 +456,7 @@ function huntBanner() {
 // ---------- sportsbook ----------
 const badge = (t) => `<span class="crest" style="--c:${t.color}"><b>${esc(t.short)}</b></span>`;
 function teamCard(t, side, cur, ev) {
-  return `<div class="tc">${badge(t)}<div class="tn">${esc(t.name)}</div><div class="tr">${esc(t.rec)}${t.home ? ' · <span class="ok">HOME</span>' : ev.n ? ' · neutral' : ' · away'}</div></div>`;
+  return `<div class="tc">${badge(t)}<div class="tn">${esc(t.name)}</div><div class="tr">${t.home ? '<span class="ok">HOME</span>' : ev.n ? 'neutral site' : 'away'}</div></div>`;
 }
 
 function oddBtn(market, pick, top, main, hinted) {
@@ -510,7 +510,7 @@ function bookView() {
 }
 
 function teamStats(t) {
-  return `<div class="ts"><div class="tsh">${badge(t)} <b>${esc(t.name)}</b></div><div class="muted">Record <b>${esc(t.rec)}</b>${t.home ? ' · home team' : ''}</div>
+  return `<div class="ts"><div class="tsh">${badge(t)} <b>${esc(t.name)}</b></div><div class="muted">${t.home ? 'Home team' : 'On the road'}</div>
     ${t.note ? `<div class="note">${esc(t.note)}</div>` : '<div class="muted">No scouting notes.</div>'}</div>`;
 }
 function playerStats(t) {
@@ -752,7 +752,7 @@ function paperView() {
     <div class="pp-mast">${esc(P.name)}</div>
     <div class="pp-rule"><span>SPORTS</span><span>${esc(P.sport)}</span><span>FINAL</span></div>
     <div class="pp-cols"><div class="pp-main"><div class="pp-head">${esc(P.head)}</div><div class="pp-sub">${esc(P.sub)}</div>
-      <div class="pp-box"><div class="pp-bh">STANDINGS</div>${P.standings.map((t) => `<div class="pp-st"><b>${esc(t.short)}</b><span>${esc(t.name)}</span><i>${esc(t.rec)}</i></div>`).join('')}</div>
+      <div class="pp-box"><div class="pp-bh">AROUND THE LEAGUE</div>${(P.around || []).map((t) => `<div class="pp-st"><b>${esc(t.short)}</b><span>${esc(t.name)} - <i>${esc(t.line)}</i></span></div>`).join('')}</div>
       ${P.stars.length ? `<div class="pp-box"><div class="pp-bh">WHO'S HOT</div>${P.stars.map((x) => `<div class="pp-st"><b>${esc(x.team)}</b><span>${esc(x.line)}</span></div>`).join('')}</div>` : ''}</div>
     <div class="pp-side">${(P.hotels || []).length ? `<div class="pp-bh">IN TOWN TONIGHT</div><div class="pp-brief pp-small">Where the teams are staying:</div>${P.hotels.map((h) => `<div class="pp-brief pp-small"><b>${esc(h.team)}</b> - ${esc(h.hotel.replace(/^the /, 'The '))}</div>`).join('')}` : ''}<div class="pp-bh">IN OTHER NEWS</div>${P.briefs.map((b) => `<div class="pp-brief">${esc(b)}</div>`).join('')}<div class="pp-brief pp-small">${esc(P.filler)}</div>
       <div class="pp-ad">COLD BEER<br><small>ask the bartender</small></div></div></div></div>`;
